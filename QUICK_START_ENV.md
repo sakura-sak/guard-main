@@ -1,0 +1,76 @@
+# Быстрый старт: Создание .env.local
+
+## 📝 Что должно быть в .env.local файле
+
+Файл `.env.local` содержит все настройки для работы приложения, включая LDAP аутентификацию.
+
+## 🚀 Создание файла
+
+### Вариант 1: Автоматически (рекомендуется)
+
+Скрипт `deploy.sh` автоматически создаст файл `.env.local` из примера при первом запуске:
+
+```bash
+./deploy.sh
+```
+
+### Вариант 2: Вручную
+
+```bash
+# Linux/macOS
+cp .env.local.example .env.local
+# или
+cp env.bsuir.local.example .env.local
+
+# Windows PowerShell
+Copy-Item .env.local.example .env.local
+# или
+Copy-Item env.bsuir.local.example .env.local
+```
+
+## ✅ Минимально необходимые переменные
+
+Для работы приложения с LDAP вам нужно указать:
+
+```env
+# Включить LDAP
+LDAP_ENABLED=true
+
+# URL и настройки LDAP сервера
+LDAP_URL=ldaps://ldap.bsuir.by
+LDAP_BASE_DN=dc=bsuir,dc=by
+
+# Учетные данные для подключения к LDAP
+LDAP_BIND_DN=uid=smdoadmin,ou=staff,dc=bsuir,dc=by
+LDAP_BIND_PASSWORD=ваш_пароль_здесь
+
+# Базы поиска пользователей
+LDAP_USER_SEARCH_BASES=ou=staff,dc=bsuir,dc=by;ou=stud,dc=bsuir,dc=by
+```
+
+## 🔐 Обязательно измените перед production
+
+После создания `.env.local` **обязательно отредактируйте** следующие значения:
+
+1. **`LDAP_BIND_PASSWORD`** - укажите актуальный пароль для LDAP
+2. **`REPORT_ACCESS_SECRET`** - измените на случайную строку минимум 16 символов
+
+## 📋 Полный список переменных
+
+См. файл `ENV_VARIABLES.md` для полного описания всех переменных окружения.
+
+## ⚠️ Важно
+
+- Файл `.env.local` уже добавлен в `.gitignore` и не будет попадать в git
+- Никогда не коммитьте файл с реальными паролями
+- В production используйте безопасные секреты
+
+## 🎯 После создания .env.local
+
+1. Отредактируйте файл и укажите правильные значения
+2. Запустите развертывание: `./deploy.sh`
+3. Проверьте логи: `docker-compose logs -f`
+
+---
+
+**Готово!** Теперь ваш проект настроен для работы с LDAP.

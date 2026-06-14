@@ -1,0 +1,242 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── 1. Institution ───────────────────────────────────────────────────────────
+model Institution {
+  id        String   @id // slug, e.g. "bsuir"
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  faculties Faculty[]
+  users     User[]
+  documents Document[]
+
+  @@map("institutions")
+}
+
+// ─── 2. Faculty ───────────────────────────────────────────────────────────────
+model Faculty {
+  id            String   @id // slug, e.g. "fitu"
+  name          String
+  institutionId String   @map("institution_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  users       User[]
+  documents   Document[]
+
+  @@unique([institutionId, name])
+  @@index([institutionId], map: "idx_faculties_institution_id")
+  @@map("faculties")
+}
+
+// ─── 3. DocumentType ─────────────────────────────────────────────────────────
+// Catalog of academic document types (coursework, thesis, essay, …)
+model DocumentType {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // slug: "coursework", "thesis"
+  displayName String   @map("display_name") // "Курсовая работа"
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  documents Document[]
+
+  @@map("document_types")
+}
+
+// ─── 4. User ──────────────────────────────────────────────────────────────────
+model User {
+  username            String    @id
+  password            String
+  role                String
+  additionalRolesJson String?   @map("additional_roles_json")
+  email               String?
+  fullName            String?   @map("full_name")
+  institutionId       String?   @map("institution_id")
+  facultyId           String?   @map("faculty_id")
+  groupName           String?   @map("group_name")
+  createdAt           DateTime  @map("created_at")
+  lastLogin           DateTime? @map("last_login")
+
+  institution   Institution?   @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  faculty       Faculty?       @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  documents     Document[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  reports       Report[]
+  sessions      Session[]
+
+  @@index([institutionId], map: "idx_users_institution_id")
+  @@index([role], map: "idx_users_role")
+  @@map("users")
+}
+
+// ─── 5. Document ──────────────────────────────────────────────────────────────
+model Document {
+  id                   Int       @id @default(autoincrement())
+  title                String
+  author               String?
+  filename             String?
+  fileFormat           String?   @map("file_format") // "word" | "pdf"
+  filePath             String?   @map("file_path")
+  content              String
+  wordCount            Int       @map("word_count")
+  uploadDate           DateTime  @map("upload_date")
+  category             String // slug used for file-storage paths
+  status               String // "draft" | "final" | "archived"
+  userId               String?   @map("user_id")
+  institutionId        String?   @map("institution_id")
+  facultyId            String?   @map("faculty_id")
+  documentTypeId       Int?      @map("document_type_id")
+  minhashSignatureJson String    @map("minhash_signature_json")
+  shingleCount         Int       @map("shingle_count")
+  originalityPercent   Float?    @map("originality_percent")
+  plagiarismPercentMl  Float?    @map("plagiarism_percent_ml")
+  aiPercentMl          Float?    @map("ai_percent_ml")
+  processingTimeMs     Int?      @map("processing_time_ms")
+  expiresAt            DateTime? @map("expires_at")
+
+  user         User?         @relation(fields: [userId], references: [username], onDelete: SetNull)
+  institution  Institution?  @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  faculty      Faculty?      @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  documentType DocumentType? @relation(fields: [documentTypeId], references: [id], onDelete: SetNull)
+
+  matchesAsSource PlagiarismMatch[] @relation("SourceDocument")
+  matchesAsTarget PlagiarismMatch[] @relation("TargetDocument")
+  reports         Report[]
+
+  @@index([uploadDate], map: "idx_documents_upload_date")
+  @@index([category], map: "idx_documents_category")
+  @@index([userId], map: "idx_documents_user_id")
+  @@index([status], map: "idx_documents_status")
+  @@index([institutionId], map: "idx_documents_institution_id")
+  @@index([documentTypeId], map: "idx_documents_document_type_id")
+  @@map("documents")
+}
+
+// ─── 6. PlagiarismMatch ───────────────────────────────────────────────────────
+// Each row records that sourceDocument is similar to targetDocument.
+model PlagiarismMatch {
+  id                Int      @id @default(autoincrement())
+  sourceDocumentId  Int      @map("source_document_id")
+  targetDocumentId  Int      @map("target_document_id")
+  similarityPercent Float    @map("similarity_percent")
+  matchedFragments  String?  @map("matched_fragments") // JSON array of {source, target} text fragments
+  algorithm         String // "minhash" | "ml"
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  sourceDocument Document @relation("SourceDocument", fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  targetDocument Document @relation("TargetDocument", fields: [targetDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceDocumentId, targetDocumentId, algorithm])
+  @@index([sourceDocumentId], map: "idx_matches_source_id")
+  @@index([targetDocumentId], map: "idx_matches_target_id")
+  @@map("plagiarism_matches")
+}
+
+// ─── 7. Report ────────────────────────────────────────────────────────────────
+// One row per generated PDF report.
+model Report {
+  id            Int       @id @default(autoincrement())
+  documentId    Int       @map("document_id")
+  generatedById String?   @map("generated_by_id")
+  filePath      String?   @map("file_path")
+  accessToken   String?   @unique @map("access_token") // signed QR/link token
+  downloadCount Int       @default(0) @map("download_count")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  expiresAt     DateTime? @map("expires_at")
+
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  generatedBy User?    @relation(fields: [generatedById], references: [username], onDelete: SetNull)
+
+  @@index([documentId], map: "idx_reports_document_id")
+  @@index([accessToken], map: "idx_reports_access_token")
+  @@map("reports")
+}
+
+// ─── 8. AuditLog ─────────────────────────────────────────────────────────────
+// Tracks all important user and admin actions.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     String?  @map("user_id")
+  action     String // "upload" | "check" | "delete" | "login" | "logout" | "admin_action"
+  entityType String?  @map("entity_type") // "document" | "user" | "institution" | …
+  entityId   String?  @map("entity_id")
+  details    String? // arbitrary JSON
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [username], onDelete: SetNull)
+
+  @@index([userId], map: "idx_audit_user_id")
+  @@index([createdAt], map: "idx_audit_created_at")
+  @@index([action], map: "idx_audit_action")
+  @@map("audit_logs")
+}
+
+// ─── 9. Notification ─────────────────────────────────────────────────────────
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    String   @map("user_id")
+  type      String // "check_complete" | "document_finalized" | "system" | "admin_message"
+  title     String
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  entityId  String?  @map("entity_id") // e.g. documentId as string
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [username], onDelete: Cascade)
+
+  @@index([userId, isRead], map: "idx_notifications_user_read")
+  @@index([createdAt], map: "idx_notifications_created_at")
+  @@map("notifications")
+}
+
+// ─── 10. Session ─────────────────────────────────────────────────────────────
+// Tracks active user sessions (complements signed cookies).
+model Session {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  token      String    @unique
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  expiresAt  DateTime  @map("expires_at")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [username], onDelete: Cascade)
+
+  @@index([userId], map: "idx_sessions_user_id")
+  @@index([expiresAt], map: "idx_sessions_expires_at")
+  @@map("sessions")
+}
+
+// ─── 11. Job ──────────────────────────────────────────────────────────────────
+model Job {
+  id          Int       @id @default(autoincrement())
+  type        String
+  payloadJson String    @map("payload_json")
+  status      String
+  resultJson  String?   @map("result_json")
+  error       String?
+  createdAt   DateTime  @map("created_at")
+  startedAt   DateTime? @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3) @map("max_attempts")
+  runAfterMs  Int?      @map("run_after_ms")
+  lockedBy    String?   @map("locked_by")
+  lockedAtMs  Int?      @map("locked_at_ms")
+
+  @@index([status, runAfterMs, id], map: "idx_jobs_status_run_after")
+  @@index([lockedAtMs], map: "idx_jobs_locked_at")
+  @@map("jobs")
+}

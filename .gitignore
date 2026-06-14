@@ -1,0 +1,49 @@
+node_modules
+.next
+out
+dist
+build
+coverage
+.turbo
+.swc
+
+# OS / редакторы
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+.idea
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# env / секреты (не коммитить локальные креды)
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# lock-файлы (оставим только один менеджер)
+pnpm-lock.yaml
+yarn.lock
+
+# Локальная рабочая директория приложения — не коммитить целиком
+data/
+
+# SQL дампы и локальные базы — не коммитить
+dump.sql
+*.db
+*.db-shm
+*.db-wal
+
+# Локальный черновик текста без необходимости в репозитории
+KURSOVAY_razdeli_po_proektu.txt
+
+# Python helper (если будут артефакты)
+__pycache__/
+*.py[cod]
+*.pyo
+
+

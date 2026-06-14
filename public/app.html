@@ -1,0 +1,2517 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Личный кабинет — Антиплагиат БГУИР</title>
+<style>
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --primary-soft: #dbeafe;
+  --ink: #0a1f44;
+  --ink-2: #1e293b;
+  --muted: #64748b;
+  --bg: #eaf1fb;
+  --bg-2: #f4f8fd;
+  --card: #ffffff;
+  --border: rgba(15, 41, 92, 0.08);
+  --shadow-sm: 0 6px 20px rgba(15, 41, 92, 0.05);
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+
+/* Embed mode (when shown inside admin iframe) */
+html.embed-admin { overflow-y: visible; }
+html.embed-admin body { background: transparent; min-height: 0; }
+html.embed-admin .page { padding: 0; width: 100%; }
+html.embed-admin .header { display: none; }
+html.embed-admin .app { margin: 0; }
+html.embed-admin .modal__backdrop,
+html.embed-admin .modal__dialog { animation: none !important; }
+
+/* Scrollbar — brand design */
+html { scrollbar-width: thin; scrollbar-color: rgba(37, 99, 235, 0.35) transparent; overflow-y: scroll; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.3);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.55);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 600px at 90% -10%, #cfe0ff 0%, transparent 60%),
+    radial-gradient(900px 500px at -10% 30%, #e6efff 0%, transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+a { color: inherit; text-decoration: none; }
+.page { width: min(1280px, 94%); margin: 0 auto; padding: 6px 0 60px; }
+@media (min-width: 1600px) { .page { width: min(1480px, 94%); padding: 32px 0 80px; } }
+@media (min-width: 1280px) and (max-width: 1599px) { .page { width: min(1320px, 94%); } }
+@media (max-width: 900px) and (min-width: 481px) { .page { padding: 20px 0 48px; } }
+@media (max-width: 480px) { .page { width: 96%; padding: 14px 0 36px; } }
+
+/* Header */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; gap: 24px;
+  position: sticky; top: 4px; z-index: 100;
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  margin: 0 0 12px;
+  box-shadow: 0 6px 24px rgba(20,30,80,0.06);
+}
+.brand { position: relative; z-index: 10002; }
+.brand__logo {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--primary-soft); color: var(--primary);
+  font-size: 12px; font-weight: 700; letter-spacing: 0.8px;
+  padding: 6px 16px 6px 10px; border-radius: 999px;
+}
+.brand__img { width: 28px; height: 28px; flex-shrink: 0; object-fit: contain; }
+.hero-cta {
+  background: var(--ink); color: #fff;
+  padding: 12px 22px; border-radius: 999px;
+  font-weight: 600; font-size: 14px;
+  display: inline-flex; align-items: center; gap: 10px;
+  box-shadow: 0 8px 20px rgba(10,31,68,0.25);
+  transition: all .2s; border: none; cursor: pointer; font-family: inherit;
+}
+.hero-cta:hover { background: #000; transform: translateY(-2px); }
+
+/* Common */
+.icon-16 { width: 16px; height: 16px; display: inline-block; vertical-align: middle; }
+.icon-18 { width: 18px; height: 18px; display: inline-block; vertical-align: middle; }
+.icon-24 { width: 24px; height: 24px; display: inline-block; vertical-align: middle; }
+
+.field { display: grid; gap: 6px; }
+.field__label { font-size: 13px; font-weight: 600; }
+.field__required { color: #dc2626; margin-left: 2px; }
+.custom-select.is-placeholder .custom-select__value { color: var(--muted); font-weight: 400; }
+.custom-select.has-error .custom-select__trigger,
+.field__input.has-error { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12); }
+#facultySelect .custom-select__menu,
+#uoSelect .custom-select__menu {
+  bottom: auto; top: calc(100% + 8px);
+  box-shadow: 0 12px 30px rgba(15, 41, 92, 0.12);
+  max-height: 200px; overflow-y: auto;
+}
+.field__input {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 13px 14px; font-size: 15px; font-family: inherit;
+  outline: none; background: var(--bg-2);
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.field__input:focus {
+  border-color: var(--primary); background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.custom-select { position: relative; }
+.custom-select__trigger {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 13px 16px; font-size: 15px; font-family: inherit;
+  background: var(--bg-2); color: var(--ink);
+  cursor: pointer; text-align: left;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.custom-select__trigger:hover { border-color: rgba(37,99,235,0.35); }
+.custom-select.is-open .custom-select__trigger,
+.custom-select__trigger:focus-visible {
+  border-color: var(--primary); background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  outline: none;
+}
+.custom-select__chevron { color: var(--muted); transition: transform .2s; }
+.custom-select.is-open .custom-select__chevron { transform: rotate(180deg); color: var(--primary); }
+.custom-select__menu {
+  position: absolute; bottom: calc(100% + 8px); left: 0; right: 0;
+  background: #fff; border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 -12px 30px rgba(15, 41, 92, 0.12);
+  list-style: none; margin: 0; padding: 6px;
+  z-index: 10;
+  animation: csPop .15s ease;
+}
+@keyframes csPop {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.custom-select__option {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-radius: 10px;
+  font-size: 14px; color: var(--ink); cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.custom-select__menu { padding: 6px; }
+.custom-select__option + .custom-select__option { margin-top: 2px; }
+.custom-select__option:hover, .custom-select__option.is-focused {
+  background: var(--bg-2); color: var(--ink);
+}
+.custom-select__option.is-selected {
+  background: var(--primary-soft); color: var(--primary); font-weight: 600;
+}
+.custom-select__option-check { opacity: 0; }
+.custom-select__option.is-selected .custom-select__option-check { opacity: 1; }
+
+/* App */
+.app { margin: 0 0 60px; display: grid; gap: 18px; }
+.app__head {
+  background: var(--card); border-radius: 24px; padding: 22px 26px;
+  display: none;
+  border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(20,30,80,0.05);
+}
+.header .app__tabs { margin-left: auto; }
+.header .user-menu { position: relative; }
+.user-menu__trigger {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--primary-soft); color: var(--primary);
+  border: none; cursor: pointer; padding: 0;
+  display: grid; place-items: center;
+  transition: all .2s;
+}
+.user-menu__trigger:hover, .user-menu.is-open .user-menu__trigger {
+  background: var(--primary); color: #fff;
+}
+.user-menu__dropdown {
+  position: absolute; top: calc(100% + 10px); right: 0;
+  background: #fff; border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(15, 41, 92, 0.15);
+  padding: 14px; min-width: 320px;
+  z-index: 150;
+  animation: csPop .15s ease;
+}
+.user-menu__head { display: flex; align-items: center; gap: 12px; padding: 4px 6px; }
+.user-menu__avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--primary-soft); color: var(--primary);
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.user-menu__initials { font-size: 14px; font-weight: 700; letter-spacing: 0.5px; }
+.user-menu__avatar .user-menu__initials { font-size: 16px; }
+.user-menu__name { font-weight: 700; color: var(--ink); line-height: 1.2; }
+.user-menu__meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.user-menu__meta code { background: var(--bg-2); padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+.user-menu__divider { height: 1px; background: var(--border); margin: 12px -14px; }
+.user-menu__item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 10px 12px; border: none; cursor: pointer;
+  background: transparent; color: var(--ink); border-radius: 10px;
+  font-size: 14px; font-weight: 500; font-family: inherit; text-align: left;
+}
+.user-menu__item:hover { background: var(--bg-2); color: var(--primary); }
+.app__user { display: flex; align-items: center; gap: 14px; }
+.app__user-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--primary-soft); color: var(--primary);
+  display: grid; place-items: center;
+}
+.app__user-name { font-weight: 700; color: var(--ink); }
+.app__user-meta { font-size: 13px; color: var(--muted); }
+.app__user-meta code { background: var(--bg-2); padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+.app__tabs { display: flex; gap: 6px; background: var(--bg-2); padding: 4px; border-radius: 999px; }
+.app__tab {
+  border: none; background: transparent; cursor: pointer;
+  padding: 10px 18px; border-radius: 999px;
+  font-size: 14px; font-weight: 500; color: var(--ink-2); font-family: inherit;
+  transition: all .2s;
+}
+.app__tab:hover { color: var(--ink); }
+.app__tab.is-active { background: #fff; color: var(--primary); box-shadow: 0 4px 14px rgba(20,30,80,0.08); }
+.app__panel { display: none; flex-direction: column; gap: 18px; }
+.app__panel.is-active { display: flex; }
+
+.stage-stepper {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 10px;
+}
+.stage-stepper__item {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 16px 4px 4px; border-radius: 999px;
+  background: var(--bg-2); color: var(--muted); font-size: 13px; font-weight: 500;
+  border: 1px solid transparent;
+}
+.stage-stepper__item span {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; color: var(--muted);
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+}
+.stage-stepper__item.is-active {
+  background: var(--primary-soft); color: var(--primary); border-color: rgba(37,99,235,0.2);
+}
+.stage-stepper__item.is-active span { background: var(--primary); color: #fff; }
+.stage-stepper__item.is-done { background: #dcfce7; color: #166534; }
+.stage-stepper__item.is-done span { background: #16a34a; color: #fff; }
+
+.stage-card {
+  background: var(--card); border-radius: 24px; padding: 28px;
+  border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(20,30,80,0.05);
+  display: flex; flex-direction: column; gap: 18px;
+}
+.stage-card__head { display: flex; flex-direction: column; gap: 6px; }
+.stage-card__num {
+  align-self: flex-start; background: var(--primary-soft); color: var(--primary);
+  padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+}
+.stage-card__head h3 { margin: 0; font-size: 22px; color: var(--ink); }
+.stage-card__sub { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+.stage-form { display: flex; flex-direction: column; gap: 18px; }
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 36px 20px; border: 2px dashed var(--border); border-radius: 18px;
+  background: var(--bg-2); cursor: pointer; transition: all .2s; color: var(--ink-2);
+  text-align: center;
+}
+.dropzone:hover, .dropzone.is-drag {
+  border-color: var(--primary); background: var(--primary-soft); color: var(--primary);
+}
+.dropzone__title { font-weight: 600; font-size: 15px; }
+.dropzone__sub { font-size: 13px; color: var(--muted); }
+.dropzone.has-file { border-style: solid; border-color: var(--primary); background: #fff; color: var(--ink); }
+
+.form { display: flex; flex-direction: column; gap: 16px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }
+.form-error { color: #dc2626; font-size: 14px; font-weight: 600; margin: 0; }
+.field__error { color: #dc2626; font-size: 13px; font-weight: 500; margin: 0; }
+.form-grid .field { position: relative; }
+.form-grid .field__error { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; }
+.dropzone.has-error { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
+
+.submit-btn {
+  background: #0f172a; color: #fff; border: none; cursor: pointer;
+  padding: 14px 18px; border-radius: 12px; font-size: 15px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  margin-top: 6px; font-family: inherit;
+}
+.submit-btn:hover { background: #000; }
+
+.scan-progress { display: flex; flex-direction: column; gap: 8px; }
+.scan-progress__bar { background: var(--bg-2); border-radius: 999px; height: 10px; overflow: hidden; }
+.scan-progress__fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--primary), #60a5fa);
+  border-radius: 999px; transition: width .3s ease;
+}
+.scan-progress__label { font-size: 14px; color: var(--muted); font-weight: 600; }
+.scan-log {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-2);
+}
+.scan-log li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; background: var(--bg-2); border-radius: 10px;
+  opacity: 0; transform: translateY(4px); transition: all .3s;
+}
+.scan-log li.is-visible { opacity: 1; transform: translateY(0); }
+.scan-log li::before { content: "✓"; color: #16a34a; font-weight: 700; }
+
+.metric-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: stretch;
+}
+@media (max-width: 700px) { .metric-row { grid-template-columns: 1fr; } }
+.metric-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 22px;
+  padding: 22px 18px; display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.metric-card--main { background: var(--bg-2); }
+.metric-card__label { font-size: 14px; color: var(--ink-2); font-weight: 500; }
+.metric-card--main .metric-card__label { font-weight: 600; color: var(--ink); }
+.metric-circle {
+  --p: 0; --color: #94a3b8; --ring-w: 10;
+  width: 110px; height: 110px;
+  position: relative;
+  display: grid; place-items: center;
+}
+.metric-circle__svg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  transform: rotate(-90deg);
+}
+.metric-circle__bg, .metric-circle__fg {
+  fill: none; stroke-width: var(--ring-w);
+}
+.metric-circle__bg { stroke: #e2e8f0; }
+.metric-circle__fg {
+  stroke: var(--color);
+  stroke-linecap: round;
+  stroke-dasharray: 263.89;
+  stroke-dashoffset: calc(263.89 * (1 - var(--p) / 100));
+  transition: stroke-dashoffset .6s ease;
+}
+.metric-circle__text {
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: baseline; gap: 1px;
+}
+.metric-circle__value, .metric-circle__unit { font-weight: 700; color: var(--ink); }
+.metric-circle__value { font-size: 26px; letter-spacing: -0.5px; line-height: 1; }
+.metric-circle__unit { font-size: 14px; color: var(--ink); }
+.metric-circle--lg { --ring-w: 12; --color: var(--primary); }
+.metric-circle--ai { --color: #8b5cf6; }
+.metric-circle--match { --color: #dc2626; }
+.metric-card__label { font-size: 14px; color: var(--ink-2); font-weight: 500; }
+.metric-card--main .metric-card__label { font-weight: 600; color: var(--ink); }
+
+.result-meta { margin: 0; display: grid; gap: 12px; }
+.result-meta div { display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: baseline; }
+.result-meta dt { color: var(--muted); font-size: 13px; }
+.result-meta dd { margin: 0; color: var(--ink); font-weight: 500; font-size: 15px; }
+.result-meta #finalPercent { color: var(--primary); }
+.result-meta #finalMatches { color: #b91c1c; }
+.result-meta #finalAi { color: #8b5cf6; }
+
+.status-pill {
+  display: inline-flex; align-items: center;
+  font-size: 12px; font-weight: 700;
+  padding: 4px 10px; border-radius: 999px; letter-spacing: 0.3px;
+}
+.status-pill--draft { background: #fef3c7; color: #92400e; }
+.draft-timer {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 10px; padding: 4px 10px; border-radius: 999px;
+  background: var(--bg-2); color: var(--muted);
+  font-size: 12px; font-weight: 500; vertical-align: middle;
+}
+.draft-timer strong { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.draft-timer.is-warn { background: #fef3c7; color: #92400e; }
+.draft-timer.is-warn strong { color: #92400e; }
+.draft-timer.is-expired { background: #fee2e2; color: #b91c1c; }
+.draft-timer.is-expired strong { color: #b91c1c; }
+.status-pill--final { background: #dcfce7; color: #166534; }
+
+.result-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.result-bottom {
+  display: grid; grid-template-columns: 1fr auto; gap: 28px;
+  align-items: end;
+}
+@media (max-width: 900px) {
+  .result-bottom { grid-template-columns: 1fr; }
+}
+.result-actions--side {
+  flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
+}
+.result-actions--side .btn { white-space: nowrap; }
+.btn {
+  border: none; cursor: pointer; padding: 13px 20px; border-radius: 12px;
+  font-size: 14px; font-weight: 600; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 10px; transition: all .2s;
+}
+.btn--primary { background: var(--primary); color: #fff; }
+.btn--primary:hover { background: var(--primary-dark); }
+.btn--ghost { background: var(--bg-2); color: var(--ink); }
+.btn--ghost:hover { background: #e2e8f0; }
+
+.final-panel {
+  display: flex; flex-direction: column; gap: 24px;
+  background: linear-gradient(135deg, #eff6ff, #f8faff);
+  border: 1px solid var(--border); border-radius: 18px; padding: 22px;
+}
+.final-panel__title { font-size: 20px; font-weight: 700; color: var(--ink); margin: 0 0 16px; letter-spacing: -0.3px; }
+.final-panel__info code {
+  background: #fff; color: var(--ink-2);
+  padding: 2px 8px; border-radius: 6px; font-family: ui-monospace, "SF Mono", monospace; font-size: 12px;
+  border: 1px solid var(--border);
+}
+.final-panel__qrs {
+  display: flex; flex-direction: row; gap: 14px; flex-wrap: wrap;
+  border-top: 1px solid var(--border); padding-top: 22px;
+}
+.final-panel__qrs .final-panel__qr { flex: 1 1 220px; min-width: 200px; }
+.final-panel__qr {
+  background: #fff; border-radius: 14px; padding: 14px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  border: 1px solid var(--border); font-size: 12px; color: var(--muted);
+  text-align: center; line-height: 1.4;
+}
+.final-panel__qr img { width: 140px; height: 140px; }
+
+.app__notes {
+  background: #fef9c3; border: 1px solid #fde68a; border-radius: 16px;
+  padding: 18px 20px; font-size: 14px; color: #713f12; line-height: 1.55;
+}
+.app__notes ol { padding-left: 20px; margin: 8px 0 0; }
+.app__notes ol li { margin-bottom: 4px; }
+
+.history-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.history-list__empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px; }
+.history-list__item {
+  display: grid; grid-template-columns: 1fr auto auto auto; gap: 16px; align-items: center;
+  padding: 14px 16px; background: var(--bg-2); border-radius: 12px;
+}
+@media (max-width: 640px) { .history-list__item { grid-template-columns: 1fr; gap: 6px; } }
+.history-list__name { font-weight: 600; color: var(--ink); display: flex; align-items: flex-start; gap: 8px; }
+.history-list__edit {
+  background: transparent; border: none; cursor: pointer; color: var(--muted);
+  width: 28px; height: 28px; min-width: 28px; flex-shrink: 0;
+  border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.history-list__edit:hover { background: #fff; color: var(--primary); }
+.history-list__meta { font-size: 13px; color: var(--muted); }
+.history-list__percents { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.history-list__percent { font-weight: 700; color: var(--primary); }
+.history-list__ai {
+  font-weight: 700; color: #8b5cf6;
+  white-space: nowrap;
+}
+.history-list__btn {
+  background: transparent; border: 1px solid var(--border); color: var(--ink); cursor: pointer;
+  padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.history-list__btn:hover { background: #fff; }
+.history-list__btn--primary {
+  background: var(--primary); border-color: var(--primary); color: #fff;
+}
+.history-list__btn--icon { padding: 8px 10px; }
+.history-list__btn--primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+.history-list__actions { display: inline-flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.history-list__placeholder { color: var(--muted); font-size: 14px; padding: 0 8px; }
+.history-list__status { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.history-timer {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px;
+  background: #fff; color: var(--muted);
+  font-size: 11px; font-weight: 500;
+  border: 1px solid var(--border);
+}
+.history-timer strong { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.profile-list { display: grid; gap: 14px; margin: 0; }
+.profile-list div { display: grid; grid-template-columns: 220px 1fr; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.profile-list div:last-child { border-bottom: none; padding-bottom: 0; }
+.profile-list dt { color: var(--muted); font-size: 13px; }
+.profile-list dd { margin: 0; color: var(--ink); font-weight: 500; display: inline-flex; align-items: center; gap: 8px; }
+.profile-edit {
+  background: transparent; border: none; cursor: pointer; color: var(--muted);
+  width: 26px; height: 26px; min-width: 26px; flex-shrink: 0;
+  border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.profile-edit:hover { background: var(--bg-2); color: var(--primary); }
+@media (max-width: 640px) { .profile-list div { grid-template-columns: 1fr; gap: 4px; } }
+
+@media (max-width: 700px) {
+  .app__head { flex-direction: column; align-items: stretch; }
+  .app__tabs { overflow-x: auto; }
+}
+
+/* Modal */
+.modal {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal__backdrop {
+  position: absolute; inset: 0; background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px); animation: mFade .2s ease;
+}
+.modal__dialog {
+  position: relative; width: min(440px, 92%);
+  background: #fff; border-radius: 20px;
+  padding: 32px; max-height: 88vh; overflow-y: auto;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.25);
+  animation: mPop .25s cubic-bezier(.2,.8,.3,1.2);
+}
+.modal__dialog--lg { width: min(960px, 94%); }
+.modal__dialog--md { width: min(560px, 94%); padding: 28px 30px; }
+.edit-title__actions {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 16px; margin-top: 8px;
+}
+.profile-notice {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: #fef9c3; border: 1px solid #fde68a;
+  color: #713f12; padding: 12px 14px; border-radius: 12px;
+  font-size: 13px; line-height: 1.45;
+}
+.profile-notice i { flex-shrink: 0; color: #92400e; margin-top: 1px; }
+.modal__close {
+  position: absolute; top: 14px; right: 14px;
+  background: transparent; border: none; font-size: 28px;
+  line-height: 1; color: var(--muted); cursor: pointer;
+  width: 36px; height: 36px; border-radius: 8px;
+}
+.modal__close:hover { background: var(--bg-2); color: var(--ink); }
+.modal__title { margin: 0 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
+.modal__subtitle { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+@keyframes mFade { from {opacity:0} to {opacity:1} }
+@keyframes mPop { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.modal__tabs {
+  display: inline-flex; gap: 4px; padding: 4px; background: var(--bg-2); border-radius: 999px;
+  margin-bottom: 20px;
+}
+.modal__tab {
+  border: none; background: transparent; cursor: pointer; font-family: inherit;
+  padding: 8px 18px; border-radius: 999px;
+  font-size: 14px; font-weight: 500; color: var(--ink-2);
+  transition: all .2s;
+}
+.modal__tab:hover { color: var(--ink); }
+.modal__tab.is-active { background: #fff; color: var(--primary); box-shadow: 0 4px 12px rgba(20,30,80,0.08); }
+.matches-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.matches-list__item--ai { border-left-color: #8b5cf6; position: relative; }
+.matches-list__percent--corner { position: absolute; top: 14px; right: 16px; }
+.matches-list__item--ai .matches-list__quote { background: #f5f3ff; border-left-color: #8b5cf6; }
+.matches-list__item--ai .matches-list__percent { background: #ede9fe; color: #6d28d9; }
+.matches-list__item {
+  background: var(--bg-2); border-radius: 14px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  border-left: 3px solid var(--primary);
+}
+.matches-list__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 13px;
+}
+.matches-list__source { color: var(--ink); font-weight: 600; }
+.matches-list__percent {
+  background: #fee2e2; color: #b91c1c;
+  padding: 2px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+}
+.matches-list__quote {
+  margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.55;
+  background: #fff7ed; padding: 10px 12px; border-radius: 10px;
+  border-left: 2px solid #fb923c;
+  font-style: italic;
+}
+.matches-list__meta {
+  font-size: 12px; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 16px;
+}
+.matches-list__meta code {
+  background: var(--bg-2); color: var(--ink-2);
+  padding: 2px 8px; border-radius: 6px; font-family: ui-monospace, "SF Mono", monospace; font-size: 11px;
+}
+.pagination {
+  display: flex; justify-content: center; align-items: center; gap: 6px;
+  margin-top: 20px;
+}
+.pagination__btn {
+  min-width: 36px; height: 36px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--ink-2);
+  font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.pagination__btn:hover:not(:disabled) { background: var(--bg-2); color: var(--ink); }
+.pagination__btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pagination__btn.is-active {
+  background: var(--primary); color: #fff; border-color: var(--primary);
+}
+.pagination__ellipsis { color: var(--muted); padding: 0 8px; font-size: 14px; user-select: none; }
+
+/* ========== Adaptive breakpoints: 1920 / 1440 / 1024 / 768 / 360 ========== */
+
+@media (min-width: 1920px) {
+  .page { width: min(1700px, 92%); padding-top: 8px; }
+  .stage-card { padding: 32px; }
+  .metric-card { padding: 28px; }
+}
+
+@media (min-width: 1440px) and (max-width: 1919px) {
+  .page { width: min(1380px, 94%); }
+}
+
+@media (max-width: 1024px) {
+  .header { padding: 10px 18px; gap: 16px; flex-wrap: wrap; }
+  .app__tabs { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .app__tab { white-space: nowrap; padding: 8px 14px; font-size: 13px; }
+  .final-panel { grid-template-columns: 1fr; }
+  .metric-row { grid-template-columns: 1fr 1fr; }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 768px) {
+  .page { padding: 4px 0 40px; }
+  .header { padding: 8px 14px; border-radius: 22px; margin-bottom: 10px; }
+  .brand__logo { font-size: 11px; padding: 5px 12px 5px 8px; }
+  .brand__img { width: 24px; height: 24px; }
+  .app { gap: 12px; }
+  .app__tab { padding: 7px 12px; font-size: 12px; }
+  .user-menu__trigger { width: 36px; height: 36px; }
+  .stage-card { padding: 18px; border-radius: 18px; }
+  .stage-card__head { gap: 8px; }
+  .stage-card h3 { font-size: 18px; }
+  .stage-card__sub { font-size: 13px; }
+  .metric-row { grid-template-columns: 1fr; }
+  .metric-card { padding: 18px; }
+  .metric-card__value { font-size: 32px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .final-panel { grid-template-columns: 1fr; gap: 16px; }
+  .final-panel__qrs { grid-template-columns: 1fr 1fr; }
+  .result-meta div { grid-template-columns: 1fr; gap: 2px; }
+  .history-list__item { grid-template-columns: 1fr; gap: 6px; padding: 12px; }
+  .modal__dialog { padding: 22px 20px; max-height: 92vh; }
+  .modal__dialog--md { width: 94%; }
+  .modal__title { font-size: 19px; }
+  .pagination { flex-wrap: wrap; gap: 6px; }
+  .pagination__btn { width: 32px; height: 32px; font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .final-panel__qrs { grid-template-columns: 1fr; }
+  .metric-card__value { font-size: 28px; }
+}
+
+@media (max-width: 360px) {
+  .page { width: 94%; padding: 4px 0 32px; }
+  .header { padding: 8px 12px; border-radius: 20px; gap: 8px; }
+  .brand__logo { font-size: 10px; padding: 4px 10px 4px 6px; gap: 6px; }
+  .brand__logo span { display: none; }
+  .brand__img { width: 20px; height: 20px; }
+  .app__tabs { padding: 3px; gap: 4px; }
+  .app__tab { padding: 6px 10px; font-size: 11px; }
+  .user-menu__trigger { width: 32px; height: 32px; }
+  .stage-card { padding: 14px; border-radius: 14px; }
+  .stage-card h3 { font-size: 16px; }
+  .metric-card__value { font-size: 24px; }
+  .modal__dialog { padding: 16px 14px; border-radius: 16px; }
+  .modal__title { font-size: 17px; }
+}
+
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="header">
+    <a href="index.html" class="brand">
+      <span class="brand__logo">
+        <img src="image 1 [Vectorized].svg" alt="БГУИР" class="brand__img"/>
+        <span>АНТИПЛАГИАТ · БГУИР</span>
+      </span>
+    </a>
+    <nav class="app__tabs" role="tablist">
+      <button class="app__tab is-active" data-tab="check" role="tab">Проверить документ</button>
+      <button class="app__tab" data-tab="history" role="tab">История</button>
+    </nav>
+    <div class="user-menu" id="userMenu">
+      <button class="user-menu__trigger" id="userMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Меню пользователя">
+        <span class="user-menu__initials">ИИ</span>
+      </button>
+      <div class="user-menu__dropdown" id="userMenuDropdown" role="menu" hidden>
+        <div class="user-menu__head">
+          <div class="user-menu__avatar"><span class="user-menu__initials">ИИ</span></div>
+          <div>
+            <div class="user-menu__name">Иванов Иван Иванович</div>
+            <div class="user-menu__meta">Студент · БГУИР · логин <code>student</code></div>
+          </div>
+        </div>
+        <div class="user-menu__divider"></div>
+        <button class="user-menu__item" id="profileBtn" type="button">
+          <i data-lucide="id-card" class="icon-16"></i> Личный кабинет
+        </button>
+        <button class="user-menu__item" id="logoutBtn" type="button">
+          <i data-lucide="log-out" class="icon-16"></i> Выйти
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <section id="appView" class="app" aria-label="Личный кабинет">
+
+    <!-- Tab: Новая проверка -->
+    <div class="app__panel is-active" data-panel="check">
+
+      <ol class="stage-stepper" aria-label="Этапы">
+        <li class="stage-stepper__item is-active" data-stage="1"><span>1</span> Загрузка</li>
+        <li class="stage-stepper__item" data-stage="2"><span>2</span> Проверка</li>
+        <li class="stage-stepper__item" data-stage="3"><span>3</span> Черновая версия</li>
+        <li class="stage-stepper__item" data-stage="4"><span>4</span> Финальная версия</li>
+      </ol>
+
+
+      <div class="stage-card" data-stage-card="1">
+        <div class="stage-card__head">
+          <h3>Загрузка текстового документа</h3>
+          <p class="stage-card__sub">Один файл за попытку. Формат: <strong>.docx</strong>, <strong>.pdf</strong>, <strong>.doc</strong>.</p>
+        </div>
+        <form class="stage-form" id="uploadForm" novalidate>
+          <div class="field">
+            <label class="dropzone" id="dropzone">
+              <input type="file" id="fileInput" accept=".doc,.docx,.pdf" hidden/>
+              <i data-lucide="cloud-upload" class="icon-24"></i>
+              <span class="dropzone__title">Перетащите файл или нажмите для выбора</span>
+              <span class="dropzone__sub" id="dropzoneSub">Поддерживаемые форматы: DOCX, PDF, DOC. Размер файла: до 200МБ.</span>
+            </label>
+            <p class="field__error" id="fileError" hidden></p>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label class="field__label" for="workTitle">Название работы<span class="field__required" aria-hidden="true">*</span></label>
+              <input class="field__input" id="workTitle" type="text" required placeholder="Напр., Создание кроссплатформенного мобильного приложения для медицины"/>
+              <p class="field__error" id="titleError" hidden></p>
+            </div>
+            <div class="field">
+              <label class="field__label" id="workTypeLabel">Тип работы<span class="field__required" aria-hidden="true">*</span></label>
+              <div class="custom-select is-placeholder" id="workType" data-value="">
+                <button class="custom-select__trigger" type="button"
+                        aria-haspopup="listbox" aria-expanded="false" aria-labelledby="workTypeLabel" aria-required="true">
+                  <span class="custom-select__value">Выберите тип работы</span>
+                  <i data-lucide="chevron-down" class="icon-16 custom-select__chevron"></i>
+                </button>
+                <ul class="custom-select__menu" id="workTypeMenu" role="listbox" hidden></ul>
+              </div>
+              <p class="field__error" id="typeError" hidden></p>
+            </div>
+          </div>
+          <button class="submit-btn" type="submit">
+            <i data-lucide="search-check" class="icon-18"></i>
+            Проверить работу
+          </button>
+        </form>
+      </div>
+
+      <div class="stage-card" data-stage-card="2" hidden>
+        <div class="stage-card__head">
+          <h3>Проверка текстового документа</h3>
+          <p class="stage-card__sub">Идёт автоматический поиск заимствований по локальному хранилищу оригиналов учебного заведения.</p>
+        </div>
+        <div class="scan-progress">
+          <div class="scan-progress__bar"><div class="scan-progress__fill" id="scanFill"></div></div>
+          <div class="scan-progress__label" id="scanLabel">0%</div>
+        </div>
+        <ul class="scan-log" id="scanLog"></ul>
+      </div>
+
+      <div class="stage-card" data-stage-card="3" hidden>
+        <div class="stage-card__head">
+          <h3>Отчёт по черновой версии</h3>
+          <p class="stage-card__sub">Промежуточный результат. Официальный отчёт с QR-кодом доступен только после сохранения финальной версии.</p>
+        </div>
+        <div class="metric-row">
+          <div class="metric-card">
+            <div class="metric-circle metric-circle--ai" id="aiCircle">
+              <svg class="metric-circle__svg" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="metric-circle__bg" cx="50" cy="50" r="42"/>
+                <circle class="metric-circle__fg" cx="50" cy="50" r="42"/>
+              </svg>
+              <span class="metric-circle__text"><span class="metric-circle__value" id="aiValue">0</span><span class="metric-circle__unit">%</span></span>
+            </div>
+            <div class="metric-card__label">ИИ-генерация</div>
+          </div>
+          <div class="metric-card metric-card--main">
+            <div class="metric-circle metric-circle--lg" id="resultCircle">
+              <svg class="metric-circle__svg" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="metric-circle__bg" cx="50" cy="50" r="42"/>
+                <circle class="metric-circle__fg" cx="50" cy="50" r="42"/>
+              </svg>
+              <span class="metric-circle__text"><span class="metric-circle__value" id="resultValue">0</span><span class="metric-circle__unit">%</span></span>
+            </div>
+            <div class="metric-card__label">Оригинальность</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-circle metric-circle--match" id="matchCircle">
+              <svg class="metric-circle__svg" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="metric-circle__bg" cx="50" cy="50" r="42"/>
+                <circle class="metric-circle__fg" cx="50" cy="50" r="42"/>
+              </svg>
+              <span class="metric-circle__text"><span class="metric-circle__value" id="matchValue">0</span><span class="metric-circle__unit">%</span></span>
+            </div>
+            <div class="metric-card__label">Совпадения</div>
+          </div>
+        </div>
+        <dl class="result-meta">
+          <div><dt>Название</dt><dd id="resultTitle">—</dd></div>
+          <div><dt>Тип работы</dt><dd id="resultType">—</dd></div>
+          <div><dt>Файл</dt><dd id="resultFile">—</dd></div>
+          <div><dt>Дата проверки</dt><dd id="resultCheckedAt">—</dd></div>
+          <div><dt>Статус</dt><dd>
+            <span class="status-pill status-pill--draft">Черновая версия</span>
+            <span class="draft-timer" id="draftTimer" aria-live="polite">
+              <i data-lucide="clock" class="icon-16"></i>
+              <span>Хранится <strong id="draftTimerValue">24:00:00</strong></span>
+            </span>
+          </dd></div>
+        </dl>
+        <div class="result-actions">
+          <button class="btn btn--ghost" type="button" id="redoBtn">
+            <i data-lucide="rotate-ccw" class="icon-18"></i>
+            Отправить заново
+          </button>
+          <button class="btn btn--ghost" type="button" id="viewMatchesBtn">
+            <i data-lucide="file-search-2" class="icon-18"></i>
+            Просмотреть заимствования и ИИ-генерации
+          </button>
+          <button class="btn btn--primary" type="button" id="finalizeBtn">
+            <i data-lucide="check" class="icon-18"></i>
+            Сохранить финальную версию
+          </button>
+        </div>
+      </div>
+
+      <div class="stage-card" data-stage-card="4" hidden>
+        <div class="stage-card__head">
+          <h3>Итоговый отчёт</h3>
+        </div>
+        <div class="final-panel">
+          <div class="final-panel__info">
+            <h4 class="final-panel__title" id="finalTitle">—</h4>
+            <dl class="result-meta">
+              <div><dt>Тип работы</dt><dd id="finalType">—</dd></div>
+              <div><dt>Дата сохранения</dt><dd id="finalSavedAt">—</dd></div>
+              <div><dt>Оригинальность</dt><dd><strong id="finalPercent">—%</strong></dd></div>
+              <div><dt>Совпадения</dt><dd><strong id="finalMatches">—%</strong></dd></div>
+              <div><dt>ИИ</dt><dd><strong id="finalAi">—%</strong></dd></div>
+              <div><dt>Статус</dt><dd><span class="status-pill status-pill--final">Финальная версия</span></dd></div>
+            </dl>
+          </div>
+          <div class="final-panel__qrs">
+            <div class="final-panel__qr">
+              <img id="finalQrVerify" alt="QR-код верификации" />
+              <span>Для подтверждения подлинности и актуальности данной справки отсканируйте QR-код</span>
+            </div>
+            <div class="final-panel__qr">
+              <img id="finalQrDoc" alt="QR-код оригинальной версии документа" />
+              <span>Для просмотра оригинальной электронной версии документа отсканируйте QR-код</span>
+            </div>
+          </div>
+        </div>
+        <div class="result-actions">
+          <button class="btn btn--ghost" type="button" id="newCheckBtn">
+            <i data-lucide="plus" class="icon-18"></i>
+            Новая проверка
+          </button>
+          <button class="btn btn--primary" type="button" id="downloadPdfBtn">
+            <i data-lucide="download" class="icon-18"></i>
+            Скачать отчёт (PDF)
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Tab: История -->
+    <div class="app__panel" data-panel="history" hidden>
+      <div class="stage-card">
+        <div class="stage-card__head">
+          <h3>История</h3>
+          <p class="stage-card__sub">История финальных и черновых версий работ.</p>
+        </div>
+        <ul class="history-list" id="historyList">
+          <li class="history-list__empty">Пока нет сохранённых финальных версий.</li>
+        </ul>
+        <nav class="pagination" id="historyPagination" hidden aria-label="Страницы истории"></nav>
+      </div>
+    </div>
+
+  </section>
+</div>
+
+<!-- Modal: Личный кабинет -->
+<div class="modal" id="profileModal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle" hidden>
+  <div class="modal__backdrop" data-close></div>
+  <div class="modal__dialog modal__dialog--md">
+    <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
+    <h2 class="modal__title" id="profileModalTitle">Личный кабинет</h2>
+    <p class="modal__subtitle">Информация о пользователе.</p>
+    <dl class="profile-list">
+      <div><dt>ФИО</dt><dd>Иванов Иван Иванович</dd></div>
+      <div><dt>Логин</dt><dd>student</dd></div>
+      <div><dt>Тип пользователя</dt><dd>Студент</dd></div>
+      <div><dt>УО</dt><dd>
+        <span id="profileUo">—</span>
+        <button class="profile-edit" type="button" data-edit="uo" aria-label="Изменить УО">
+          <i data-lucide="pencil" class="icon-16"></i>
+        </button>
+      </dd></div>
+      <div><dt>Факультет</dt><dd>
+        <span id="profileFaculty">—</span>
+        <button class="profile-edit" type="button" data-edit="faculty" aria-label="Изменить факультет">
+          <i data-lucide="pencil" class="icon-16"></i>
+        </button>
+      </dd></div>
+      <div><dt>Номер группы</dt><dd>
+        <span id="profileGroup">—</span>
+        <button class="profile-edit" type="button" data-edit="group" aria-label="Изменить номер группы">
+          <i data-lucide="pencil" class="icon-16"></i>
+        </button>
+      </dd></div>
+    </dl>
+  </div>
+</div>
+
+<!-- Modal: Дозаполнить профиль -->
+<div class="modal" id="completeProfileModal" role="dialog" aria-modal="true" aria-labelledby="completeProfileTitle" hidden>
+  <div class="modal__backdrop" data-close></div>
+  <div class="modal__dialog modal__dialog--md">
+    <button class="modal__close" type="button" data-close aria-label="Закрыть" id="completeProfileClose" hidden>&times;</button>
+    <h2 class="modal__title" id="completeProfileTitle">Дозаполните профиль</h2>
+    <p class="modal__subtitle" id="completeProfileSub">Перед первой проверкой укажите ваше УО, факультет и номер группы.</p>
+    <form id="completeProfileForm" class="form" autocomplete="off">
+      <div class="field">
+        <label class="field__label">УО<span class="field__required" aria-hidden="true">*</span></label>
+        <div class="custom-select is-placeholder" id="uoSelect" data-value="">
+          <button class="custom-select__trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="custom-select__value">Выберите УО</span>
+            <i data-lucide="chevron-down" class="icon-16 custom-select__chevron"></i>
+          </button>
+          <ul class="custom-select__menu" id="uoSelectMenu" role="listbox" hidden></ul>
+        </div>
+        <p class="field__error" id="uoError" hidden>Выберите УО.</p>
+      </div>
+      <div class="field">
+        <label class="field__label">Факультет<span class="field__required" aria-hidden="true">*</span></label>
+        <div class="custom-select is-placeholder" id="facultySelect" data-value="">
+          <button class="custom-select__trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="custom-select__value">Выберите факультет</span>
+            <i data-lucide="chevron-down" class="icon-16 custom-select__chevron"></i>
+          </button>
+          <ul class="custom-select__menu" id="facultySelectMenu" role="listbox" hidden></ul>
+        </div>
+        <p class="field__error" id="completeProfileError" hidden>Выберите факультет.</p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="groupInput">Номер группы<span class="field__required" aria-hidden="true">*</span></label>
+        <input class="field__input" id="groupInput" type="text" placeholder="Напр., 213801" maxlength="10"/>
+        <p class="field__error" id="groupError" hidden>Укажите номер группы.</p>
+      </div>
+      <div class="profile-notice">
+        <i data-lucide="info" class="icon-18"></i>
+        <span>В случае если Вы являетесь преподавателем, в поле «Номер группы» укажите «—».</span>
+      </div>
+      <div class="edit-title__actions">
+        <button class="btn btn--primary" type="submit">
+          <i data-lucide="check" class="icon-18"></i> Сохранить
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Изменить название работы -->
+<div class="modal" id="editTitleModal" role="dialog" aria-modal="true" aria-labelledby="editTitleModalTitle" hidden>
+  <div class="modal__backdrop" data-close></div>
+  <div class="modal__dialog modal__dialog--md">
+    <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
+    <h2 class="modal__title" id="editTitleModalTitle">Изменить название работы</h2>
+    <p class="modal__subtitle">Новое название будет видно в истории и в итоговом отчёте.</p>
+    <form class="form" id="editTitleForm" autocomplete="off">
+      <div class="field">
+        <label class="field__label" for="editTitleInput">Название работы</label>
+        <input class="field__input" id="editTitleInput" type="text" required maxlength="200"/>
+        <p class="field__error" id="editTitleError" hidden>Укажите название.</p>
+      </div>
+      <div class="edit-title__actions">
+        <button class="btn btn--primary" type="submit">
+          <i data-lucide="check" class="icon-18"></i> Сохранить
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Просмотр заимствований -->
+<div class="modal" id="matchesModal" role="dialog" aria-modal="true" aria-labelledby="matchesModalTitle" hidden>
+  <div class="modal__backdrop" data-close></div>
+  <div class="modal__dialog modal__dialog--lg">
+    <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
+    <h2 class="modal__title" id="matchesModalTitle">Заимствования документа</h2>
+    <p class="modal__subtitle" id="matchesModalSub">—</p>
+    <ul class="matches-list" id="matchesList"></ul>
+    <nav class="pagination" id="matchesPagination" hidden aria-label="Страницы"></nav>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="file-parser.js"></script>
+<script src="api.js"></script>
+<script>
+(function () {
+  // Auth gate: check session via real API
+  const __embedAdmin = new URLSearchParams(location.search).get('embed') === 'admin' && window.parent !== window;
+  let __currentUser = null;
+  let __isAdmin = false;
+
+  // We'll init the page asynchronously after auth check
+  async function initPage() {
+    const { ok, data } = await ApApi.getMe();
+    if (!ok || !data.user) {
+      window.location.replace('index.html');
+      return;
+    }
+    __currentUser = data.user;
+    const role = __currentUser.role;
+    __isAdmin = role === 'admin' || role === 'superadmin' || role === 'teacher';
+    runApp();
+  }
+
+  initPage();
+
+  function runApp() {
+  if (__embedAdmin) {
+    document.documentElement.classList.add('embed-admin');
+    // Send content height to parent so the iframe can grow and avoid internal scroll
+    let lastSentH = 0;
+    const sendHeight = () => {
+      const h = Math.max(
+        document.documentElement.scrollHeight,
+        document.body ? document.body.scrollHeight : 0
+      );
+      // Only send when height changes by more than 4px to avoid feedback jitter
+      if (Math.abs(h - lastSentH) <= 4) return;
+      lastSentH = h;
+      try { parent.postMessage({ type: 'ap-embed-height', height: h }, '*'); } catch (_) {}
+    };
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(sendHeight);
+      window.addEventListener('load', () => { ro.observe(document.body); sendHeight(); });
+    } else {
+      window.addEventListener('load', sendHeight);
+      window.addEventListener('resize', sendHeight);
+    }
+    setInterval(sendHeight, 1500); // fallback for dynamic DOM changes
+    // Notify parent about modal state so it can show its own backdrop / scroll
+    const reportModalState = () => {
+      const anyOpen = Array.from(document.querySelectorAll('.modal')).some((m) => !m.hidden);
+      try { parent.postMessage({ type: anyOpen ? 'ap-modal-open' : 'ap-modal-close' }, '*'); } catch (_) {}
+    };
+    window.addEventListener('load', () => {
+      document.querySelectorAll('.modal').forEach((m) => {
+        const obs = new MutationObserver(reportModalState);
+        obs.observe(m, { attributes: true, attributeFilter: ['hidden'] });
+      });
+    });
+  }
+
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+
+  // Adjust UI for admin context
+  if (__isAdmin) {
+    const setText = (sel, txt) => { const el = document.querySelector(sel); if (el) el.textContent = txt; };
+    // Brand: show admin label
+    setText('.brand__logo span', 'АНТИПЛАГИАТ · БГУИР · АДМИН');
+    // Header: replace student tabs with admin nav (identical to admin.html tabs).
+    // In embed mode the header is hidden by CSS, so don't bother building the tabs.
+    if (!__embedAdmin) {
+      const tabsEl = document.querySelector('.app__tabs');
+      if (tabsEl) {
+        const go = (hash) => `(function(){var t=window.parent!==window?window.parent:window;t.location.href='admin.html${hash}';})()`;
+        tabsEl.innerHTML = `
+          <button class="app__tab" type="button" onclick="${go('#dashboard')}">Дашборд</button>
+          <button class="app__tab" type="button" onclick="${go('#users')}">Пользователи</button>
+          <button class="app__tab" type="button" onclick="${go('#submissions')}">Проверки</button>
+          <button class="app__tab" type="button" onclick="${go('#repository')}">Хранилище</button>
+          <button class="app__tab is-active" type="button">Проверить документ</button>
+        `;
+      }
+    }
+    // User menu: admin info
+    document.querySelectorAll('.user-menu__initials').forEach((el) => el.textContent = 'АА');
+    setText('.user-menu__name', 'Администратор системы');
+    const metaEl = document.querySelector('.user-menu__meta');
+    if (metaEl) metaEl.innerHTML = 'Администратор · БГУИР · логин <code>admin</code>';
+    // Hide profile menu item — admin doesn't need student profile
+    const profileBtn = document.getElementById('profileBtn');
+    if (profileBtn) profileBtn.style.display = 'none';
+  }
+
+  // ============ Profile (UO / faculty / group) ============
+  // Profile is loaded from the API (the server owns the source of truth).
+  // Local cache in __currentUser; saveProfile sends PATCH /api/users/me.
+  const APP_CONFIG_KEY = 'ap_config_v1'; // kept for type-color preferences only
+
+  const loadProfile = () => ({
+    uo:      __currentUser.institution || '',
+    faculty: __currentUser.faculty     || '',
+    group:   __currentUser.group       || '',
+  });
+
+  const saveProfile = async (p) => {
+    await ApApi.updateProfile({
+      institution: p.uo,
+      faculty:     p.faculty,
+      group:       p.group,
+    });
+    // Update in-memory cache
+    __currentUser = { ...__currentUser, institution: p.uo, faculty: p.faculty, group: p.group };
+  };
+
+  // App config: load from API (institutions/faculties + document types)
+  const fallbackConfig = {
+    uos: ['БГУИР'],
+    facultiesByUo: { 'БГУИР': ['ФИТУ', 'ФКСиС', 'ИИТ', 'ФКП'] },
+  };
+  let appConfig = { ...fallbackConfig, types: [] };
+  const defaultWorkTypes = [
+    'Дипломная работа / проект',
+    'Курсовая работа / проект',
+    'Лабораторная работа',
+    'Практическая работа',
+    'Статьи',
+  ];
+
+  let __docTypeOptions = [];
+
+  const populateWorkTypeOptions = (types) => {
+    const menu = document.getElementById('workTypeMenu');
+    if (!menu || !types || !types.length) return;
+    __docTypeOptions = types;
+    menu.innerHTML = types.map((t) => {
+      const slug = String(t.name || t.displayName || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      const label = String(t.displayName || t.name || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      return `<li class="custom-select__option" role="option" data-value="${slug}">${label}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>`;
+    }).join('');
+    if (window.lucide) window.lucide.createIcons();
+  };
+
+  // Load real config asynchronously; UI will refresh when ready
+  Promise.all([ApApi.getDirectories(), ApApi.getDocumentTypes()]).then(([dirRes, typesRes]) => {
+    if (dirRes.ok && dirRes.data.institutions) {
+      const insts = dirRes.data.institutions;
+      appConfig.uos = insts.map((i) => i.name);
+      appConfig.facultiesByUo = {};
+      insts.forEach((i) => { appConfig.facultiesByUo[i.name] = i.faculties.map((f) => f.name); });
+    }
+    if (typesRes.ok && typesRes.data.types && typesRes.data.types.length) {
+      appConfig.types = typesRes.data.types.map((t) => t.displayName || t.name);
+      populateWorkTypeOptions(typesRes.data.types);
+    }
+    refreshProfileUi();
+  });
+  const refreshProfileUi = () => {
+    const p = loadProfile();
+    const uEl = document.getElementById('profileUo');
+    const fEl = document.getElementById('profileFaculty');
+    const gEl = document.getElementById('profileGroup');
+    if (uEl) uEl.textContent = p.uo || '—';
+    if (fEl) fEl.textContent = p.faculty || '—';
+    if (gEl) gEl.textContent = p.group || '—';
+  };
+  refreshProfileUi();
+
+  // ===== Cascading UO + Faculty custom-selects =====
+  const uoSelect = document.getElementById('uoSelect');
+  const uoSelectMenu = document.getElementById('uoSelectMenu');
+  const facultySelect = document.getElementById('facultySelect');
+  const facultySelectMenu = document.getElementById('facultySelectMenu');
+  const setSelectValue = (sel, val, placeholder) => {
+    const valueEl = sel.querySelector('.custom-select__value');
+    sel.dataset.value = val || '';
+    if (val) {
+      valueEl.textContent = val;
+      sel.classList.remove('is-placeholder', 'has-error');
+    } else {
+      valueEl.textContent = placeholder;
+      sel.classList.add('is-placeholder');
+    }
+    sel.querySelectorAll('.custom-select__option').forEach((o) => o.classList.toggle('is-selected', o.dataset.value === val));
+  };
+  const closeAllProfileSelects = (except) => {
+    [uoSelect, facultySelect].forEach((s) => {
+      if (s !== except && s.classList.contains('is-open')) {
+        s.classList.remove('is-open');
+        const m = s.querySelector('.custom-select__menu');
+        if (m) m.hidden = true;
+      }
+    });
+  };
+  const openCs = (sel) => {
+    closeAllProfileSelects(sel);
+    sel.classList.add('is-open');
+    sel.querySelector('.custom-select__menu').hidden = false;
+  };
+  const closeCs = (sel) => {
+    sel.classList.remove('is-open');
+    sel.querySelector('.custom-select__menu').hidden = true;
+  };
+  const populateFacultySelect = (uo) => {
+    const list = appConfig.facultiesByUo[uo] || [];
+    facultySelectMenu.innerHTML = list.map((v) => `
+      <li class="custom-select__option" role="option" data-value="${v}">${v}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>
+    `).join('');
+    facultySelectMenu.querySelectorAll('.custom-select__option').forEach((opt) => {
+      opt.addEventListener('click', () => {
+        setSelectValue(facultySelect, opt.dataset.value, 'Выберите факультет');
+        const err = document.getElementById('completeProfileError');
+        if (err) err.hidden = true;
+        closeCs(facultySelect);
+      });
+    });
+    if (window.lucide) window.lucide.createIcons();
+  };
+  const populateUoSelect = () => {
+    uoSelectMenu.innerHTML = appConfig.uos.map((v) => `
+      <li class="custom-select__option" role="option" data-value="${v}">${v}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>
+    `).join('');
+    uoSelectMenu.querySelectorAll('.custom-select__option').forEach((opt) => {
+      opt.addEventListener('click', () => {
+        const val = opt.dataset.value;
+        setSelectValue(uoSelect, val, 'Выберите УО');
+        const err = document.getElementById('uoError');
+        if (err) err.hidden = true;
+        // Reset faculty when UO changes
+        setSelectValue(facultySelect, '', 'Выберите факультет');
+        populateFacultySelect(val);
+        closeCs(uoSelect);
+      });
+    });
+    if (window.lucide) window.lucide.createIcons();
+  };
+  populateUoSelect();
+  // Open/close triggers
+  uoSelect.querySelector('.custom-select__trigger').addEventListener('click', (e) => {
+    e.stopPropagation();
+    uoSelect.classList.contains('is-open') ? closeCs(uoSelect) : openCs(uoSelect);
+  });
+  facultySelect.querySelector('.custom-select__trigger').addEventListener('click', (e) => {
+    e.stopPropagation();
+    facultySelect.classList.contains('is-open') ? closeCs(facultySelect) : openCs(facultySelect);
+  });
+  document.addEventListener('click', (e) => {
+    if (!uoSelect.contains(e.target)) closeCs(uoSelect);
+    if (!facultySelect.contains(e.target)) closeCs(facultySelect);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeCs(uoSelect); closeCs(facultySelect); }
+  });
+
+  const completeProfileModal = document.getElementById('completeProfileModal');
+  const completeProfileForm = document.getElementById('completeProfileForm');
+  const completeProfileError = document.getElementById('completeProfileError');
+  const completeProfileSub = document.getElementById('completeProfileSub');
+  const completeProfileClose = document.getElementById('completeProfileClose');
+  const completeProfileTitle = document.getElementById('completeProfileTitle');
+  const openCompleteProfile = (mode = 'init') => {
+    const p = loadProfile();
+    // Pre-fill UO (default to first UO if none saved)
+    const uoVal = p.uo && appConfig.uos.includes(p.uo) ? p.uo : (appConfig.uos[0] || '');
+    setSelectValue(uoSelect, uoVal, 'Выберите УО');
+    populateFacultySelect(uoVal);
+    // Pre-fill faculty if valid for current UO
+    const facsForUo = appConfig.facultiesByUo[uoVal] || [];
+    setSelectValue(facultySelect, p.faculty && facsForUo.includes(p.faculty) ? p.faculty : '', 'Выберите факультет');
+    // Pre-fill group
+    groupInput.value = p.group || '';
+    groupInput.classList.remove('has-error');
+    completeProfileError.hidden = true;
+    document.getElementById('uoError').hidden = true;
+    document.getElementById('groupError').hidden = true;
+    // Mode: init (first time, no close) vs edit
+    const canClose = mode === 'edit';
+    completeProfileClose.hidden = !canClose;
+    completeProfileModal.querySelector('.modal__backdrop').dataset.close = canClose ? '' : 'disabled';
+    if (mode === 'edit') {
+      completeProfileTitle.textContent = 'Редактировать профиль';
+      completeProfileSub.textContent = 'Обновите ваше УО, факультет или номер группы.';
+    } else {
+      completeProfileTitle.textContent = 'Дозаполните профиль';
+      completeProfileSub.textContent = 'Перед первой проверкой укажите ваше УО, факультет и номер группы.';
+    }
+    completeProfileModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  };
+  const closeCompleteProfile = () => {
+    completeProfileModal.hidden = true;
+    document.body.style.overflow = '';
+  };
+  // Close handlers (only fire when modal is in edit mode → close button shown)
+  completeProfileClose.addEventListener('click', closeCompleteProfile);
+  completeProfileModal.querySelector('.modal__backdrop').addEventListener('click', () => {
+    if (!completeProfileClose.hidden) closeCompleteProfile();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !completeProfileModal.hidden && !completeProfileClose.hidden) closeCompleteProfile();
+  });
+  // Edit icons in profile modal
+  document.querySelectorAll('[data-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      // Close profile modal first if open
+      profileModal.hidden = true;
+      document.body.style.overflow = '';
+      openCompleteProfile('edit');
+    });
+  });
+  const groupInput = document.getElementById('groupInput');
+  const groupError = document.getElementById('groupError');
+  groupInput.addEventListener('input', () => {
+    groupInput.classList.remove('has-error');
+    groupError.hidden = true;
+  });
+  completeProfileForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const uoVal = uoSelect.dataset.value;
+    const facultyVal = facultySelect.dataset.value;
+    const groupVal = groupInput.value.trim();
+    let ok = true;
+    if (!uoVal) {
+      document.getElementById('uoError').hidden = false;
+      uoSelect.classList.add('has-error');
+      ok = false;
+    }
+    if (!facultyVal) {
+      completeProfileError.hidden = false;
+      facultySelect.classList.add('has-error');
+      ok = false;
+    }
+    if (!groupVal) {
+      groupError.hidden = false;
+      groupInput.classList.add('has-error');
+      ok = false;
+    }
+    if (!ok) return;
+    await saveProfile({ ...loadProfile(), uo: uoVal, faculty: facultyVal, group: groupVal });
+    refreshProfileUi();
+    closeCompleteProfile();
+  });
+  // Show automatically on first load if profile incomplete (skip for admin)
+  if (!__isAdmin) {
+    const _p0 = loadProfile();
+    if (!_p0.uo || !_p0.faculty || !_p0.group) openCompleteProfile();
+  }
+
+  // Logout
+  const doLogout = async (e) => {
+    if (e) e.preventDefault();
+    if (__isAdmin) {
+      window.location.href = 'admin.html';
+      return;
+    }
+    await ApApi.logout();
+    window.location.href = 'index.html';
+  };
+  document.getElementById('logoutBtn').addEventListener('click', doLogout);
+  // Brand logo behaves the same as logout: leave app and go home
+  document.querySelector('.brand').addEventListener('click', doLogout);
+
+  // Profile modal
+  const profileModal = document.getElementById('profileModal');
+  const profileBtn = document.getElementById('profileBtn');
+  if (profileBtn) {
+    profileBtn.addEventListener('click', () => {
+      toggleUserMenu(false);
+      profileModal.hidden = false;
+      document.body.style.overflow = 'hidden';
+    });
+    profileModal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => {
+      profileModal.hidden = true;
+      document.body.style.overflow = '';
+    }));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !profileModal.hidden) {
+        profileModal.hidden = true;
+        document.body.style.overflow = '';
+      }
+    });
+  }
+
+  // User menu dropdown
+  const userMenu = document.getElementById('userMenu');
+  const userMenuBtn = document.getElementById('userMenuBtn');
+  const userMenuDropdown = document.getElementById('userMenuDropdown');
+  const toggleUserMenu = (open) => {
+    const next = open ?? userMenuDropdown.hidden;
+    userMenuDropdown.hidden = !next;
+    userMenu.classList.toggle('is-open', next);
+    userMenuBtn.setAttribute('aria-expanded', next ? 'true' : 'false');
+  };
+  userMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleUserMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if (!userMenu.contains(e.target)) toggleUserMenu(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !userMenuDropdown.hidden) toggleUserMenu(false);
+  });
+
+  // Tabs
+  const tabs = document.querySelectorAll('.app__tab');
+  const panels = document.querySelectorAll('.app__panel');
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const name = tab.dataset.tab;
+      // Save current result as a draft if leaving the result stage
+      if (currentStage === 3 && currentResult && !currentResult._saved) {
+        saveAsDraft();
+        resetCheckFlow();
+      }
+      tabs.forEach((t) => t.classList.toggle('is-active', t === tab));
+      panels.forEach((p) => {
+        const active = p.dataset.panel === name;
+        p.classList.toggle('is-active', active);
+        p.hidden = !active;
+      });
+      if (name === 'history') renderHistory();
+    });
+  });
+
+  // Upload + check workflow
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const dropzoneSub = document.getElementById('dropzoneSub');
+  const uploadForm = document.getElementById('uploadForm');
+  const workTitle = document.getElementById('workTitle');
+  const workType = document.getElementById('workType');
+
+  // Custom select — use event delegation so API refresh keeps click handlers
+  (function initWorkTypeSelect() {
+    const trigger = workType.querySelector('.custom-select__trigger');
+    const menu = workType.querySelector('.custom-select__menu');
+    const valueEl = workType.querySelector('.custom-select__value');
+    const configRaw = (() => { try { return JSON.parse(localStorage.getItem('ap_config_v1') || 'null'); } catch { return null; } })();
+    const types = (configRaw && Array.isArray(configRaw.types) && configRaw.types.length)
+      ? configRaw.types
+      : defaultWorkTypes;
+    populateWorkTypeOptions(types);
+
+    const open = () => {
+      workType.classList.add('is-open');
+      menu.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+    };
+    const close = () => {
+      workType.classList.remove('is-open');
+      menu.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      workType.classList.contains('is-open') ? close() : open();
+    });
+    menu.addEventListener('click', (e) => {
+      const opt = e.target.closest('.custom-select__option');
+      if (!opt) return;
+      const val = opt.dataset.value;
+      workType.dataset.value = val;
+      valueEl.textContent = val;
+      workType.classList.remove('is-placeholder', 'has-error');
+      const tErr = document.getElementById('typeError');
+      if (tErr) tErr.hidden = true;
+      menu.querySelectorAll('.custom-select__option').forEach((o) => o.classList.toggle('is-selected', o === opt));
+      close();
+    });
+    document.addEventListener('click', (e) => {
+      if (!workType.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && workType.classList.contains('is-open')) close();
+    });
+  })();
+
+  const stageCards = {
+    1: document.querySelector('[data-stage-card="1"]'),
+    2: document.querySelector('[data-stage-card="2"]'),
+    3: document.querySelector('[data-stage-card="3"]'),
+    4: document.querySelector('[data-stage-card="4"]'),
+  };
+  const stepperItems = document.querySelectorAll('.stage-stepper__item');
+
+  const appSection = document.getElementById('appView');
+  let currentStage = 1;
+
+  const showStage = (n) => {
+    currentStage = n;
+    Object.entries(stageCards).forEach(([k, el]) => { if (el) el.hidden = Number(k) !== n; });
+    stepperItems.forEach((item) => {
+      const s = Number(item.dataset.stage);
+      item.classList.toggle('is-active', s === n);
+      item.classList.toggle('is-done', s < n);
+    });
+    appSection.classList.toggle('is-in-workflow', n > 1);
+  };
+
+  const saveAsDraft = () => {
+    // In the new flow the document is already saved as a draft by startScan (POST /api/upload).
+    // Mark as saved so we don't duplicate.
+    if (currentResult) currentResult._saved = true;
+  };
+
+  let currentResult = null;
+  let draftTimerId = null;
+  const DRAFT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  const formatRemaining = (ms) => {
+    if (ms <= 0) return '00:00:00';
+    const totalSec = Math.floor(ms / 1000);
+    const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+    const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+    const s = String(totalSec % 60).padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  };
+
+  const startDraftTimer = () => {
+    stopDraftTimer();
+    const timerEl = document.getElementById('draftTimer');
+    const valEl = document.getElementById('draftTimerValue');
+    if (!timerEl || !valEl) return;
+    const expiresAt = Date.now() + DRAFT_TTL_MS;
+    const tick = () => {
+      const left = expiresAt - Date.now();
+      valEl.textContent = formatRemaining(left);
+      timerEl.classList.toggle('is-warn', left > 0 && left <= 60 * 60 * 1000); // < 1h
+      timerEl.classList.toggle('is-expired', left <= 0);
+      if (left <= 0) stopDraftTimer();
+    };
+    tick();
+    draftTimerId = setInterval(tick, 1000);
+  };
+
+  const stopDraftTimer = () => {
+    if (draftTimerId) { clearInterval(draftTimerId); draftTimerId = null; }
+  };
+
+  const showFileName = (file) => {
+    if (!file) {
+      dropzone.classList.remove('has-file');
+      dropzoneSub.textContent = 'Поддерживаемые форматы: DOCX, PDF, DOC. Размер файла: до 200МБ.';
+      return;
+    }
+    dropzone.classList.add('has-file');
+    dropzoneSub.textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
+  };
+
+  fileInput.addEventListener('change', () => showFileName(fileInput.files[0]));
+  ['dragenter', 'dragover'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+    e.preventDefault(); dropzone.classList.add('is-drag');
+  }));
+  ['dragleave', 'drop'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+    e.preventDefault(); dropzone.classList.remove('is-drag');
+  }));
+  dropzone.addEventListener('drop', (e) => {
+    const f = e.dataTransfer.files[0];
+    if (f) {
+      fileInput.files = e.dataTransfer.files;
+      showFileName(f);
+    }
+  });
+
+  const fileError = document.getElementById('fileError');
+  const titleError = document.getElementById('titleError');
+  const typeError = document.getElementById('typeError');
+
+  const setError = (errEl, target, message) => {
+    if (message) {
+      errEl.textContent = message;
+      errEl.hidden = false;
+      target.classList.add('has-error');
+    } else {
+      errEl.hidden = true;
+      target.classList.remove('has-error');
+    }
+  };
+
+  uploadForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const file = fileInput.files[0];
+    let ok = true;
+
+    if (!file) {
+      setError(fileError, dropzone, 'Выберите файл для проверки.');
+      ok = false;
+    } else if (!/\.(docx?|pdf)$/i.test(file.name)) {
+      setError(fileError, dropzone, 'Неподдерживаемый формат. Допустимы: DOCX, PDF, DOC.');
+      ok = false;
+    } else {
+      setError(fileError, dropzone, '');
+    }
+
+    if (!workTitle.value.trim()) {
+      setError(titleError, workTitle, 'Укажите название работы.');
+      ok = false;
+    } else {
+      setError(titleError, workTitle, '');
+    }
+
+    if (!workType.dataset.value) {
+      setError(typeError, workType, 'Выберите тип работы.');
+      ok = false;
+    } else {
+      setError(typeError, workType, '');
+    }
+
+    if (ok) {
+      if (!__isAdmin) {
+        const _p = loadProfile();
+        if (!_p.faculty || !_p.group) {
+          openCompleteProfile();
+          return;
+        }
+      }
+      startScan(file);
+    }
+  });
+
+  workTitle.addEventListener('input', () => setError(titleError, workTitle, ''));
+  fileInput.addEventListener('change', () => setError(fileError, dropzone, ''));
+
+  const scanFill = document.getElementById('scanFill');
+  const scanLabel = document.getElementById('scanLabel');
+  const scanLog = document.getElementById('scanLog');
+  const scanSteps = [
+    'Проверка формата и извлечение текста',
+    'Сегментация документа на блоки',
+    'Поиск по локальному хранилищу учебного заведения',
+    'Сверка с другими работами',
+    'Исключение ранее загруженных работ автора',
+    'Подсчёт процента оригинальности'
+  ];
+
+  const startScan = async (file) => {
+    showStage(2);
+    scanFill.style.width = '0%';
+    scanLabel.textContent = '0%';
+    scanLog.innerHTML = '';
+
+    // Animate progress bar while real API call runs
+    let p = 0, step = 0, animating = true;
+    const animTick = () => {
+      if (!animating) return;
+      p = Math.min(90, p + (2 + Math.random() * 5)); // max 90% until API responds
+      scanFill.style.width = p + '%';
+      scanLabel.textContent = Math.round(p) + '%';
+      const targetStep = Math.min(Math.floor((p / 100) * (scanSteps.length - 1)), scanSteps.length - 1);
+      while (step < targetStep) {
+        const li = document.createElement('li');
+        li.textContent = scanSteps[step++];
+        scanLog.appendChild(li);
+        requestAnimationFrame(() => li.classList.add('is-visible'));
+      }
+      if (p < 90) setTimeout(animTick, 300);
+    };
+    animTick();
+
+    try {
+      // 1. Parse file text on the client side
+      if (!window.ApFileParser) throw new Error('Парсер файлов не загружен');
+      const parsed = await ApFileParser.parseFile(file);
+
+      if (parsed.text.length < 50) {
+        throw new Error('Документ слишком короткий для проверки (менее 50 символов)');
+      }
+
+      // 2. Check for plagiarism
+      const category = workType.dataset.value || 'uncategorized';
+
+      const checkRes = await ApApi.checkDocument({
+        content:     parsed.text,
+        filename:    file.name,
+        category,
+        institution: __currentUser.institution || 'БГУИР',
+      });
+
+      if (!checkRes.ok || !checkRes.data.success) {
+        throw new Error(checkRes.data.error || 'Ошибка при проверке документа');
+      }
+
+      const checkData = checkRes.data;
+
+      // 3. Upload + save as draft
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('title', workTitle.value.trim());
+      fd.append('content', parsed.text);
+      fd.append('category', category);
+      fd.append('status', 'draft');
+      fd.append('institution', __currentUser.institution || 'БГУИР');
+      fd.append('originality_percent', String(checkData.uniquenessPercent));
+      fd.append('plagiarism_percent_ml', String(checkData.mlPlagiarismPercent));
+      fd.append('ai_percent_ml', String(checkData.mlAiPercent));
+      fd.append('processing_time_ms', String(checkData.processingTimeMs || 0));
+      fd.append('document_type', parsed.fileType);
+
+      const uploadRes = await ApApi.uploadDocument(fd);
+      if (!uploadRes.ok || !uploadRes.data.success) {
+        throw new Error(uploadRes.data?.error || 'Не удалось сохранить документ в базу');
+      }
+      const docId = uploadRes.data.document.id;
+
+      // 4. Finish animation
+      animating = false;
+      scanFill.style.width = '100%';
+      scanLabel.textContent = '100%';
+      while (step < scanSteps.length) {
+        const li = document.createElement('li');
+        li.textContent = scanSteps[step++];
+        scanLog.appendChild(li);
+        requestAnimationFrame(() => li.classList.add('is-visible'));
+      }
+
+      await renderHistory();
+      setTimeout(() => showResult(file, checkData, docId), 400);
+
+    } catch (err) {
+      animating = false;
+      scanFill.style.width = '0%';
+      scanLabel.textContent = 'Ошибка';
+      const li = document.createElement('li');
+      li.textContent = '⚠ ' + (err.message || 'Неизвестная ошибка');
+      li.style.color = 'var(--bad)';
+      scanLog.appendChild(li);
+      requestAnimationFrame(() => li.classList.add('is-visible'));
+      setTimeout(() => showStage(1), 3000);
+    }
+  };
+
+  const showResult = (file, apiData, docId) => {
+    const percent = Math.round(apiData ? apiData.uniquenessPercent : 0);
+    const matches = Math.round(apiData ? apiData.plagiarismPercent : 0);
+    const ai      = Math.round(apiData ? apiData.mlAiPercent       : 0);
+    currentResult = {
+      id: docId,
+      percent, matches, ai,
+      title:    workTitle.value.trim(),
+      type:     workType.dataset.value,
+      fileName: file.name,
+      fileSize: file.size,
+      similarDocuments: apiData ? apiData.similarDocuments : [],
+    };
+    document.getElementById('resultValue').textContent = percent;
+    document.getElementById('resultCircle').style.setProperty('--p', percent);
+    document.getElementById('matchValue').textContent = matches;
+    document.getElementById('matchCircle').style.setProperty('--p', matches);
+    document.getElementById('aiValue').textContent = ai;
+    document.getElementById('aiCircle').style.setProperty('--p', ai);
+    document.getElementById('resultTitle').textContent = currentResult.title;
+    document.getElementById('resultType').textContent = currentResult.type;
+    document.getElementById('resultFile').textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
+    document.getElementById('resultCheckedAt').textContent = formatDate(new Date().toISOString());
+    showStage(3);
+    startDraftTimer();
+  };
+
+  document.getElementById('redoBtn').addEventListener('click', () => {
+    saveAsDraft();
+    resetCheckFlow();
+  });
+
+  // ============ View matches modal ============
+  const matchesModal = document.getElementById('matchesModal');
+  const matchesList = document.getElementById('matchesList');
+  const matchesSub = document.getElementById('matchesModalSub');
+  const mockMatches = [
+    { source: 'Дипломная работа / проект', percent: 5.4, authorId: 'AP-USR-184372', docId: 'AP-DOC-7Z4K2A',
+      title: 'Разработка системы оценки оригинальности текстовых документов',
+      quote: 'В современных условиях развития информационных технологий вопросы оценки оригинальности текстов приобретают особую актуальность.' },
+    { source: 'Курсовая работа / проект', percent: 3.8, authorId: 'AP-USR-091284', docId: 'AP-DOC-3M9R1B',
+      title: 'Алгоритмы предварительной обработки документов',
+      quote: 'Алгоритм сегментации документа на блоки выполняется на этапе предварительной обработки.' },
+    { source: 'Лабораторная работа', percent: 2.1, authorId: 'AP-USR-220915', docId: 'AP-DOC-K8X5Q2',
+      title: 'Организация локального хранилища оригиналов работ',
+      quote: 'Локальное хранилище оригиналов обновляется автоматически при сохранении финальной версии работы.' },
+    { source: 'Практическая работа', percent: 1.6, authorId: 'AP-USR-058103', docId: 'AP-DOC-N2P7F4',
+      title: 'Перекрёстная сверка по объединённому репозиторию',
+      quote: 'Для повышения точности проверки используется перекрёстная сверка по объединённому репозиторию.' },
+    { source: 'Статьи', percent: 1.2, authorId: 'AP-USR-073921', docId: 'AP-DOC-G5T8H1',
+      title: 'Методы исключения самоплагиата при проверке работ',
+      quote: 'Алгоритм исключает ранее загруженные работы автора, предотвращая ложные срабатывания на самоплагиат.' },
+    { source: 'Курсовая работа / проект', percent: 0.9, authorId: 'AP-USR-145668', docId: 'AP-DOC-W6L3J9',
+      title: 'Надёжность оценки оригинальности при перекрёстной проверке',
+      quote: 'Перекрёстная проверка курсовых и дипломных работ повышает надёжность оценки оригинальности текста.' },
+    { source: 'Дипломная работа / проект', percent: 0.7, authorId: 'AP-USR-302184', docId: 'AP-DOC-D9C4M5',
+      title: 'Учёт метаданных документа при формировании отчёта',
+      quote: 'Метаданные документа учитываются при формировании отчёта о проверке.' },
+    { source: 'Статьи', percent: 0.5, authorId: 'AP-USR-487130', docId: 'AP-DOC-B1V6E8',
+      title: 'Извлечение текста из PDF с сохранением форматирования',
+      quote: 'Извлечение текста из PDF-файлов выполняется с сохранением исходного форматирования.' },
+  ];
+
+  const mockAiGenerations = [
+    { source: 'ChatGPT (GPT-4)', percent: 2.4, confidence: 'высокая', detectionId: 'AP-AI-7H3K9P',
+      quote: 'Анализ предметной области показал, что существующие подходы к решению задачи демонстрируют ряд ограничений, связанных с производительностью и масштабируемостью.' },
+    { source: 'Claude 3 Opus', percent: 1.8, confidence: 'средняя', detectionId: 'AP-AI-2M5R7T',
+      quote: 'Современные требования к подобным системам предполагают комплексный подход, включающий как архитектурные, так и алгоритмические решения.' },
+    { source: 'Gemini Pro', percent: 1.2, confidence: 'высокая', detectionId: 'AP-AI-N8X1Q4',
+      quote: 'Ключевым преимуществом предложенного решения является сочетание гибкости конфигурации и высокой степени автоматизации рабочих процессов.' },
+    { source: 'YandexGPT 3', percent: 0.6, confidence: 'низкая', detectionId: 'AP-AI-G6F2L9',
+      quote: 'Таким образом, на основании проведённого исследования можно сделать вывод о целесообразности применения данного подхода в практических задачах.' },
+  ];
+
+  const MATCHES_PER_PAGE = 5;
+  let matchesPage = 1;
+  let matchesTab = 'matches';
+  const buildPageList = (cur, total) => {
+    if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
+    if (cur <= 3) return [1, 2, 3, '…', total];
+    if (cur >= total - 2) return [1, '…', total - 2, total - 1, total];
+    return [1, '…', cur - 1, cur, cur + 1, '…', total];
+  };
+
+  const renderMatches = () => {
+    const isAi = matchesTab === 'ai';
+    const dataset = isAi ? mockAiGenerations : mockMatches;
+    const total = dataset.length;
+    const pages = Math.max(1, Math.ceil(total / MATCHES_PER_PAGE));
+    if (matchesPage > pages) matchesPage = pages;
+    const start = (matchesPage - 1) * MATCHES_PER_PAGE;
+    const slice = dataset.slice(start, start + MATCHES_PER_PAGE);
+    matchesList.innerHTML = slice.map((m) => {
+      const cls = isAi ? 'matches-list__item matches-list__item--ai' : 'matches-list__item';
+      const meta = isAi
+        ? `<span>Достоверность: <b>${m.confidence}</b></span>`
+        : `<span>ID документа <code>${m.docId}</code></span>`;
+      if (isAi) {
+        return `
+          <li class="${cls}">
+            <span class="matches-list__percent matches-list__percent--corner">${m.percent}%</span>
+            <div class="matches-list__meta">${meta}</div>
+            <p class="matches-list__quote">«${m.quote}»</p>
+          </li>
+        `;
+      }
+      return `
+        <li class="${cls}">
+          <div class="matches-list__head">
+            <span class="matches-list__source">${m.source}</span>
+            <span class="matches-list__percent">${m.percent}%</span>
+          </div>
+          <p class="matches-list__quote">${m.title || m.quote}</p>
+          <div class="matches-list__meta">${meta}</div>
+        </li>
+      `;
+    }).join('');
+    const pagi = document.getElementById('matchesPagination');
+    if (total <= MATCHES_PER_PAGE) {
+      pagi.hidden = true;
+      pagi.innerHTML = '';
+    } else {
+      pagi.hidden = false;
+      const btns = [];
+      btns.push(`<button class="pagination__btn" data-page="prev" ${matchesPage === 1 ? 'disabled' : ''}>‹</button>`);
+      buildPageList(matchesPage, pages).forEach((p) => {
+        if (p === '…') btns.push(`<span class="pagination__ellipsis">…</span>`);
+        else btns.push(`<button class="pagination__btn ${p === matchesPage ? 'is-active' : ''}" data-page="${p}">${p}</button>`);
+      });
+      btns.push(`<button class="pagination__btn" data-page="next" ${matchesPage === pages ? 'disabled' : ''}>›</button>`);
+      pagi.innerHTML = btns.join('');
+      pagi.querySelectorAll('.pagination__btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const p = btn.dataset.page;
+          if (p === 'prev') matchesPage = Math.max(1, matchesPage - 1);
+          else if (p === 'next') matchesPage = Math.min(pages, matchesPage + 1);
+          else matchesPage = Number(p);
+          renderMatches();
+        });
+      });
+    }
+    if (window.lucide) window.lucide.createIcons();
+  };
+
+  const openMatches = (sourceItem) => {
+    const item = sourceItem || currentResult;
+    if (!item) return;
+    const matches = item.matches != null ? item.matches : Math.max(0, 100 - (item.percent || 0));
+    const ai = item.ai != null ? item.ai : 0;
+    // In admin embed mode, delegate to the parent — show modal there with full-screen dim
+    if (__embedAdmin) {
+      try { parent.postMessage({ type: 'ap-show-matches', matchPct: matches, aiPct: ai }, '*'); } catch (_) {}
+      return;
+    }
+    matchesSub.textContent = `Совпадения: ${matches}%`;
+    matchesPage = 1;
+    matchesTab = 'matches';
+    matchesModal.querySelectorAll('.modal__tab').forEach((t) => {
+      t.classList.toggle('is-active', t.dataset.tab === 'matches');
+    });
+    renderMatches();
+    matchesModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  };
+
+  matchesModal.querySelectorAll('.modal__tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      matchesTab = tab.dataset.tab;
+      matchesPage = 1;
+      matchesModal.querySelectorAll('.modal__tab').forEach((t) => {
+        t.classList.toggle('is-active', t === tab);
+      });
+      renderMatches();
+    });
+  });
+  const closeMatches = () => {
+    matchesModal.hidden = true;
+    document.body.style.overflow = '';
+  };
+  document.getElementById('viewMatchesBtn').addEventListener('click', () => openMatches());
+
+  // Edit title from history
+  const editModal = document.getElementById('editTitleModal');
+  const editInput = document.getElementById('editTitleInput');
+  const editError = document.getElementById('editTitleError');
+  const editForm = document.getElementById('editTitleForm');
+  let editTargetId = null;
+  const openEditTitle = (item) => {
+    editTargetId = item.id;
+    editInput.value = item.title;
+    editError.hidden = true;
+    editModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => editInput.focus(), 50);
+  };
+  const closeEditTitle = () => {
+    editModal.hidden = true;
+    document.body.style.overflow = '';
+    editTargetId = null;
+  };
+  editModal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', closeEditTitle));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !editModal.hidden) closeEditTitle();
+  });
+  editForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newTitle = editInput.value.trim();
+    if (!newTitle) { editError.hidden = false; return; }
+    const { ok, data } = await ApApi.updateDocumentTitle(editTargetId, newTitle);
+    if (!ok) { editError.textContent = data.error || 'Ошибка'; editError.hidden = false; return; }
+    closeEditTitle();
+    renderHistory();
+  });
+  editInput.addEventListener('input', () => { editError.hidden = true; });
+
+  // Finalize a draft from history
+  const finalizeFromHistory = async (draft) => {
+    const { ok, data } = await ApApi.updateDocumentStatus(draft.id, 'final');
+    if (!ok) { alert(data.error || 'Не удалось финализировать документ'); return; }
+    await renderHistory();
+    const finalItem = { ...draft, status: 'final', savedAt: new Date().toISOString() };
+    const checkTab = document.querySelector('.app__tab[data-tab="check"]');
+    if (checkTab) checkTab.click();
+    currentResult = { ...finalItem, _saved: true };
+    showFinal(finalItem);
+  };
+  matchesModal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', closeMatches));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !matchesModal.hidden) closeMatches();
+  });
+
+  document.getElementById('finalizeBtn').addEventListener('click', async () => {
+    if (!currentResult) return;
+    stopDraftTimer();
+    if (currentResult.id) {
+      const { ok, data } = await ApApi.updateDocumentStatus(currentResult.id, 'final');
+      if (!ok) { alert(data.error || 'Не удалось финализировать документ'); return; }
+    }
+    const item = { ...currentResult, status: 'final', savedAt: new Date().toISOString() };
+    currentResult._saved = true;
+    await saveHistory(item);
+    showFinal(item);
+  });
+
+  document.getElementById('newCheckBtn').addEventListener('click', () => {
+    resetCheckFlow();
+  });
+
+  document.getElementById('downloadPdfBtn').addEventListener('click', () => {
+    if (!currentResult) return;
+    openPrintableReport(currentResult);
+  });
+
+  const showFinal = (item) => {
+    document.getElementById('finalTitle').textContent = item.title;
+    document.getElementById('finalType').textContent = item.type;
+    document.getElementById('finalSavedAt').textContent = formatDate(item.savedAt);
+    document.getElementById('finalPercent').textContent = item.percent + '%';
+    document.getElementById('finalMatches').textContent = (item.matches != null ? item.matches : Math.max(0, 100 - (item.percent || 0))) + '%';
+    document.getElementById('finalAi').textContent = (item.ai != null ? item.ai : 0) + '%';
+    const verifyUrl = `https://antiplagiat.bsuir.by/verify/${item.id}`;
+    const docUrl = `https://antiplagiat.bsuir.by/doc/${item.id}`;
+    const qrApi = (url) => `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`;
+    document.getElementById('finalQrVerify').src = qrApi(verifyUrl);
+    document.getElementById('finalQrDoc').src = qrApi(docUrl);
+    showStage(4);
+  };
+
+  const resetCheckFlow = () => {
+    stopDraftTimer();
+    currentResult = null;
+    uploadForm.reset();
+    fileInput.value = '';
+    showFileName(null);
+    setError(fileError, dropzone, '');
+    setError(titleError, workTitle, '');
+    setError(typeError, workType, '');
+    showStage(1);
+  };
+
+  // History — loaded from real API
+  let __historyCache = [];
+
+  const loadHistory = () => __historyCache;
+
+  const saveHistory = async (item) => {
+    // item is already uploaded as draft in startScan; just refresh the list
+    if (__isAdmin) { await renderHistory(); return; }
+    await renderHistory();
+  };
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  };
+  const HISTORY_PER_PAGE = 10;
+  let historyPage = 1;
+  const renderHistory = async () => {
+    const list = document.getElementById('historyList');
+    const pagi = document.getElementById('historyPagination');
+    if (!list) return;
+
+    // Load from API
+    if (!__isAdmin && __currentUser) {
+      const { ok, data } = await ApApi.getUserDocuments(__currentUser.username);
+      if (ok && data.documents) {
+        __historyCache = data.documents.map((doc) => ({
+          id:      doc.id,
+          title:   doc.title,
+          type:    doc.category || '',
+          percent: Math.round(doc.originalityPercent ?? 0),
+          matches: Math.round(doc.plagiarismPercentMl ?? (100 - (doc.originalityPercent ?? 0))),
+          ai:      Math.round(doc.aiPercentMl ?? 0),
+          status:  doc.status,
+          savedAt: doc.uploadDate,
+          expiresAt: doc.expiresAt,
+          fileName: doc.filename,
+        }));
+      }
+    }
+
+    const items = loadHistory();
+    if (!items.length) {
+      list.innerHTML = '<li class="history-list__empty">Пока нет сохранённых проверок.</li>';
+      if (pagi) { pagi.hidden = true; pagi.innerHTML = ''; }
+      return;
+    }
+    const pages = Math.max(1, Math.ceil(items.length / HISTORY_PER_PAGE));
+    if (historyPage > pages) historyPage = pages;
+    const start = (historyPage - 1) * HISTORY_PER_PAGE;
+    const visible = items.slice(start, start + HISTORY_PER_PAGE);
+    list.innerHTML = visible.map((it) => {
+      const isDraft = it.status === 'draft';
+      const pillClass = isDraft ? 'status-pill--draft' : 'status-pill--final';
+      const pillLabel = isDraft ? 'Черновая' : 'Финальная';
+      const timer = isDraft && it.expiresAt
+        ? `<span class="history-timer" data-expires="${it.expiresAt}">
+             <i data-lucide="clock" class="icon-16"></i>
+             <span>Хранится <strong>${formatRemaining(new Date(it.expiresAt).getTime() - Date.now())}</strong></span>
+           </span>`
+        : '';
+      const actionBtn = isDraft
+        ? `<div class="history-list__actions">
+             <button class="history-list__btn history-list__btn--icon" data-action="view" data-id="${it.id}" aria-label="Просмотреть заимствования и ИИ-генерации" title="Просмотреть заимствования и ИИ-генерации"><i data-lucide="file-search-2" class="icon-16"></i></button>
+             <button class="history-list__btn history-list__btn--primary" data-action="finalize" data-id="${it.id}"><i data-lucide="check" class="icon-16"></i> Финальная</button>
+           </div>`
+        : `<button class="history-list__btn" data-action="pdf" data-id="${it.id}"><i data-lucide="download" class="icon-16"></i> PDF</button>`;
+      return `
+        <li class="history-list__item">
+          <div>
+            <div class="history-list__name">
+              ${escapeHtml(it.title)}
+              <button class="history-list__edit" type="button" data-action="edit" data-id="${it.id}" aria-label="Изменить название">
+                <i data-lucide="pencil" class="icon-16"></i>
+              </button>
+            </div>
+            <div class="history-list__meta">${escapeHtml(it.type)} · ${formatDate(it.savedAt)}</div>
+          </div>
+          <div class="history-list__percents">
+            <span class="history-list__percent" title="Оригинальность">${it.percent}%</span>
+            <span class="history-list__ai" title="ИИ-генерация">ИИ ${it.ai ?? 0}%</span>
+          </div>
+          <div class="history-list__status">
+            <span class="status-pill ${pillClass}">${pillLabel}</span>
+            ${timer}
+          </div>
+          ${actionBtn}
+        </li>
+      `;
+    }).join('');
+    if (window.lucide) window.lucide.createIcons();
+    list.querySelectorAll('.history-list__btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.action;
+        const id = isNaN(btn.dataset.id) ? btn.dataset.id : Number(btn.dataset.id);
+        const item = loadHistory().find((x) => x.id == id); // loose == to handle string/number
+        if (!item) return;
+        if (action === 'pdf') openPrintableReport(item);
+        else if (action === 'view') openMatches(item);
+        else if (action === 'finalize') finalizeFromHistory(item);
+        else if (action === 'delete') deleteHistoryItem(item);
+      });
+    });
+    list.querySelectorAll('.history-list__edit').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = isNaN(btn.dataset.id) ? btn.dataset.id : Number(btn.dataset.id);
+        const item = loadHistory().find((x) => x.id == id);
+        if (item) openEditTitle(item);
+      });
+    });
+
+    if (pagi) {
+      if (items.length <= HISTORY_PER_PAGE) {
+        pagi.hidden = true;
+        pagi.innerHTML = '';
+      } else {
+        pagi.hidden = false;
+        const btns = [];
+        btns.push(`<button class="pagination__btn" data-page="prev" ${historyPage === 1 ? 'disabled' : ''}>‹</button>`);
+        buildPageList(historyPage, pages).forEach((p) => {
+          if (p === '…') btns.push(`<span class="pagination__ellipsis">…</span>`);
+          else btns.push(`<button class="pagination__btn ${p === historyPage ? 'is-active' : ''}" data-page="${p}">${p}</button>`);
+        });
+        btns.push(`<button class="pagination__btn" data-page="next" ${historyPage === pages ? 'disabled' : ''}>›</button>`);
+        pagi.innerHTML = btns.join('');
+        pagi.querySelectorAll('.pagination__btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const p = btn.dataset.page;
+            if (p === 'prev') historyPage = Math.max(1, historyPage - 1);
+            else if (p === 'next') historyPage = Math.min(pages, historyPage + 1);
+            else historyPage = Number(p);
+            renderHistory();
+          });
+        });
+      }
+    }
+
+    startHistoryTimers();
+  };
+
+  // Delete a document from history
+  const deleteHistoryItem = async (item) => {
+    if (!confirm(`Удалить «${item.title}»?`)) return;
+    const { ok, data } = await ApApi.deleteUserDocument(__currentUser.username, item.id);
+    if (!ok) { alert(data.error || 'Не удалось удалить документ'); return; }
+    await renderHistory();
+  };
+
+  let historyTimerId = null;
+  const startHistoryTimers = () => {
+    if (historyTimerId) clearInterval(historyTimerId);
+    const tick = () => {
+      const nodes = document.querySelectorAll('.history-timer[data-expires]');
+      if (!nodes.length) { clearInterval(historyTimerId); historyTimerId = null; return; }
+      const now = Date.now();
+      let needsReload = false;
+      nodes.forEach((node) => {
+        const left = new Date(node.dataset.expires).getTime() - now;
+        if (left <= 0) { needsReload = true; return; }
+        const strong = node.querySelector('strong');
+        if (strong) strong.textContent = formatRemaining(left);
+      });
+      if (needsReload) renderHistory();
+    };
+    tick();
+    historyTimerId = setInterval(tick, 1000);
+  };
+
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+
+  // Printable PDF
+  const openPrintableReport = (item) => {
+    const id = item.id || ('AP-' + Date.now().toString(36).toUpperCase());
+    const verifyUrl = `https://antiplagiat.bsuir.by/verify/${id}`;
+    const docUrl = `https://antiplagiat.bsuir.by/doc/${id}`;
+    const qr = (url) => `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`;
+    const qrVerify = qr(verifyUrl);
+    const qrDoc = qr(docUrl);
+    const logoUrl = new URL('image 1 [Vectorized].svg', location.href).href;
+
+    const orig = item.percent ?? 0;
+    const matches = item.matches ?? Math.max(0, 100 - orig);
+    const ai = item.ai ?? 0;
+
+    // Circle helper (same style as on the site)
+    const C = 2 * Math.PI * 42;
+    const ringSvg = (p, color, w = 10) => `
+      <svg viewBox="0 0 100 100" width="100%" height="100%">
+        <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" stroke-width="${w}"/>
+        <circle cx="50" cy="50" r="42" fill="none" stroke="${color}" stroke-width="${w}"
+          stroke-linecap="round" stroke-dasharray="${C}"
+          stroke-dashoffset="${C * (1 - p / 100)}"
+          transform="rotate(-90 50 50)"/>
+      </svg>`;
+
+    // Matches table — from mockMatches, only items that fit on the page (limit to 5)
+    const sources = mockMatches.slice(0, 5);
+    const sourcesHtml = sources.map((m, i) => `
+      <tr>
+        <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
+        <td class="src-table__quote">${escapeHtml(m.title || m.quote)}</td>
+        <td><code>${escapeHtml(m.docId)}</code></td>
+        <td class="src-table__pct"><span>${m.percent}%</span></td>
+      </tr>
+    `).join('');
+
+    const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Отчёт — ${escapeHtml(item.title)}</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-soft: #dbeafe;
+    --ink: #0a1f44;
+    --ink-2: #1e293b;
+    --muted: #64748b;
+    --bg-2: #f4f8fd;
+    --border: rgba(15, 41, 92, 0.08);
+  }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
+    color: var(--ink); background: #fff;
+    padding: 40px 48px; max-width: 960px; margin: 0 auto;
+    line-height: 1.55;
+  }
+  h1 { font-size: 20px; letter-spacing: -0.3px; margin: 0 0 6px; line-height: 1.3; }
+  h2 { font-size: 16px; margin: 0 0 14px; color: var(--ink); }
+
+  .head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 18px; border-bottom: 1px solid var(--border); margin-bottom: 24px;
+  }
+  .brand {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--primary-soft); color: var(--primary);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.8px;
+    padding: 6px 16px 6px 10px; border-radius: 999px;
+  }
+  .brand img { width: 28px; height: 28px; flex-shrink: 0; object-fit: contain; }
+  .meta-id { font-size: 12px; color: var(--muted); }
+  .meta-id code {
+    background: var(--bg-2); padding: 2px 8px; border-radius: 6px;
+    font-family: ui-monospace, "SF Mono", monospace; font-size: 11px; color: var(--ink-2);
+  }
+
+  .subtitle { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+
+  .card {
+    background: #fff; border: 1px solid var(--border); border-radius: 22px;
+    padding: 22px 24px; margin-bottom: 18px;
+  }
+
+  .metrics {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
+  }
+  .metric {
+    background: #fff; border: 1px solid var(--border); border-radius: 18px;
+    padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .metric--main { background: var(--bg-2); }
+  .metric__circle { width: 110px; height: 110px; position: relative; display: grid; place-items: center; }
+  .metric__circle svg { position: absolute; inset: 0; }
+  .metric__val {
+    position: relative; z-index: 1; font-size: 24px; font-weight: 700; color: var(--ink);
+    display: inline-flex; align-items: baseline; gap: 1px;
+  }
+  .metric__val span:last-child { font-size: 13px; }
+  .metric__label { font-size: 14px; color: var(--ink-2); font-weight: 500; }
+  .metric--main .metric__label { font-weight: 700; color: var(--ink); }
+
+  .meta {
+    display: grid; grid-template-columns: 200px 1fr; gap: 12px 24px;
+    font-size: 14px; margin: 0;
+  }
+  .meta dt { margin: 0; color: var(--muted); }
+  .meta dd { margin: 0; color: var(--ink); font-weight: 500; }
+  .status-pill {
+    display: inline-block; background: #dcfce7; color: #166534;
+    padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  }
+
+  .src-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+  .src-table thead th {
+    text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
+    padding: 10px 12px; background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .src-table thead th:first-child { border-top-left-radius: 12px; }
+  .src-table thead th:last-child { border-top-right-radius: 12px; }
+  .src-table tbody td {
+    padding: 12px; border-bottom: 1px solid var(--border);
+    vertical-align: top; color: var(--ink-2);
+  }
+  .src-table tbody tr:last-child td { border-bottom: none; }
+  .src-table__num { color: var(--muted); font-weight: 700; width: 36px; }
+  .src-table__type { font-weight: 600; color: var(--ink); white-space: nowrap; }
+  .src-table__quote { font-style: italic; line-height: 1.45; min-width: 280px; }
+  .src-table code {
+    background: var(--bg-2); padding: 2px 8px; border-radius: 6px;
+    font-family: ui-monospace, "SF Mono", monospace; font-size: 11px; color: var(--ink-2);
+  }
+  .src-table__pct { text-align: right; white-space: nowrap; }
+  .src-table__pct span {
+    background: #fee2e2; color: #b91c1c;
+    padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+    display: inline-block;
+  }
+
+  .signature {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
+    margin: 12px 0 24px; font-size: 13px;
+  }
+  .signature__row { display: flex; align-items: end; gap: 12px; }
+  .signature__label { color: var(--ink-2); white-space: nowrap; }
+  .signature__line { flex: 1; border-bottom: 1px solid #94a3b8; height: 18px; }
+
+  .qrs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+    padding: 18px 0;
+  }
+  .qr {
+    background: #fff; border: 1px solid var(--border); border-radius: 18px;
+    padding: 16px; text-align: center; font-size: 12px; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; gap: 10px; line-height: 1.4;
+  }
+  .qr img { width: 160px; height: 160px; }
+
+  footer {
+    margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+    display: flex; justify-content: space-between;
+  }
+  @page {
+    size: A4;
+    margin: 10mm;
+    @top-left { content: ""; }
+    @top-center { content: ""; }
+    @top-right { content: ""; }
+    @bottom-left { content: ""; }
+    @bottom-center { content: ""; }
+    @bottom-right { content: ""; }
+  }
+  @media print {
+    body { padding: 0; max-width: none; }
+    .qr { break-inside: avoid; }
+    .src-table tr { break-inside: avoid; }
+    h2 { break-after: avoid; }
+    .metric--main { background: var(--bg-2) !important; }
+    .matches-list__percent, .src-table__pct span, .status-pill, .metric__circle circle {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  }
+</style></head><body>
+
+  <div class="head">
+    <span class="brand"><img src="${logoUrl}" alt="БГУИР"/>АНТИПЛАГИАТ · БГУИР</span>
+    <div class="meta-id">ID отчёта <code>${id}</code></div>
+  </div>
+
+  <h1>${escapeHtml(item.title)}</h1>
+  <p class="subtitle">Отчёт о проверке на оригинальность</p>
+
+  <div class="card">
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric__circle">
+          ${ringSvg(ai, '#8b5cf6')}
+          <span class="metric__val"><span>${ai}</span><span>%</span></span>
+        </div>
+        <div class="metric__label">ИИ-генерация</div>
+      </div>
+      <div class="metric metric--main">
+        <div class="metric__circle">
+          ${ringSvg(orig, '#2563eb', 12)}
+          <span class="metric__val"><span>${orig}</span><span>%</span></span>
+        </div>
+        <div class="metric__label">Оригинальность</div>
+      </div>
+      <div class="metric">
+        <div class="metric__circle">
+          ${ringSvg(matches, '#dc2626')}
+          <span class="metric__val"><span>${matches}</span><span>%</span></span>
+        </div>
+        <div class="metric__label">Совпадения</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Сведения о работе</h2>
+    <dl class="meta">
+      <dt>Автор</dt><dd>Иванов Иван Иванович</dd>
+      <dt>Учебное заведение</dt><dd>БГУИР</dd>
+      <dt>Тип работы</dt><dd>${escapeHtml(item.type)}</dd>
+      <dt>Количество символов</dt><dd>${Math.round((item.fileSize || 30000) * 0.7).toLocaleString('ru-RU')}</dd>
+      <dt>Дата проверки</dt><dd>${formatDate(item.savedAt || new Date().toISOString())}</dd>
+    </dl>
+  </div>
+
+  <div class="signature">
+    <div class="signature__row">
+      <span class="signature__label">Дата:</span>
+      <span class="signature__line"></span>
+    </div>
+    <div class="signature__row">
+      <span class="signature__label">Подпись проверяющего:</span>
+      <span class="signature__line"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Найденные заимствования</h2>
+    <table class="src-table">
+      <thead>
+        <tr>
+          <th>№</th>
+          <th>Название работы</th>
+          <th>ID документа</th>
+          <th style="text-align: right;">%</th>
+        </tr>
+      </thead>
+      <tbody>${sourcesHtml}</tbody>
+    </table>
+  </div>
+
+  <div class="qrs">
+    <div class="qr">
+      <img src="${qrVerify}" alt="QR-код верификации"/>
+      Для подтверждения подлинности и актуальности данной справки отсканируйте QR-код
+    </div>
+    <div class="qr">
+      <img src="${qrDoc}" alt="QR-код оригинальной версии"/>
+      Для просмотра оригинальной электронной версии документа отсканируйте QR-код
+    </div>
+  </div>
+
+  <footer>
+    <span>antiplagiat.bsuir.by</span>
+    <span>${verifyUrl}</span>
+  </footer>
+  <script>
+    const __t = document.title;
+    window.addEventListener('beforeprint', () => { document.title = ' '; });
+    window.addEventListener('afterprint', () => { document.title = __t; });
+    window.addEventListener('load', () => setTimeout(() => window.print(), 500));
+  <\/script>
+</body></html>`;
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
+  // Initial render
+  renderHistory();
+  } // end runApp
+})();
+</script>
+</body>
+</html>

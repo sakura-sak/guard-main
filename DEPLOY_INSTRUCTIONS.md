@@ -1,0 +1,168 @@
+# Инструкция по развертыванию на сервере
+
+## ✅ Подготовка проекта завершена
+
+Проект полностью подготовлен к деплою с поддержкой LDAP аутентификации.
+
+## 📋 Что было сделано:
+
+1. ✅ LDAP функционал интегрирован в проект
+2. ✅ Добавлена библиотека `ldapts` в зависимости
+3. ✅ Создан модуль `lib/ldap.ts` для работы с LDAP
+4. ✅ Обновлен API аутентификации для поддержки LDAP
+5. ✅ Настроен Dockerfile с системными зависимостями
+6. ✅ Настроен docker-compose.yml для деплоя
+7. ✅ Настроен nginx.conf
+8. ✅ Создан скрипт автоматического развертывания `deploy.sh`
+9. ✅ Добавлена документация по деплою
+
+## 🚀 Быстрый старт на сервере
+
+### Шаг 1: Подготовка файла .env.local
+
+Скрипт `deploy.sh` автоматически создаст файл `.env.local` из примера при первом запуске, но вы можете создать его вручную:
+
+```bash
+cp env.bsuir.local.example .env.local
+```
+
+**Важно:** Файл `.env.local` уже содержит настройки LDAP для БГУИР. Убедитесь, что пароль `LDAP_BIND_PASSWORD` актуален.
+
+### Шаг 2: Запуск развертывания
+
+#### На Linux/macOS:
+
+```bash
+# Сделайте скрипт исполняемым
+chmod +x deploy.sh
+
+# Запустите развертывание
+./deploy.sh
+```
+
+#### На Windows (PowerShell):
+
+```powershell
+# Скопируйте пример конфигурации
+Copy-Item env.bsuir.local.example .env.local
+
+# Создайте директории для данных
+New-Item -ItemType Directory -Force -Path data\uploads, data\reports, data\logs
+
+# Запустите Docker Compose
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+### Шаг 3: Проверка работы
+
+После запуска проверьте статус контейнеров:
+
+```bash
+docker-compose ps
+```
+
+Просмотрите логи:
+
+```bash
+docker-compose logs -f
+```
+
+Приложение будет доступно по адресу: **http://localhost:3000**
+
+## 🔧 Настройка LDAP
+
+Файл `.env.local` содержит следующие настройки LDAP:
+
+```env
+LDAP_ENABLED=true
+LDAP_URL=ldaps://ldap.bsuir.by
+LDAP_BASE_DN=dc=bsuir,dc=by
+LDAP_BIND_DN=uid=smdoadmin,ou=staff,dc=bsuir,dc=by
+LDAP_BIND_PASSWORD=eW308687!
+LDAP_USER_SEARCH_BASES=ou=staff,dc=bsuir,dc=by;ou=stud,dc=bsuir,dc=by
+LDAP_USER_SEARCH_FILTER=(uid={username})
+LDAP_USERNAME_ATTRIBUTE=uid
+LDAP_EMAIL_ATTRIBUTE=mail
+LDAP_FIRSTNAME_ATTRIBUTE=givenName
+LDAP_LASTNAME_ATTRIBUTE=sn
+LDAP_TIMEOUT=10000
+```
+
+**Если нужно изменить настройки LDAP:**
+1. Отредактируйте файл `.env.local`
+2. Перезапустите контейнеры: `docker-compose restart`
+
+## 📝 Проверка работы LDAP
+
+После развертывания проверьте логи на наличие ошибок LDAP:
+
+```bash
+docker-compose logs app | grep -i ldap
+```
+
+Проверьте переменные окружения в контейнере:
+
+```bash
+docker-compose exec app env | grep LDAP
+```
+
+## 🔍 Устранение проблем
+
+### LDAP не работает
+
+1. Проверьте доступность LDAP сервера из контейнера:
+   ```bash
+   docker-compose exec app ping ldap.bsuir.by
+   ```
+
+2. Проверьте переменные окружения:
+   ```bash
+   docker-compose exec app env | grep LDAP
+   ```
+
+3. Проверьте логи:
+   ```bash
+   docker-compose logs app | grep -i ldap
+   ```
+
+### Контейнер не запускается
+
+1. Проверьте логи:
+   ```bash
+   docker-compose logs app
+   ```
+
+2. Убедитесь, что порт 3000 свободен:
+   ```bash
+   netstat -tulpn | grep :3000
+   ```
+
+3. Пересоберите образы:
+   ```bash
+   docker-compose build --no-cache
+   ```
+
+## 📚 Дополнительная документация
+
+- **LDAP настройка:** `LDAP_SETUP.md`
+- **Docker деплой:** `DOCKER_DEPLOY.md`
+- **README:** `README.md`
+
+## 🔐 Безопасность
+
+⚠️ **Важно:**
+- Файл `.env.local` содержит секретные данные и не должен попадать в git
+- Регулярно обновляйте пароли LDAP
+- Используйте HTTPS в production (настройте SSL сертификаты)
+
+## 🎯 Следующие шаги после деплоя
+
+1. Настройте DNS запись для домена `guard-main.by`
+2. Настройте SSL сертификаты для HTTPS
+3. Настройте резервное копирование директории `data/`
+4. Настройте мониторинг приложения
+
+---
+
+**Проект готов к развертыванию!** 🚀

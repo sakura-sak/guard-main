@@ -1,0 +1,92 @@
+@startuml k8s-deployment-guard-antiplagiarism
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam handwritten false
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor #2F4F4F
+skinparam RectangleBorderColor #2F4F4F
+skinparam RectangleBackgroundColor #F8FBFF
+skinparam DatabaseBackgroundColor #FFF8DC
+skinparam NodeBackgroundColor #EEF5FF
+skinparam NoteBackgroundColor #FFFDE7
+
+title Kubernetes Deployment Diagram\nPlagiarismGuard (guard-main) + Antiplagiarism ML (analysis + qdrant)
+
+actor "Пользователь\n(браузер)" as User
+cloud "Интернет / LAN" as Net
+
+node "Kubernetes Cluster" as K8s {
+
+  frame "Namespace: plagiarismguard" as NS {
+
+    rectangle "Ingress\n(plagiarismguard.example.com)" as Ingress
+
+    rectangle "Service: guard-nginx-svc\nClusterIP : 80" as SvcNginx
+    node "Deployment: guard-nginx\nreplicas: 1..2" as DepNginx {
+      component "Pod: guard-nginx\ncontainer: nginx:alpine\nport: 3000" as PodNginx
+    }
+
+    rectangle "Service: guard-app-svc\nClusterIP : 3000" as SvcGuard
+    node "Deployment: guard-app\nreplicas: 2+" as DepGuard {
+      component "Pod: guard-app\ncontainer: Next.js app\nport: 3000" as PodGuard
+    }
+
+    rectangle "Service: analysis-svc\nClusterIP : 8765" as SvcAnalysis
+    node "Deployment: analysis\nreplicas: 1" as DepAnalysis {
+      component "Pod: analysis\ncontainer: FastAPI + worker.py\nport: 8765" as PodAnalysis
+    }
+
+    rectangle "Service: qdrant-svc\nClusterIP : 6333" as SvcQdrant
+    node "StatefulSet: qdrant\nreplicas: 1" as StsQdrant {
+      database "Pod: qdrant\ncontainer: qdrant/qdrant\nport: 6333" as PodQdrant
+    }
+
+    folder "ConfigMap\napp-config" as Cfg
+    folder "Secret\napp-secrets" as Sec
+
+    database "PVC: guard-data-pvc\n(/app/data)" as PvcGuard
+    database "PVC: qdrant-storage-pvc\n(/qdrant/storage)" as PvcQdrant
+
+    queue "Опционально: LDAP сервер\n(внешний)" as LDAP
+  }
+}
+
+User --> Net
+Net --> Ingress : HTTPS 443
+Ingress --> SvcNginx : route /
+SvcNginx --> PodNginx
+PodNginx --> SvcGuard : reverse proxy\nHTTP 3000
+SvcGuard --> PodGuard
+
+PodGuard --> SvcAnalysis : POST /v1/analyze\nGET /health
+SvcAnalysis --> PodAnalysis
+PodAnalysis --> SvcQdrant : query/upsert vectors
+SvcQdrant --> PodQdrant
+
+PodGuard --> PvcGuard : documents + sqlite data
+PodQdrant --> PvcQdrant : vector storage
+
+Cfg ..> PodGuard
+Cfg ..> PodAnalysis
+Cfg ..> PodQdrant
+Sec ..> PodGuard : ANALYSIS_SERVICE_API_KEY,\nREPORT_ACCESS_SECRET
+Sec ..> PodAnalysis : ANALYSIS_API_KEY
+PodGuard ..> LDAP : LDAP auth (optional)
+
+note right of PodAnalysis
+entrypoint:
+1) wait qdrant /readyz
+2) init_qdrant_collection.py
+3) run uvicorn api_server:app
+end note
+
+note bottom of NS
+Ключевые env:
+- ANALYSIS_SERVICE_URL=http://analysis-svc:8765
+- QDRANT_HOST=qdrant-svc
+- QDRANT_PORT=6333
+end note
+
+@enduml

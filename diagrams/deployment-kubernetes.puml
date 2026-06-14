@@ -1,0 +1,96 @@
+@startuml deployment-kubernetes-plagiarismguard
+!theme plain
+title Схема развёртывания в Kubernetes\n(веб-приложение PlagiarismGuard)
+
+skinparam backgroundColor #FEFEFE
+skinparam rectangleBorderColor #2F4F4F
+skinparam arrowColor #2F4F4F
+skinparam defaultTextAlignment center
+skinparam wrapWidth 180
+skinparam shadowing false
+
+left to right direction
+
+actor "Пользователь" as User #LightBlue
+
+rectangle "Точка входа трафика" as Edge #FFF8DC {
+  rectangle "Ingress Controller\n(часто nginx-ingress в kube-system)" as IC #FFE4B5
+  rectangle "Ingress\nресурс (host, TLS,\nproxy-body-size и т.д.)" as ING #FFE4B5
+}
+
+together {
+  rectangle "Kubernetes-кластер" as Cluster #F5F5F5 {
+
+    rectangle "**Namespace: plagiarismguard**" as NS {
+
+      package "Сетевое взаимодействие" #E6F2FF {
+        rectangle "**Service**\nplagiarismguard-nginx\nClusterIP / NodePort" as SVC_NGX #DAE8FC
+        rectangle "**Service**\nplagiarismguard-app\nClusterIP\n→ :3000" as SVC_APP #DAE8FC
+      }
+
+      package "Рабочие нагрузки" #FFF9E6 {
+        rectangle "**Deployment**\nnginx reverse-proxy\n(лимиты тела, прокси к Next.js)" as DEP_NGX #FFF2CC
+        rectangle "**Deployment**\nNext.js (Guard)\nконтейнер app\nliveness / readiness" as DEP_APP #FFF2CC
+      }
+
+      storage "**PersistentVolumeClaim**\nplagiarismguard-data-pvc\nмонтаж в pod приложения\n`/app/data`\n(SQLite, загрузки, отчёты)" as PVC #E1D5E7
+
+      file "**ConfigMap**\nпеременные приложения,\nLDAP (часть значений)" as CM #D5E8D4
+      file "**Secret**\nпример: секреты отчётов,\nпароли вне ConfigMap" as SEC #F8CECC
+    }
+  }
+}
+
+User --> IC : HTTP / HTTPS
+IC --> ING : маршрутизация по IngressClass
+ING --> SVC_NGX : правило host → backend
+
+SVC_NGX --> DEP_NGX : selector → Pod'ы
+DEP_NGX --> SVC_APP : proxy_pass\nвнутри кластера
+SVC_APP --> DEP_APP : selector → Pod'ы
+
+DEP_APP --> PVC : volumeMount
+DEP_APP ..> CM : env / volume
+DEP_APP ..> SEC : env
+
+note bottom of DEP_APP
+  Переменная **ANALYSIS_SERVICE_URL** может указывать
+  на ML-сервис (отдельный Namespace или вне кластера).
+  При отсутствии — работа только по MinHash.
+end note
+
+note right of ING
+  Цепочка трафика (как в типичной документации к проекту):
+  Internet → Ingress Controller → **Ingress** → **Service nginx**
+  → Pod nginx → **Service app** → Pod Next.js.
+end note
+
+newpage Схема развёртывания — расширение (ML + Qdrant в том же кластере)
+
+title Схема развёртывания в Kubernetes\n(расширение: семантический анализ в кластере)
+
+skinparam backgroundColor #FEFEFE
+left to right direction
+
+rectangle "**Namespace: plagiarismguard** (фрагмент)" as NS1 #F5F5F5 {
+  rectangle "Deployment\nGuard (Next.js)" as G #FFF2CC
+}
+
+rectangle "**Namespace: antiplag-ml** (пример имени)" as NS2 #F0F8FF {
+  rectangle "StatefulSet / Deployment\n**Qdrant**\nService + PVC для storage" as QD #E1D5E7
+  rectangle "Deployment\n**analysis**\n(FastAPI, uvicorn :8765)" as AN #FFF2CC
+  rectangle "Service\nanalysis\nClusterIP" as SVAN #DAE8FC
+}
+
+G ..> SVAN : **ANALYSIS_SERVICE_URL**\nhttp://analysis:8765 (DNS кластера)
+SVAN --> AN
+AN --> QD : QDRANT_HOST\nHTTP/gRPC
+
+note bottom of NS2
+  В репозитории ML по умолчанию поднимается через **Docker Compose**;
+  на диаграмме — типовой перенос в K8s: отдельный namespace,
+  персистентное хранилище для Qdrant, один или несколько реплик analysis
+  за Service (при **replicas > 1** нужна общая сессия/стратегия для Qdrant).
+end note
+
+@enduml

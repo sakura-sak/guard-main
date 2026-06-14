@@ -1,0 +1,85 @@
+@startuml use-case-plagiarism-guard
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam handwritten false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #FFF8DC
+  BorderColor #2F4F4F
+}
+skinparam arrowColor #2F4F4F
+
+title Диаграмма вариантов использования\nсистемы проверки заимствований PlagiarismGuard + ML-модуль
+
+left to right direction
+
+actor "Гость" as Guest #LightGray
+actor "Пользователь\n(студент / сотрудник)" as User #LightBlue
+actor "Администратор" as Admin #LightCoral
+
+actor "LDAP-сервер\n(опционально)" as LDAP #Wheat
+actor "Сервис семантического\nанализа (Python, Qdrant)" as ML #MistyRose
+
+rectangle "Система PlagiarismGuard (веб-приложение)" as Guard {
+
+  package "Аутентификация и доступ" {
+    usecase "Войти в систему\n(локальная учётная запись)" as UC_LoginLocal
+    usecase "Войти через LDAP" as UC_LoginLDAP
+    usecase "Выйти из системы" as UC_Logout
+  }
+
+  package "Работа с документами" {
+    usecase "Загрузить документ\n(PDF, DOCX) в корпус" as UC_Upload
+    usecase "Проверить текст\nна заимствования" as UC_Check
+    usecase "Выполнить лексический анализ\n(MinHash, LSH, Jaccard)" as UC_MinHash
+    usecase "Выполнить семантический анализ\n(эмбеддинги, Qdrant)" as UC_Semantic
+    usecase "Просмотреть список\nдокументов корпуса" as UC_List
+    usecase "Просмотреть карточку\nдокумента и метрики" as UC_ViewDoc
+    usecase "Скачать PDF-отчёт" as UC_Report
+    usecase "Поставить фоновую\nзадачу в очередь" as UC_Queue
+  }
+
+  package "Администрирование" {
+    usecase "Управлять пользователями\nи правами" as UC_AdminUsers
+    usecase "Просматривать статистику\nи журналы" as UC_AdminStats
+  }
+}
+
+' --- Гость ---
+Guest --> UC_LoginLocal
+Guest --> UC_LoginLDAP
+
+' --- Пользователь ---
+User --> UC_Logout
+User --> UC_Upload
+User --> UC_Check
+User --> UC_List
+User --> UC_ViewDoc
+User --> UC_Report
+User --> UC_Queue
+
+' --- Администратор наследует сценарии пользователя (опционально в тексте записки) ---
+Admin --> UC_AdminUsers
+Admin --> UC_AdminStats
+Admin --> UC_Upload
+Admin --> UC_List
+
+' --- Внешние системы ---
+UC_LoginLDAP ..> LDAP : LDAP bind / search
+UC_Check .> UC_MinHash : <<include>>
+UC_Semantic .> UC_Check : <<extend>>\n(при настроенном\nANALYSIS_SERVICE_URL\nи доступности сервиса)
+UC_Semantic ..> ML : <<HTTP>>\nPOST /v1/analyze
+
+note right of UC_Check
+  Базовый сценарий всегда включает
+  лексическое сравнение по корпусу SQLite.
+  Расширение — опциональный вызов ML.
+end note
+
+note bottom of ML
+  Внешний микросервис (FastAPI + Qdrant),
+  не часть образа Next.js.
+end note
+
+@enduml
