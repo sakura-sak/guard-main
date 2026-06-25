@@ -1,17 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDocumentByIdFromDb, updateDocumentStatus, getReportPdfPath, saveReportPdf } from "@/lib/local-storage"
+import { getDocumentByIdFromDb, updateDocumentStatus, getReportPdfPath, saveReportPdf, getDocumentAuthorLabel } from "@/lib/local-storage"
 import { generatePDFReport } from "@/lib/pdf-report"
 import { getSimilarDocumentsForReport } from "@/lib/similar-documents-for-report"
 import { logInfo, logError } from "@/lib/logger"
 import type { DocumentStatus } from "@/lib/local-storage"
 import { requireSessionApi } from "@/lib/require-session-api"
 
-function getBaseUrl(request: NextRequest): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host")
-  const proto = request.headers.get("x-forwarded-proto") ?? "http"
-  return host ? `${proto === "https" ? "https" : "http"}://${host}` : ""
-}
+import { resolvePublicBaseUrl } from "@/lib/report-qr-links"
 
 /**
  * PATCH /api/documents/:documentId/status
@@ -77,7 +72,7 @@ export async function PATCH(
           const pdfBytes = await generatePDFReport({
             filename: doc.filename || `${doc.title || "document"}.txt`,
             title: doc.title,
-            author: doc.author || undefined,
+            author: getDocumentAuthorLabel(doc),
             category: doc.category,
             uniquenessPercent,
             totalDocumentsChecked: similarDocuments.length > 0 ? similarDocuments.length : 0,
@@ -88,7 +83,7 @@ export async function PATCH(
             uploadDate: doc.uploadDate,
             status: "final",
             documentId: id,
-            baseUrl: getBaseUrl(request),
+            baseUrl: resolvePublicBaseUrl(request),
           })
           saveReportPdf(id, Buffer.from(pdfBytes), uniquenessPercent)
         } catch (e) {

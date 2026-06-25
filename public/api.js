@@ -138,8 +138,8 @@
     DELETE(`/api/documents/user/${encodeURIComponent(username)}/documents/${documentId}`);
 
   /**
-   * Get plagiarism match details for a document.
-   * @returns {{ ok, data: { success, matches: [...], aiMatches: [...] } }}
+   * Borrowings / AI fragments for a document.
+   * @returns {{ ok, data: { success, borrowMatches, aiMatches, similarDocuments, plagiarismPercent, aiPercent } }}
    */
   const getDocumentMatches = (documentId) =>
     GET(`/api/documents/${documentId}/matches`);
@@ -150,6 +150,96 @@
    */
   const generateReport = (documentId) =>
     POST('/api/report', { documentId });
+
+  /** Signed URLs for report QR codes (verify + original file). */
+  const getReportQrLinks = (documentId) =>
+    GET(`/api/report/${documentId}/links`);
+
+  const resolveReportQrUrls = async (documentId) => {
+    if (!documentId) return { verifyUrl: '', docUrl: '' };
+    const { ok, data } = await getReportQrLinks(documentId);
+    if (ok && data.success) {
+      return { verifyUrl: data.verifyUrl, docUrl: data.originalUrl };
+    }
+    return { verifyUrl: '', docUrl: '' };
+  };
+
+  /** Map GET /matches response to printable report table rows (real documents only, no ML duplicate). */
+  function mapBorrowRowsFromMatchesApi(data) {
+    const rows = [];
+    (data.borrowMatches || []).forEach((m) => {
+      if (!m.sourceId || m.sourceId <= 0) return;
+      rows.push({
+        title: m.sourceTitle || '—',
+        quote: m.quote || m.sourceTitle || '—',
+        docId: String(m.sourceId),
+        percent: Math.round(m.similarity ?? 0),
+        percentLabel: `${Math.round(m.similarity ?? 0)}%`,
+        kind: 'local',
+      });
+    });
+    return rows.slice(0, 5);
+  }
+
+  /**
+   * Rows for «Найденные заимствования» when API returned no document matches.
+   * Avoids misleading 0% row while header shows ML-based совпадения.
+   */
+  function buildReportTableRows(rows, stats) {
+    if (rows && rows.length) return rows;
+    const matches = stats?.matches ?? 0;
+    const ml = stats?.ml ?? 0;
+    const local = stats?.local ?? 0;
+    if (matches > 0) {
+      const viaMl = ml >= local && ml > 0;
+      return [{
+        title: viaMl ? 'Семантический анализ (ML / Qdrant)' : 'Итоговая оценка',
+        quote: viaMl
+          ? `Конкретные работы в базе сравнения не найдены. Показатель «Совпадения» (${matches}%) сформирован векторным поиском.`
+          : `Конкретные источники в таблице не найдены. Показатель «Совпадения»: ${matches}%.`,
+        docId: '—',
+        percentLabel: '—',
+      }];
+    }
+    return [{
+      title: 'Заимствования не обнаружены',
+      quote: 'Заимствования не обнаружены',
+      docId: '—',
+      percent: 0,
+      percentLabel: '0%',
+    }];
+  }
+
+  function formatReportPercentCell(row) {
+    if (row.percentLabel != null) return row.percentLabel;
+    if (row.percent != null && Number.isFinite(row.percent)) return `${row.percent}%`;
+    return '—';
+  }
+
+  /**
+   * Load borrowings for printable PDF report.
+   * @returns {{ rows: Array, stats: { orig, matches, ai, local, ml } | null, error?: string }}
+   */
+  async function fetchReportMatchRows(documentId) {
+    if (!documentId) {
+      return { rows: [], stats: null };
+    }
+    const { ok, data } = await getDocumentMatches(documentId);
+    if (!ok || !data?.success) {
+      return { rows: [], stats: null, error: data?.error || 'Не удалось загрузить заимствования' };
+    }
+    const local = data.localPlagiarismPercent ?? 0;
+    const ml = data.mlPlagiarismPercent ?? 0;
+    const matches = data.plagiarismPercent ?? Math.max(local, ml);
+    const stats = {
+      orig: data.originalityPercent != null ? Math.round(data.originalityPercent) : null,
+      matches: Math.round(matches),
+      ai: data.aiPercent != null ? Math.round(data.aiPercent) : null,
+      local: Math.round(local),
+      ml: Math.round(ml),
+    };
+    return { rows: mapBorrowRowsFromMatchesApi(data), stats };
+  }
 
   // ─── Admin: users ─────────────────────────────────────────────────────────
 
@@ -218,8 +308,8 @@
   // ─── Admin: statistics, logs, storage ────────────────────────────────────
 
   /**
-   * Get system statistics.
-   * @param {{ from?, to?, institution?, faculty? }} [params]
+   * Get system statistics for admin monitoring dashboard.
+   * @param {{ startDate?, endDate?, from?, to?, category?, status?, minUniqueness?, maxUniqueness?, minPlagiarism?, maxPlagiarism? }} [params]
    */
   const getAdminStatistics = (params) => {
     const qs = params ? '?' + new URLSearchParams(
@@ -239,8 +329,23 @@
   /** Get storage statistics (admin). */
   const getAdminStorageStats = () => GET('/api/admin/storage/stats');
 
-  /** Run storage cleanup (admin). */
+  /** Run archived storage purge (admin): removes files/text, keeps stats in DB. */
   const runAdminCleanup = () => POST('/api/admin/cleanup', {});
+
+  /** Open printable report HTML in a new tab (avoids about:blank from document.write). */
+  function openReportPrintWindow(html) {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!w) {
+      URL.revokeObjectURL(url);
+      alert('Разрешите всплывающие окна в браузере, чтобы открыть отчёт.');
+      return;
+    }
+    w.addEventListener('load', () => {
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }, { once: true });
+  }
 
   // ─── Expose ───────────────────────────────────────────────────────────────
 
@@ -255,7 +360,8 @@
     checkDocument, uploadDocument,
     // documents
     getUserDocuments, updateDocumentStatus, updateDocumentTitle,
-    deleteUserDocument, getDocumentMatches, generateReport,
+    deleteUserDocument, getDocumentMatches, generateReport, getReportQrLinks, resolveReportQrUrls,
+    fetchReportMatchRows, mapBorrowRowsFromMatchesApi, buildReportTableRows, formatReportPercentCell, openReportPrintWindow,
     updateAdminDocument,
     // admin: users
     getAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser,

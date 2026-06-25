@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
+import type { UserRole } from "@/lib/auth"
 import { getAllUsers, registerUser, filterUsersBySearch } from "@/lib/user-storage"
 import { getAllDocumentsFromDb } from "@/lib/local-storage"
 import { logInfo, logError } from "@/lib/logger"
-import { requireAdminApi } from "@/lib/require-admin-api"
+import { assertUserInScope, requireAdminApi } from "@/lib/require-admin-api"
+import { adminCanChangeUserPassword, canAssignRole, creatableRolesFor } from "@/lib/roles"
 
 // GET - Получение всех пользователей
 export async function GET(request: NextRequest) {
@@ -12,10 +14,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
     let users = await getAllUsers()
-    users = filterUsersBySearch(users, search)
-    const documents = await getAllDocumentsFromDb()
 
-    // Подсчитываем количество документов для каждого пользователя
+    if (gate.isUniversityAdmin && gate.institutionId) {
+      users = users.filter((u) => u.institutionId === gate.institutionId)
+      users = users.filter((u) => u.role === "student" || u.role === "teacher")
+    }
+
+    users = filterUsersBySearch(users, search)
+    const documents = await getAllDocumentsFromDb(
+      undefined,
+      gate.isUniversityAdmin ? gate.institutionId : undefined,
+    )
+
     const userDocumentCounts = new Map<string, number>()
     documents.forEach((doc) => {
       if (doc.userId) {
@@ -23,14 +33,16 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Возвращаем без паролей
     const usersData = users.map((user) => ({
       username: user.username,
+      password: user.password,
+      passwordEditable: adminCanChangeUserPassword(user.institutionId, user.institution),
       fullName: user.fullName,
       email: user.email,
       role: user.role,
       additionalRoles: user.additionalRoles ?? [],
       institution: user.institution,
+      institutionId: user.institutionId,
       faculty: user.faculty,
       group: user.group,
       createdAt: user.createdAt,
@@ -41,6 +53,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       users: usersData,
+      creatableRoles: creatableRolesFor(gate.role),
+      scope: gate.isSuperAdmin ? "all" : "institution",
+      institutionId: gate.institutionId ?? null,
+      institution: gate.institution ?? null,
     })
   } catch (error) {
     console.error("Error fetching users:", error)
@@ -54,16 +70,32 @@ export async function POST(request: NextRequest) {
   if (!gate.ok) return gate.response
   try {
     const body = await request.json()
-    const { username, password, role, email, fullName, institution, faculty, group } = body
+    let { username, password, role, email, fullName, institution, faculty, group } = body
 
     if (!username || !password) {
       return NextResponse.json({ success: false, error: "Логин и пароль обязательны" }, { status: 400 })
     }
 
+    const targetRole = (role || "student") as UserRole
+    if (!canAssignRole(gate.role, targetRole)) {
+      return NextResponse.json({ success: false, error: "Недостаточно прав для создания пользователя с этой ролью" }, { status: 403 })
+    }
+
+    if (gate.isUniversityAdmin) {
+      institution = gate.institution
+      if (targetRole === "admin" || targetRole === "superadmin") {
+        return NextResponse.json({ success: false, error: "Администратор УО может создавать только студентов и преподавателей" }, { status: 403 })
+      }
+    }
+
+    if (targetRole === "admin" && !institution) {
+      return NextResponse.json({ success: false, error: "Для администратора УО укажите учебное заведение" }, { status: 400 })
+    }
+
     const result = await registerUser(
       username,
       password,
-      role || "student",
+      targetRole,
       email,
       fullName,
       institution,
@@ -72,8 +104,8 @@ export async function POST(request: NextRequest) {
     )
 
     if (result.success) {
-      logInfo("Пользователь добавлен администратором", username, "admin", "add_user", {
-        role,
+      logInfo("Пользователь добавлен администратором", gate.username, gate.role, "add_user", {
+        role: targetRole,
         institution,
       })
       return NextResponse.json({

@@ -718,8 +718,8 @@ a { color: inherit; text-decoration: none; }
         <div class="user-menu__head">
           <div class="user-menu__avatar"><span class="user-menu__initials">ИИ</span></div>
           <div>
-            <div class="user-menu__name">Иванов Иван Иванович</div>
-            <div class="user-menu__meta">Студент · БГУИР · логин <code>student</code></div>
+            <div class="user-menu__name">—</div>
+            <div class="user-menu__meta">—</div>
           </div>
         </div>
         <div class="user-menu__divider"></div>
@@ -931,9 +931,9 @@ a { color: inherit; text-decoration: none; }
     <h2 class="modal__title" id="profileModalTitle">Личный кабинет</h2>
     <p class="modal__subtitle">Информация о пользователе.</p>
     <dl class="profile-list">
-      <div><dt>ФИО</dt><dd>Иванов Иван Иванович</dd></div>
-      <div><dt>Логин</dt><dd>student</dd></div>
-      <div><dt>Тип пользователя</dt><dd>Студент</dd></div>
+      <div><dt>ФИО</dt><dd>—</dd></div>
+      <div><dt>Логин</dt><dd>—</dd></div>
+      <div><dt>Тип пользователя</dt><dd>—</dd></div>
       <div><dt>УО</dt><dd>
         <span id="profileUo">—</span>
         <button class="profile-edit" type="button" data-edit="uo" aria-label="Изменить УО">
@@ -964,7 +964,7 @@ a { color: inherit; text-decoration: none; }
     <h2 class="modal__title" id="completeProfileTitle">Дозаполните профиль</h2>
     <p class="modal__subtitle" id="completeProfileSub">Перед первой проверкой укажите ваше УО, факультет и номер группы.</p>
     <form id="completeProfileForm" class="form" autocomplete="off">
-      <div class="field">
+      <div class="field" id="uoSelectField">
         <label class="field__label">УО<span class="field__required" aria-hidden="true">*</span></label>
         <div class="custom-select is-placeholder" id="uoSelect" data-value="">
           <button class="custom-select__trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
@@ -974,6 +974,10 @@ a { color: inherit; text-decoration: none; }
           <ul class="custom-select__menu" id="uoSelectMenu" role="listbox" hidden></ul>
         </div>
         <p class="field__error" id="uoError" hidden>Выберите УО.</p>
+      </div>
+      <div class="field" id="uoReadonly" hidden>
+        <label class="field__label">УО</label>
+        <p class="field__static">БГУИР</p>
       </div>
       <div class="field">
         <label class="field__label">Факультет<span class="field__required" aria-hidden="true">*</span></label>
@@ -1031,8 +1035,12 @@ a { color: inherit; text-decoration: none; }
   <div class="modal__backdrop" data-close></div>
   <div class="modal__dialog modal__dialog--lg">
     <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
-    <h2 class="modal__title" id="matchesModalTitle">Заимствования документа</h2>
+    <h2 class="modal__title" id="matchesModalTitle">Заимствования и ИИ-генерации документа</h2>
     <p class="modal__subtitle" id="matchesModalSub">—</p>
+    <div class="modal__tabs" role="tablist">
+      <button class="modal__tab is-active" type="button" data-tab="matches" role="tab">Заимствования</button>
+      <button class="modal__tab" type="button" data-tab="ai" role="tab">ИИ-генерации</button>
+    </div>
     <ul class="matches-list" id="matchesList"></ul>
     <nav class="pagination" id="matchesPagination" hidden aria-label="Страницы"></nav>
   </div>
@@ -1048,6 +1056,35 @@ a { color: inherit; text-decoration: none; }
   let __currentUser = null;
   let __isAdmin = false;
 
+  const ROLE_LABELS = {
+    student: 'Студент',
+    teacher: 'Преподаватель',
+    admin: 'Администратор УО',
+    superadmin: 'Главный администратор',
+  };
+
+  function initialsFromName(name, fallback) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return String(fallback || '?').slice(0, 2).toUpperCase();
+  }
+
+  function applyUserMenu(user) {
+    if (!user) return;
+    const fullName = user.fullName || user.username;
+    const initials = initialsFromName(fullName, user.username);
+    document.querySelectorAll('.user-menu__initials').forEach((el) => { el.textContent = initials; });
+    const nameEl = document.querySelector('.user-menu__name');
+    if (nameEl) nameEl.textContent = fullName;
+    const metaEl = document.querySelector('.user-menu__meta');
+    if (metaEl) {
+      const role = ROLE_LABELS[user.role] || user.role;
+      const inst = user.institution || '—';
+      metaEl.innerHTML = `${role} · ${inst} · логин <code>${user.username}</code>`;
+    }
+  }
+
   // We'll init the page asynchronously after auth check
   async function initPage() {
     const { ok, data } = await ApApi.getMe();
@@ -1057,7 +1094,7 @@ a { color: inherit; text-decoration: none; }
     }
     __currentUser = data.user;
     const role = __currentUser.role;
-    __isAdmin = role === 'admin' || role === 'superadmin' || role === 'teacher';
+    __isAdmin = role === 'admin' || role === 'superadmin';
     runApp();
   }
 
@@ -1103,6 +1140,8 @@ a { color: inherit; text-decoration: none; }
     window.lucide.createIcons();
   }
 
+  applyUserMenu(__currentUser);
+
   // Adjust UI for admin context
   if (__isAdmin) {
     const setText = (sel, txt) => { const el = document.querySelector(sel); if (el) el.textContent = txt; };
@@ -1123,11 +1162,6 @@ a { color: inherit; text-decoration: none; }
         `;
       }
     }
-    // User menu: admin info
-    document.querySelectorAll('.user-menu__initials').forEach((el) => el.textContent = 'АА');
-    setText('.user-menu__name', 'Администратор системы');
-    const metaEl = document.querySelector('.user-menu__meta');
-    if (metaEl) metaEl.innerHTML = 'Администратор · БГУИР · логин <code>admin</code>';
     // Hide profile menu item — admin doesn't need student profile
     const profileBtn = document.getElementById('profileBtn');
     if (profileBtn) profileBtn.style.display = 'none';
@@ -1145,13 +1179,27 @@ a { color: inherit; text-decoration: none; }
   });
 
   const saveProfile = async (p) => {
-    await ApApi.updateProfile({
-      institution: p.uo,
-      faculty:     p.faculty,
-      group:       p.group,
-    });
-    // Update in-memory cache
-    __currentUser = { ...__currentUser, institution: p.uo, faculty: p.faculty, group: p.group };
+    const patch = {};
+    const pe = __currentUser.profileEditable || {};
+    if (pe.institution && p.uo) patch.institution = p.uo;
+    if (pe.faculty && p.faculty) patch.faculty = p.faculty;
+    if (pe.group && p.group) patch.group = p.group;
+    await ApApi.updateProfile(patch);
+    __currentUser = { ...__currentUser, institution: p.uo || __currentUser.institution, faculty: p.faculty, group: p.group };
+  };
+
+  const applyProfilePolicyUi = () => {
+    const pe = __currentUser.profileEditable || {};
+    document.querySelectorAll('[data-edit="uo"]').forEach((el) => { el.hidden = !pe.institution; });
+    document.querySelectorAll('[data-edit="faculty"]').forEach((el) => { el.hidden = !pe.faculty; });
+    document.querySelectorAll('[data-edit="group"]').forEach((el) => { el.hidden = !pe.group; });
+    const uoField = document.getElementById('uoSelectField');
+    const uoReadonly = document.getElementById('uoReadonly');
+    if (__currentUser.isBsuirUser && uoField && uoReadonly) {
+      uoField.hidden = true;
+      uoReadonly.hidden = false;
+      uoReadonly.textContent = __currentUser.institution || 'БГУИР';
+    }
   };
 
   // App config: load from API (institutions/faculties + document types)
@@ -1170,14 +1218,39 @@ a { color: inherit; text-decoration: none; }
 
   let __docTypeOptions = [];
 
+  const DEFAULT_TYPE_SLUGS = {
+    'Дипломная работа / проект': 'diploma',
+    'Курсовая работа / проект': 'coursework',
+    'Лабораторная работа': 'lab',
+    'Практическая работа': 'practice',
+    'Статьи': 'article',
+  };
+
+  const normalizeTypeOption = (t) => {
+    if (typeof t === 'string') {
+      return { name: DEFAULT_TYPE_SLUGS[t] || t, displayName: t };
+    }
+    return {
+      name: t.name || t.displayName || '',
+      displayName: t.displayName || t.name || '',
+    };
+  };
+
+  const getWorkTypeLabel = (slug) => {
+    const found = __docTypeOptions.find((t) => t.name === slug);
+    if (found) return found.displayName;
+    const ruEntry = Object.entries(DEFAULT_TYPE_SLUGS).find(([, v]) => v === slug);
+    return ruEntry ? ruEntry[0] : slug;
+  };
+
   const populateWorkTypeOptions = (types) => {
     const menu = document.getElementById('workTypeMenu');
     if (!menu || !types || !types.length) return;
-    __docTypeOptions = types;
-    menu.innerHTML = types.map((t) => {
-      const slug = String(t.name || t.displayName || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    __docTypeOptions = types.map(normalizeTypeOption);
+    menu.innerHTML = __docTypeOptions.map((t) => {
+      const slug = String(t.name || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
       const label = String(t.displayName || t.name || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-      return `<li class="custom-select__option" role="option" data-value="${slug}">${label}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>`;
+      return `<li class="custom-select__option" role="option" data-value="${slug}" data-label="${label}">${label}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>`;
     }).join('');
     if (window.lucide) window.lucide.createIcons();
   };
@@ -1195,9 +1268,17 @@ a { color: inherit; text-decoration: none; }
       populateWorkTypeOptions(typesRes.data.types);
     }
     refreshProfileUi();
+    applyProfilePolicyUi();
   });
   const refreshProfileUi = () => {
     const p = loadProfile();
+    const profileList = document.querySelector('#profileModal .profile-list');
+    if (profileList && __currentUser) {
+      const rows = profileList.querySelectorAll('div');
+      if (rows[0]) rows[0].querySelector('dd').textContent = __currentUser.fullName || __currentUser.username;
+      if (rows[1]) rows[1].querySelector('dd').textContent = __currentUser.username;
+      if (rows[2]) rows[2].querySelector('dd').textContent = ROLE_LABELS[__currentUser.role] || __currentUser.role;
+    }
     const uEl = document.getElementById('profileUo');
     const fEl = document.getElementById('profileFaculty');
     const gEl = document.getElementById('profileGroup');
@@ -1299,10 +1380,13 @@ a { color: inherit; text-decoration: none; }
   const completeProfileSub = document.getElementById('completeProfileSub');
   const completeProfileClose = document.getElementById('completeProfileClose');
   const completeProfileTitle = document.getElementById('completeProfileTitle');
+  refreshProfileUi();
+  applyProfilePolicyUi();
+
   const openCompleteProfile = (mode = 'init') => {
+    if (!__currentUser.canSelfCompleteProfile) return;
     const p = loadProfile();
-    // Pre-fill UO (default to first UO if none saved)
-    const uoVal = p.uo && appConfig.uos.includes(p.uo) ? p.uo : (appConfig.uos[0] || '');
+    const uoVal = __currentUser.institution || p.uo || appConfig.uos[0] || 'БГУИР';
     setSelectValue(uoSelect, uoVal, 'Выберите УО');
     populateFacultySelect(uoVal);
     // Pre-fill faculty if valid for current UO
@@ -1320,10 +1404,10 @@ a { color: inherit; text-decoration: none; }
     completeProfileModal.querySelector('.modal__backdrop').dataset.close = canClose ? '' : 'disabled';
     if (mode === 'edit') {
       completeProfileTitle.textContent = 'Редактировать профиль';
-      completeProfileSub.textContent = 'Обновите ваше УО, факультет или номер группы.';
+      completeProfileSub.textContent = 'Обновите факультет или номер группы.';
     } else {
       completeProfileTitle.textContent = 'Дозаполните профиль';
-      completeProfileSub.textContent = 'Перед первой проверкой укажите ваше УО, факультет и номер группы.';
+      completeProfileSub.textContent = 'Перед первой проверкой укажите факультет и номер группы.';
     }
     completeProfileModal.hidden = false;
     document.body.style.overflow = 'hidden';
@@ -1343,7 +1427,7 @@ a { color: inherit; text-decoration: none; }
   // Edit icons in profile modal
   document.querySelectorAll('[data-edit]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      // Close profile modal first if open
+      if (!__currentUser.profileEditable?.[btn.dataset.edit === 'uo' ? 'institution' : btn.dataset.edit]) return;
       profileModal.hidden = true;
       document.body.style.overflow = '';
       openCompleteProfile('edit');
@@ -1357,11 +1441,11 @@ a { color: inherit; text-decoration: none; }
   });
   completeProfileForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const uoVal = uoSelect.dataset.value;
+    const uoVal = __currentUser.institution || uoSelect.dataset.value;
     const facultyVal = facultySelect.dataset.value;
     const groupVal = groupInput.value.trim();
     let ok = true;
-    if (!uoVal) {
+    if (!__currentUser.isBsuirUser && !uoVal) {
       document.getElementById('uoError').hidden = false;
       uoSelect.classList.add('has-error');
       ok = false;
@@ -1377,14 +1461,16 @@ a { color: inherit; text-decoration: none; }
       ok = false;
     }
     if (!ok) return;
-    await saveProfile({ ...loadProfile(), uo: uoVal, faculty: facultyVal, group: groupVal });
+    await saveProfile({ uo: uoVal, faculty: facultyVal, group: groupVal });
+    __currentUser = { ...__currentUser, faculty: facultyVal, group: groupVal, needsProfileCompletion: false };
     refreshProfileUi();
     closeCompleteProfile();
   });
-  // Show automatically on first load if profile incomplete (skip for admin)
   if (!__isAdmin) {
-    const _p0 = loadProfile();
-    if (!_p0.uo || !_p0.faculty || !_p0.group) openCompleteProfile();
+    if (__currentUser.needsProfileCompletion) openCompleteProfile();
+    else if (__currentUser.profileBlocked) {
+      console.warn('Profile incomplete — contact your university administrator.');
+    }
   }
 
   // Logout
@@ -1502,8 +1588,10 @@ a { color: inherit; text-decoration: none; }
       const opt = e.target.closest('.custom-select__option');
       if (!opt) return;
       const val = opt.dataset.value;
+      const label = opt.dataset.label || opt.textContent.trim();
       workType.dataset.value = val;
-      valueEl.textContent = val;
+      workType.dataset.label = label;
+      valueEl.textContent = label;
       workType.classList.remove('is-placeholder', 'has-error');
       const tErr = document.getElementById('typeError');
       if (tErr) tErr.hidden = true;
@@ -1652,8 +1740,11 @@ a { color: inherit; text-decoration: none; }
 
     if (ok) {
       if (!__isAdmin) {
-        const _p = loadProfile();
-        if (!_p.faculty || !_p.group) {
+        if (__currentUser.profileBlocked) {
+          alert('Профиль не заполнен администратором. Обратитесь к администратору вашего учебного заведения.');
+          return;
+        }
+        if (__currentUser.needsProfileCompletion) {
           openCompleteProfile();
           return;
         }
@@ -1735,8 +1826,8 @@ a { color: inherit; text-decoration: none; }
       fd.append('status', 'draft');
       fd.append('institution', __currentUser.institution || 'БГУИР');
       fd.append('originality_percent', String(checkData.uniquenessPercent));
-      fd.append('plagiarism_percent_ml', String(checkData.mlPlagiarismPercent));
-      fd.append('ai_percent_ml', String(checkData.mlAiPercent));
+      fd.append('plagiarism_percent_ml', String(checkData.mlPlagiarismPercent ?? 0));
+      fd.append('ai_percent_ml', String(checkData.mlAiPercent ?? 0));
       fd.append('processing_time_ms', String(checkData.processingTimeMs || 0));
       fd.append('document_type', parsed.fileType);
 
@@ -1781,7 +1872,8 @@ a { color: inherit; text-decoration: none; }
       id: docId,
       percent, matches, ai,
       title:    workTitle.value.trim(),
-      type:     workType.dataset.value,
+      type:     workType.dataset.label || getWorkTypeLabel(workType.dataset.value),
+      typeSlug: workType.dataset.value,
       fileName: file.name,
       fileSize: file.size,
       similarDocuments: apiData ? apiData.similarDocuments : [],
@@ -2026,16 +2118,19 @@ a { color: inherit; text-decoration: none; }
     openPrintableReport(currentResult);
   });
 
-  const showFinal = (item) => {
+  const showFinal = async (item) => {
     document.getElementById('finalTitle').textContent = item.title;
     document.getElementById('finalType').textContent = item.type;
     document.getElementById('finalSavedAt').textContent = formatDate(item.savedAt);
     document.getElementById('finalPercent').textContent = item.percent + '%';
     document.getElementById('finalMatches').textContent = (item.matches != null ? item.matches : Math.max(0, 100 - (item.percent || 0))) + '%';
     document.getElementById('finalAi').textContent = (item.ai != null ? item.ai : 0) + '%';
-    const verifyUrl = `https://antiplagiat.bsuir.by/verify/${item.id}`;
-    const docUrl = `https://antiplagiat.bsuir.by/doc/${item.id}`;
-    const qrApi = (url) => `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`;
+    const { verifyUrl, docUrl } = item.id && ApApi.resolveReportQrUrls
+      ? await ApApi.resolveReportQrUrls(item.id)
+      : { verifyUrl: '', docUrl: '' };
+    const qrApi = (url) => url
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`
+      : '';
     document.getElementById('finalQrVerify').src = qrApi(verifyUrl);
     document.getElementById('finalQrDoc').src = qrApi(docUrl);
     showStage(4);
@@ -2082,9 +2177,9 @@ a { color: inherit; text-decoration: none; }
         __historyCache = data.documents.map((doc) => ({
           id:      doc.id,
           title:   doc.title,
-          type:    doc.category || '',
+          type:    doc.categoryLabel || doc.category || '',
           percent: Math.round(doc.originalityPercent ?? 0),
-          matches: Math.round(doc.plagiarismPercentMl ?? (100 - (doc.originalityPercent ?? 0))),
+          matches: Math.round(Math.max(0, 100 - (doc.originalityPercent ?? 100))),
           ai:      Math.round(doc.aiPercentMl ?? 0),
           status:  doc.status,
           savedAt: doc.uploadDate,
@@ -2119,7 +2214,10 @@ a { color: inherit; text-decoration: none; }
              <button class="history-list__btn history-list__btn--icon" data-action="view" data-id="${it.id}" aria-label="Просмотреть заимствования и ИИ-генерации" title="Просмотреть заимствования и ИИ-генерации"><i data-lucide="file-search-2" class="icon-16"></i></button>
              <button class="history-list__btn history-list__btn--primary" data-action="finalize" data-id="${it.id}"><i data-lucide="check" class="icon-16"></i> Финальная</button>
            </div>`
-        : `<button class="history-list__btn" data-action="pdf" data-id="${it.id}"><i data-lucide="download" class="icon-16"></i> PDF</button>`;
+        : `<div class="history-list__actions">
+             <button class="history-list__btn history-list__btn--icon" data-action="view" data-id="${it.id}" aria-label="Просмотреть заимствования" title="Просмотреть заимствования"><i data-lucide="file-search-2" class="icon-16"></i></button>
+             <button class="history-list__btn" data-action="pdf" data-id="${it.id}"><i data-lucide="download" class="icon-16"></i> PDF</button>
+           </div>`;
       return `
         <li class="history-list__item">
           <div>
@@ -2226,18 +2324,28 @@ a { color: inherit; text-decoration: none; }
   }[c]));
 
   // Printable PDF
-  const openPrintableReport = (item) => {
-    const id = item.id || ('AP-' + Date.now().toString(36).toUpperCase());
-    const verifyUrl = `https://antiplagiat.bsuir.by/verify/${id}`;
-    const docUrl = `https://antiplagiat.bsuir.by/doc/${id}`;
-    const qr = (url) => `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`;
-    const qrVerify = qr(verifyUrl);
-    const qrDoc = qr(docUrl);
-    const logoUrl = new URL('image 1 [Vectorized].svg', location.href).href;
+  const openPrintableReport = async (item) => {
+    try {
+    if (item?.id && window.ApApi?.generateReport) {
+      try { await ApApi.generateReport(item.id); } catch (_) { /* отчёт в БД необязателен для печати */ }
+    }
 
     const orig = item.percent ?? 0;
     const matches = item.matches ?? Math.max(0, 100 - orig);
     const ai = item.ai ?? 0;
+
+    const sources = mockMatches.slice(0, 5);
+
+    const id = item.id || ('AP-' + Date.now().toString(36).toUpperCase());
+    const { verifyUrl, docUrl } = item.id && ApApi.resolveReportQrUrls
+      ? await ApApi.resolveReportQrUrls(item.id)
+      : { verifyUrl: '', docUrl: '' };
+    const qr = (url) => url
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`
+      : '';
+    const qrVerify = qr(verifyUrl);
+    const qrDoc = qr(docUrl);
+    const logoUrl = new URL('image 1 [Vectorized].svg', location.href).href;
 
     // Circle helper (same style as on the site)
     const C = 2 * Math.PI * 42;
@@ -2250,14 +2358,13 @@ a { color: inherit; text-decoration: none; }
           transform="rotate(-90 50 50)"/>
       </svg>`;
 
-    // Matches table — from mockMatches, only items that fit on the page (limit to 5)
-    const sources = mockMatches.slice(0, 5);
+    // Matches table from GET /api/documents/:id/matches
     const sourcesHtml = sources.map((m, i) => `
       <tr>
         <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
         <td class="src-table__quote">${escapeHtml(m.title || m.quote)}</td>
         <td><code>${escapeHtml(m.docId)}</code></td>
-        <td class="src-table__pct"><span>${m.percent}%</span></td>
+        <td class="src-table__pct"><span>${m.percent != null ? m.percent + '%' : '—'}</span></td>
       </tr>
     `).join('');
 
@@ -2448,7 +2555,7 @@ a { color: inherit; text-decoration: none; }
   <div class="card">
     <h2>Сведения о работе</h2>
     <dl class="meta">
-      <dt>Автор</dt><dd>Иванов Иван Иванович</dd>
+      <dt>Автор</dt><dd>${escapeHtml((__currentUser && __currentUser.fullName) || item.author || '—')}</dd>
       <dt>Учебное заведение</dt><dd>БГУИР</dd>
       <dt>Тип работы</dt><dd>${escapeHtml(item.type)}</dd>
       <dt>Количество символов</dt><dd>${Math.round((item.fileSize || 30000) * 0.7).toLocaleString('ru-RU')}</dd>
@@ -2475,7 +2582,7 @@ a { color: inherit; text-decoration: none; }
           <th>№</th>
           <th>Название работы</th>
           <th>ID документа</th>
-          <th style="text-align: right;">%</th>
+          <th style="text-align: right;">Схожесть</th>
         </tr>
       </thead>
       <tbody>${sourcesHtml}</tbody>
@@ -2504,8 +2611,15 @@ a { color: inherit; text-decoration: none; }
     window.addEventListener('load', () => setTimeout(() => window.print(), 500));
   <\/script>
 </body></html>`;
-    const w = window.open('', '_blank');
-    if (w) { w.document.write(html); w.document.close(); }
+    if (ApApi.openReportPrintWindow) ApApi.openReportPrintWindow(html);
+    else {
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      window.open(URL.createObjectURL(blob), '_blank');
+    }
+    } catch (err) {
+      console.error('openPrintableReport', err);
+      alert('Не удалось открыть отчёт: ' + (err?.message || err));
+    }
   };
 
   // Initial render

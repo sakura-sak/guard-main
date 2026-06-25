@@ -1916,7 +1916,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
   ApApi.getMe().then(function (res) {
     if (!res.ok || !res.data.user) return;
     const role = res.data.user.role;
-    const isAdmin = role === 'admin' || role === 'superadmin' || role === 'teacher';
+    const isAdmin = role === 'admin' || role === 'superadmin';
     window.location.replace(isAdmin ? 'admin.html' : 'app.html');
   });
   // Render Lucide icons
@@ -2063,7 +2063,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
       if (ok && data.success && data.user) {
         closeModal();
         const role = data.user.role;
-        const isAdmin = role === 'admin' || role === 'superadmin' || role === 'teacher';
+        const isAdmin = role === 'admin' || role === 'superadmin';
         window.location.href = isAdmin ? 'admin.html' : 'app.html';
       } else {
         if (loginError) {

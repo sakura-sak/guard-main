@@ -387,6 +387,9 @@ a { color: inherit; text-decoration: none; }
 .adm-table__row { cursor: pointer; transition: background .15s; }
 .adm-table__name { font-weight: 600; color: var(--ink); }
 .adm-table__sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.adm-table__pwd { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.adm-table__pwd code { font-size: 12px; background: var(--bg-2); padding: 2px 6px; border-radius: 6px; word-break: break-all; }
+.adm-table__pwd-toggle { flex-shrink: 0; }
 .adm-table code { background: var(--bg-2); padding: 2px 8px; border-radius: 6px; font-family: ui-monospace, "SF Mono", monospace; font-size: 11px; color: var(--ink-2); }
 
 /* Toolbar */
@@ -425,6 +428,12 @@ a { color: inherit; text-decoration: none; }
 .role-pill--student { background: var(--primary-soft); color: var(--primary); }
 .role-pill--teacher { background: #fef3c7; color: #92400e; }
 .role-pill--admin { background: #ede9fe; color: #6d28d9; }
+.role-pill--superadmin { background: #fce7f3; color: #9d174d; }
+/* University-scoped admin: hide multi-university UI */
+body.is-uni-admin .admin-col-uo,
+body.is-uni-admin .admin-filter-uo,
+body.is-uni-admin #settingsUoSection,
+body.is-uni-admin .dash-global-uo { display: none !important; }
 .status-pill--draft { background: #fef3c7; color: #92400e; }
 .status-pill--final { background: #dcfce7; color: #166534; }
 .status-pill--archived { background: #e2e8f0; color: #475569; }
@@ -1086,8 +1095,8 @@ a { color: inherit; text-decoration: none; }
         <div class="user-menu__head">
           <div class="user-menu__avatar"><span class="user-menu__initials">АА</span></div>
           <div>
-            <div class="user-menu__name">Администратор системы</div>
-            <div class="user-menu__meta">Администратор · БГУИР · логин <code>admin</code></div>
+            <div class="user-menu__name">—</div>
+            <div class="user-menu__meta">—</div>
           </div>
         </div>
         <div class="user-menu__divider"></div>
@@ -1121,7 +1130,7 @@ a { color: inherit; text-decoration: none; }
             <span class="dash-filter__label">Дата по</span>
             <input type="text" id="dashGlobalDateTo" placeholder="дд.мм.гггг" readonly/>
           </div>
-          <div class="dash-filter__field">
+          <div class="dash-filter__field dash-global-uo">
             <span class="dash-filter__label">УО</span>
             <div class="multi-select" id="dashGlobalUO" data-options='[{"value":"БГУИР","label":"БГУИР"}]'></div>
           </div>
@@ -1212,7 +1221,7 @@ a { color: inherit; text-decoration: none; }
                 <div class="filter-popover__field"><span class="filter-popover__label">Тип</span>
                   <div class="multi-select" id="hmFilterType" data-options='[{"value":"Дипломная работа / проект","label":"Дипломная работа / проект"},{"value":"Курсовая работа / проект","label":"Курсовая работа / проект"},{"value":"Лабораторная работа","label":"Лабораторная работа"},{"value":"Практическая работа","label":"Практическая работа"},{"value":"Статьи","label":"Статьи"}]'></div>
                 </div>
-                <div class="filter-popover__field"><span class="filter-popover__label">УО</span>
+                <div class="filter-popover__field admin-filter-uo"><span class="filter-popover__label admin-filter-uo">УО</span>
                   <div class="multi-select" id="hmFilterUO" data-options='[{"value":"БГУИР","label":"БГУИР"}]'></div>
                 </div>
                 <div class="filter-popover__field"><span class="filter-popover__label">Факультет</span>
@@ -1257,7 +1266,7 @@ a { color: inherit; text-decoration: none; }
                   <div class="filter-popover__field"><span class="filter-popover__label">Статус</span>
                     <div class="multi-select" id="lineFilterStatus" data-options='[{"value":"final","label":"Финальная"},{"value":"draft","label":"Черновая"},{"value":"archived","label":"Архивная"}]'></div>
                   </div>
-                  <div class="filter-popover__field"><span class="filter-popover__label">УО</span>
+                  <div class="filter-popover__field admin-filter-uo"><span class="filter-popover__label admin-filter-uo">УО</span>
                     <div class="multi-select" id="lineFilterUO" data-options='[{"value":"БГУИР","label":"БГУИР"}]'></div>
                   </div>
                   <div class="filter-popover__field"><span class="filter-popover__label">Факультет</span>
@@ -1296,7 +1305,7 @@ a { color: inherit; text-decoration: none; }
                   <div class="filter-popover__field"><span class="filter-popover__label">Статус</span>
                     <div class="multi-select" id="pieFilterStatus" data-options='[{"value":"final","label":"Финальная"},{"value":"draft","label":"Черновая"},{"value":"archived","label":"Архивная"}]'></div>
                   </div>
-                  <div class="filter-popover__field"><span class="filter-popover__label">УО</span>
+                  <div class="filter-popover__field admin-filter-uo"><span class="filter-popover__label admin-filter-uo">УО</span>
                     <div class="multi-select" id="pieFilterUO" data-options='[{"value":"БГУИР","label":"БГУИР"}]'></div>
                   </div>
                   <div class="filter-popover__field"><span class="filter-popover__label">Факультет</span>
@@ -1335,7 +1344,7 @@ a { color: inherit; text-decoration: none; }
                   <div class="filter-popover__field"><span class="filter-popover__label">Статус</span>
                     <div class="multi-select" id="bar1FilterStatus" data-options='[{"value":"final","label":"Финальная"},{"value":"draft","label":"Черновая"},{"value":"archived","label":"Архивная"}]'></div>
                   </div>
-                  <div class="filter-popover__field"><span class="filter-popover__label">УО</span>
+                  <div class="filter-popover__field admin-filter-uo"><span class="filter-popover__label admin-filter-uo">УО</span>
                     <div class="multi-select" id="bar1FilterUO" data-options='[{"value":"БГУИР","label":"БГУИР"}]'></div>
                   </div>
                   <div class="filter-popover__field"><span class="filter-popover__label">Факультет</span>
@@ -1374,7 +1383,7 @@ a { color: inherit; text-decoration: none; }
                   <div class="filter-popover__field"><span class="filter-popover__label">Статус</span>
                     <div class="multi-select" id="bar2FilterStatus" data-options='[{"value":"final","label":"Финальная"},{"value":"draft","label":"Черновая"},{"value":"archived","label":"Архивная"}]'></div>
                   </div>
-                  <div class="filter-popover__field"><span class="filter-popover__label">УО</span>
+                  <div class="filter-popover__field admin-filter-uo"><span class="filter-popover__label admin-filter-uo">УО</span>
                     <div class="multi-select" id="bar2FilterUO" data-options='[{"value":"БГУИР","label":"БГУИР"}]'></div>
                   </div>
                   <div class="filter-popover__field"><span class="filter-popover__label">Факультет</span>
@@ -1400,6 +1409,9 @@ a { color: inherit; text-decoration: none; }
             <div class="card__sub">Полный список с возможностью фильтрации</div>
           </div>
           <div class="card__actions">
+            <button class="action-btn" type="button" id="docExportBtn">
+              <i data-lucide="file-down" class="icon-16"></i> Экспорт XLSX
+            </button>
             <div class="filter-popover" id="docFilterPop">
               <button class="action-btn" type="button" id="docFilterBtn">
                 <i data-lucide="filter" class="icon-16"></i> Фильтры
@@ -1427,7 +1439,7 @@ a { color: inherit; text-decoration: none; }
                     <input type="date" id="docFilterDateFrom"/><span>–</span><input type="date" id="docFilterDateTo"/>
                   </div>
                 </div>
-                <div class="filter-popover__field"><span class="filter-popover__label">УО</span>
+                <div class="filter-popover__field admin-filter-uo"><span class="filter-popover__label admin-filter-uo">УО</span>
                   <div class="multi-select" id="docFilterUO" data-options='[{"value":"БГУИР","label":"БГУИР"}]'></div>
                 </div>
                 <div class="filter-popover__field"><span class="filter-popover__label">Факультет</span>
@@ -1447,7 +1459,6 @@ a { color: inherit; text-decoration: none; }
               <tr>
                 <th>ID документа</th>
                 <th>ID пользователя</th>
-                <th>УО</th>
                 <th>Факультет</th>
                 <th>Тип работы</th>
                 <th>Статус</th>
@@ -1483,7 +1494,7 @@ a { color: inherit; text-decoration: none; }
                   <div class="multi-select" id="usersFilterRole" data-options='[{"value":"student","label":"Студент"},{"value":"teacher","label":"Преподаватель"},{"value":"admin","label":"Администратор"}]'></div>
                 </div>
                 <div class="filter-popover__field">
-                  <span class="filter-popover__label">УО</span>
+                  <span class="filter-popover__label admin-filter-uo">УО</span>
                   <div class="multi-select" id="usersFilterUO" data-options='[{"value":"БГУИР","label":"БГУИР"}]'></div>
                 </div>
                 <div class="filter-popover__field">
@@ -1524,7 +1535,8 @@ a { color: inherit; text-decoration: none; }
               <tr>
                 <th>ФИО / Логин</th>
                 <th>Роль</th>
-                <th>УО</th>
+                <th>Пароль</th>
+                <th class="admin-col-uo">УО</th>
                 <th>Факультет</th>
                 <th>Группа</th>
                 <th>Проверок</th>
@@ -1585,7 +1597,7 @@ a { color: inherit; text-decoration: none; }
                     <input type="date" id="subsFilterDateTo"/>
                   </div>
                 </div>
-                <div class="filter-popover__field"><span class="filter-popover__label">УО</span>
+                <div class="filter-popover__field admin-filter-uo"><span class="filter-popover__label admin-filter-uo">УО</span>
                   <div class="multi-select" id="subsFilterUO" data-options='[{"value":"БГУИР","label":"БГУИР"}]'></div>
                 </div>
                 <div class="filter-popover__field"><span class="filter-popover__label">Факультет</span>
@@ -1617,7 +1629,7 @@ a { color: inherit; text-decoration: none; }
               <tr>
                 <th>Работа</th>
                 <th>Автор</th>
-                <th>УО</th>
+                <th class="admin-col-uo">УО</th>
                 <th>Факультет</th>
                 <th>Тип</th>
                 <th title="Оригинальность">Ориг.</th>
@@ -1849,9 +1861,10 @@ a { color: inherit; text-decoration: none; }
     <h2 class="modal__title" id="settingsTitle">Настройки справочников</h2>
     <p class="user-card__sub" style="margin-bottom: 18px;">Управление списками УО, факультетов и типов работ. Изменения применяются после обновления страницы.</p>
     <div class="settings-grid">
-      <div class="settings-section">
+      <div class="settings-section" id="settingsUoSection">
         <div class="settings-section__head">
           <h3 class="settings-section__title">УО</h3>
+          <button class="action-btn" type="button" data-export="uo"><i data-lucide="download" class="icon-16"></i> Экспорт</button>
           <button class="action-btn" type="button" data-import="uo"><i data-lucide="upload" class="icon-16"></i> Импорт</button>
         </div>
         <div class="settings-section__hint">Кликните, чтобы увидеть факультеты УО.</div>
@@ -1864,6 +1877,7 @@ a { color: inherit; text-decoration: none; }
       <div class="settings-section">
         <div class="settings-section__head">
           <h3 class="settings-section__title">Факультеты <span class="settings-section__sub" id="settingsFacScope"></span></h3>
+          <button class="action-btn" type="button" data-export="faculty"><i data-lucide="download" class="icon-16"></i> Экспорт</button>
           <button class="action-btn" type="button" data-import="faculty"><i data-lucide="upload" class="icon-16"></i> Импорт</button>
         </div>
         <div class="settings-list" id="settingsFacultiesList"></div>
@@ -1875,6 +1889,7 @@ a { color: inherit; text-decoration: none; }
       <div class="settings-section">
         <div class="settings-section__head">
           <h3 class="settings-section__title">Типы работ</h3>
+          <button class="action-btn" type="button" data-export="type"><i data-lucide="download" class="icon-16"></i> Экспорт</button>
           <button class="action-btn" type="button" data-import="type"><i data-lucide="upload" class="icon-16"></i> Импорт</button>
         </div>
         <div class="settings-list" id="settingsTypesList"></div>
@@ -1966,11 +1981,12 @@ a { color: inherit; text-decoration: none; }
       <label class="ue-field">
         <span class="ue-label">Пароль</span>
         <div class="ue-pwd-wrap">
-          <input type="password" id="ue-password" required/>
+          <input type="password" id="ue-password"/>
           <button type="button" class="uc-icon-btn" id="ue-pwd-toggle" aria-label="Показать пароль">
             <i data-lucide="eye" class="icon-16"></i>
           </button>
         </div>
+        <p class="user-card__sub ue-pwd-hint" id="ue-pwd-hint" hidden style="margin-top:6px;">Пароль пользователей БГУИР можно только просматривать.</p>
       </label>
       <div class="ue-field">
         <span class="ue-label">Роль</span>
@@ -2036,16 +2052,113 @@ a { color: inherit; text-decoration: none; }
 (function () {
   // Auth gate: check real session
   let __currentAdminUser = null;
+  let __isSuperAdmin = false;
+  let __isUniAdmin = false;
+  let __creatableRoles = ['student', 'teacher', 'admin', 'superadmin'];
+  const ROLE_LABELS = {
+    student: 'Студент',
+    teacher: 'Преподаватель',
+    admin: 'Администратор УО',
+    superadmin: 'Главный администратор',
+  };
+
+  function initialsFromName(name, fallback) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return String(fallback || '?').slice(0, 2).toUpperCase();
+  }
+
+  function applyAdminUserMenu(user) {
+    if (!user) return;
+    const fullName = user.fullName || user.username;
+    const initials = initialsFromName(fullName, user.username);
+    document.querySelectorAll('.user-menu__initials').forEach((el) => { el.textContent = initials; });
+    const nameEl = document.querySelector('.user-menu__name');
+    if (nameEl) nameEl.textContent = fullName;
+    const metaEl = document.querySelector('.user-menu__meta');
+    if (metaEl) {
+      const role = ROLE_LABELS[user.role] || user.role;
+      const inst = user.institution || '—';
+      metaEl.innerHTML = `${role} · ${inst} · логин <code>${user.username}</code>`;
+    }
+    const profileModal = document.getElementById('adminProfileModal');
+    if (profileModal) {
+      const rows = profileModal.querySelectorAll('.profile-list div');
+      if (rows[0]) rows[0].querySelector('dd').textContent = fullName;
+      if (rows[1]) rows[1].querySelector('dd').textContent = user.username;
+      if (rows[2]) {
+        const pill = rows[2].querySelector('.role-pill');
+        if (pill) {
+          pill.className = `role-pill role-pill--${user.role}`;
+          pill.textContent = ROLE_LABELS[user.role] || user.role;
+        } else {
+          rows[2].querySelector('dd').textContent = ROLE_LABELS[user.role] || user.role;
+        }
+      }
+    }
+  }
+
   ApApi.getMe().then(function (res) {
     if (!res.ok || !res.data.user) { window.location.replace('index.html'); return; }
     const role = res.data.user.role;
-    const isAdmin = role === 'admin' || role === 'superadmin' || role === 'teacher';
-    if (!isAdmin) { window.location.replace('index.html'); return; }
+    if (role !== 'admin' && role !== 'superadmin') { window.location.replace('app.html'); return; }
     __currentAdminUser = res.data.user;
+    __isSuperAdmin = role === 'superadmin';
+    __isUniAdmin = role === 'admin';
+    document.body.classList.toggle('is-superadmin', __isSuperAdmin);
+    document.body.classList.toggle('is-uni-admin', __isUniAdmin);
+    applyAdminUserMenu(__currentAdminUser);
     initAdminApp();
   });
 
   function initAdminApp() {
+
+  const XLSX_ERR = 'Библиотека XLSX не загружена.';
+  function ensureXlsx() {
+    if (!window.XLSX) { alert(XLSX_ERR); return false; }
+    return true;
+  }
+  function exportXlsx(filename, sheetName, rows, colWidths) {
+    if (!ensureXlsx()) return;
+    if (!rows.length) { alert('Нет данных для экспорта.'); return; }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    if (colWidths) ws['!cols'] = colWidths;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename);
+  }
+  function readXlsxRows(file) {
+    return new Promise((resolve, reject) => {
+      if (!ensureXlsx()) return reject(new Error(XLSX_ERR));
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          resolve(XLSX.utils.sheet_to_json(sheet, { defval: '' }));
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать файл'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+  function readXlsxMatrix(file) {
+    return new Promise((resolve, reject) => {
+      if (!ensureXlsx()) return reject(new Error(XLSX_ERR));
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+          const sh = wb.Sheets[wb.SheetNames[0]];
+          resolve(XLSX.utils.sheet_to_json(sh, { header: 1, defval: '' }));
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать файл'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+  const xlsxDate = () => new Date().toISOString().slice(0, 10);
 
   // ===== App config (УО / Факультеты / Типы работ) — loaded from real API =====
   const APP_CONFIG_KEY = 'ap_config_v1'; // kept for type-color UI preferences only
@@ -2094,10 +2207,10 @@ a { color: inherit; text-decoration: none; }
     if (typeof populateSubTypeOptions === 'function') populateSubTypeOptions();
     const subTypeEl = document.getElementById('sub-edit-type');
     if (subTypeEl && subTypeEl.__rebindTypeOptions) subTypeEl.__rebindTypeOptions();
-    if (typeof renderAllDash === 'function' && typeof loadSubmissions === 'function') {
+    if (typeof loadSubmissions === 'function') {
       await loadSubmissions();
-    } else if (typeof renderAllDash === 'function') {
-      renderAllDash();
+    } else if (typeof loadDashboardFromApi === 'function') {
+      await loadDashboardFromApi();
     }
   }
   const normalizeDocType = (raw) => {
@@ -2278,6 +2391,7 @@ a { color: inherit; text-decoration: none; }
     const rmBtn = e.target.closest('[data-remove]');
     const selBtn = e.target.closest('[data-select-uo]');
     const impBtn = e.target.closest('[data-import]');
+    const expBtn = e.target.closest('[data-export]');
     if (selBtn && !rmBtn) {
       settingsState.selectedUo = selBtn.dataset.selectUo;
       renderSettingsList();
@@ -2368,6 +2482,20 @@ a { color: inherit; text-decoration: none; }
       saveAppConfig();
       renderSettingsList();
       markDirty();
+    } else if (expBtn) {
+      const kind = expBtn.dataset.export;
+      const stamp = xlsxDate();
+      if (kind === 'uo') {
+        exportXlsx(`uo_${stamp}.xlsx`, 'УО', appConfig.uos.map((name) => ({ 'УО': name })), [{ wch: 40 }]);
+      } else if (kind === 'faculty') {
+        const rows = [];
+        appConfig.uos.forEach((uo) => {
+          (appConfig.facultiesByUo[uo] || []).forEach((fac) => rows.push({ 'УО': uo, 'Факультет': fac }));
+        });
+        exportXlsx(`faculties_${stamp}.xlsx`, 'Факультеты', rows, [{ wch: 24 }, { wch: 44 }]);
+      } else if (kind === 'type') {
+        exportXlsx(`work_types_${stamp}.xlsx`, 'Типы работ', appConfig.types.map((name) => ({ 'Тип работы': name })), [{ wch: 44 }]);
+      }
     } else if (impBtn) {
       settingsState.importKind = impBtn.dataset.import;
       document.getElementById('settingsImportFile').click();
@@ -2391,43 +2519,50 @@ a { color: inherit; text-decoration: none; }
     if (!file) return;
     const kind = settingsState.importKind;
     try {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: 'array' });
-      const sh = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sh, { header: 1, defval: '' });
+      const rows = await readXlsxMatrix(file);
       let added = 0;
       if (kind === 'uo') {
-        rows.forEach((r) => {
+        for (const r of rows) {
           const v = String(r[0] || '').trim();
-          if (!v || /^уо$/i.test(v)) return;
-          if (!appConfig.uos.includes(v)) {
-            appConfig.uos.push(v);
-            if (!appConfig.facultiesByUo[v]) appConfig.facultiesByUo[v] = [];
-            added++;
-          }
-        });
+          if (!v || /^уо$/i.test(v)) continue;
+          if (appConfig.uos.includes(v)) continue;
+          const { ok, data } = await ApApi.saveAdminDirectories({ action: 'addInstitution', name: v });
+          if (ok && data.success) added++;
+        }
+        await loadAppConfigFromApi();
       } else if (kind === 'faculty') {
-        rows.forEach((r, i) => {
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
           const a = String(r[0] || '').trim();
           const b = String(r[1] || '').trim();
-          if (!a) return;
-          if (i === 0 && /^уо$/i.test(a) && /^факультет/i.test(b)) return;
-          if (b) {
-            if (!appConfig.uos.includes(a)) { appConfig.uos.push(a); appConfig.facultiesByUo[a] = []; }
-            appConfig.facultiesByUo[a] = appConfig.facultiesByUo[a] || [];
-            if (!appConfig.facultiesByUo[a].includes(b)) { appConfig.facultiesByUo[a].push(b); added++; }
-          } else {
-            if (!settingsState.selectedUo) return;
-            appConfig.facultiesByUo[settingsState.selectedUo] = appConfig.facultiesByUo[settingsState.selectedUo] || [];
-            if (!appConfig.facultiesByUo[settingsState.selectedUo].includes(a)) { appConfig.facultiesByUo[settingsState.selectedUo].push(a); added++; }
+          if (!a) continue;
+          if (i === 0 && /^уо$/i.test(a) && /^факультет/i.test(b)) continue;
+          const uoName = b ? a : settingsState.selectedUo;
+          const facName = b || a;
+          if (!uoName || !facName) continue;
+          let inst = findInstitutionByName(uoName);
+          if (!inst) {
+            const res = await ApApi.saveAdminDirectories({ action: 'addInstitution', name: uoName });
+            if (!res.ok || !res.data.success) continue;
+            await loadAppConfigFromApi();
+            inst = findInstitutionByName(uoName);
           }
-        });
+          if (!inst) continue;
+          const facs = appConfig.facultiesByUo[uoName] || [];
+          if (facs.includes(facName)) continue;
+          const { ok, data } = await ApApi.saveAdminDirectories({ action: 'addFaculty', institutionId: inst.id, name: facName });
+          if (ok && data.success) added++;
+        }
+        await loadAppConfigFromApi();
       } else if (kind === 'type') {
-        rows.forEach((r) => {
+        for (const r of rows) {
           const v = String(r[0] || '').trim();
-          if (!v || /^тип/i.test(v)) return;
-          if (!appConfig.types.includes(v)) { appConfig.types.push(v); added++; }
-        });
+          if (!v || /^тип/i.test(v)) continue;
+          if (appConfig.types.includes(v)) continue;
+          const { ok, data } = await ApApi.createAdminDocumentType({ displayName: v });
+          if (ok && data.success) added++;
+        }
+        await loadAppConfigFromApi();
       }
       saveAppConfig();
       renderSettingsList();
@@ -2651,37 +2786,41 @@ a { color: inherit; text-decoration: none; }
   const ADMIN_MATCHES_PER_PAGE = 5;
 
   // ===== Printable PDF report =====
-  const mockMatches = [
-    { source: 'Дипломная работа / проект', percent: 5.4, authorId: 'AP-USR-184372', docId: 'AP-DOC-7Z4K2A', title: 'Разработка системы оценки оригинальности текстовых документов', quote: 'В современных условиях развития информационных технологий вопросы оценки оригинальности текстов приобретают особую актуальность.' },
-    { source: 'Курсовая работа / проект', percent: 3.8, authorId: 'AP-USR-091284', docId: 'AP-DOC-3M9R1B', title: 'Алгоритмы предварительной обработки документов', quote: 'Алгоритм сегментации документа на блоки выполняется на этапе предварительной обработки.' },
-    { source: 'Лабораторная работа', percent: 2.1, authorId: 'AP-USR-220915', docId: 'AP-DOC-K8X5Q2', title: 'Организация локального хранилища оригиналов работ', quote: 'Локальное хранилище оригиналов обновляется автоматически при сохранении финальной версии работы.' },
-    { source: 'Практическая работа', percent: 1.6, authorId: 'AP-USR-058103', docId: 'AP-DOC-N2P7F4', title: 'Перекрёстная сверка по объединённому репозиторию', quote: 'Для повышения точности проверки используется перекрёстная сверка по объединённому репозиторию.' },
-    { source: 'Статьи', percent: 1.2, authorId: 'AP-USR-073921', docId: 'AP-DOC-G5T8H1', title: 'Методы исключения самоплагиата при проверке работ', quote: 'Алгоритм исключает ранее загруженные работы автора, предотвращая ложные срабатывания на самоплагиат.' },
-  ];
-  const openPrintableReport = (item, currentUser) => {
-    const id = 'AP-' + (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).toUpperCase();
-    const verifyUrl = `https://antiplagiat.bsuir.by/verify/${id}`;
-    const docUrl = `https://antiplagiat.bsuir.by/doc/${id}`;
-    const qr = (url) => `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`;
-    const logoUrl = new URL('image 1 [Vectorized].svg', location.href).href;
+  const openPrintableReport = async (item, currentUser) => {
+    try {
+    if (item?.id && window.ApApi?.generateReport) {
+      try { await ApApi.generateReport(item.id); } catch (_) { /* optional */ }
+    }
+
     const orig = item.percent ?? 0;
+    const matches = item.matches ?? Math.max(0, 100 - (item.percent ?? 0));
     const ai = item.ai ?? 0;
-    const matches = Math.max(0, 100 - orig - ai);
+
+    const sources = mockMatches.slice(0, 5);
+
+    const id = item?.id ? String(item.id) : 'AP-' + (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).toUpperCase();
+    const { verifyUrl, docUrl } = item?.id && ApApi.resolveReportQrUrls
+      ? await ApApi.resolveReportQrUrls(item.id)
+      : { verifyUrl: '', docUrl: '' };
+    const qr = (url) => url
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`
+      : '';
+    const logoUrl = new URL('image 1 [Vectorized].svg', location.href).href;
     const C = 2 * Math.PI * 42;
     const ringSvg = (p, color, w = 10) => `
       <svg viewBox="0 0 100 100" width="100%" height="100%">
         <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" stroke-width="${w}"/>
         <circle cx="50" cy="50" r="42" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - p / 100)}" transform="rotate(-90 50 50)"/>
       </svg>`;
-    const sources = mockMatches.slice(0, 5).map((m, i) => `
+    const sourcesHtml = sources.map((m, i) => `
       <tr>
         <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
         <td class="src-table__quote">«${escapeHtml(m.quote)}»</td>
         <td><code>${escapeHtml(m.docId)}</code></td>
-        <td class="src-table__pct"><span>${m.percent}%</span></td>
+        <td class="src-table__pct"><span>${m.percent != null ? m.percent + '%' : '—'}</span></td>
       </tr>
     `).join('');
-    const charCount = 28885;
+    const charCount = item.wordCount || item.charCount || 0;
     const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Отчёт — ${escapeHtml(item.title)}</title>
 <style>
 :root { --primary: #2563eb; --primary-dark: #1d4ed8; --primary-soft: #dbeafe; --ink: #0a1f44; --ink-2: #1e293b; --muted: #64748b; --bg-2: #f4f8fd; --border: rgba(15, 41, 92, 0.08); }
@@ -2758,7 +2897,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     <dt>Автор</dt><dd>${escapeHtml(currentUser ? currentUser.name : item.author)}</dd>
     <dt>Учебное заведение</dt><dd>БГУИР</dd>
     <dt>Тип работы</dt><dd>${escapeHtml(item.type)}</dd>
-    <dt>Количество символов</dt><dd>${charCount.toLocaleString('ru-RU')}</dd>
+    <dt>Количество символов</dt><dd>${charCount ? charCount.toLocaleString('ru-RU') : '—'}</dd>
     <dt>Дата проверки</dt><dd>${fmtDate(item.date)}</dd>
   </dl>
 </div>
@@ -2769,8 +2908,8 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
 <div class="card">
   <h2>Найденные заимствования</h2>
   <table class="src-table">
-    <thead><tr><th>№</th><th>Цитата</th><th>ID документа</th><th style="text-align:right;">%</th></tr></thead>
-    <tbody>${sources}</tbody>
+    <thead><tr><th>№</th><th>Цитата / источник</th><th>ID документа</th><th style="text-align:right;">Схожесть</th></tr></thead>
+    <tbody>${sourcesHtml}</tbody>
   </table>
 </div>
 <div class="qrs">
@@ -2780,8 +2919,15 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
 <footer><span>antiplagiat.bsuir.by</span><span>${verifyUrl}</span></footer>
 <script>const __t=document.title;window.addEventListener('beforeprint',()=>{document.title=' ';});window.addEventListener('afterprint',()=>{document.title=__t;});window.addEventListener('load',()=>setTimeout(()=>window.print(),500));<\/script>
 </body></html>`;
-    const w = window.open('', '_blank');
-    if (w) { w.document.write(html); w.document.close(); }
+    if (ApApi.openReportPrintWindow) ApApi.openReportPrintWindow(html);
+    else {
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      window.open(URL.createObjectURL(blob), '_blank');
+    }
+    } catch (err) {
+      console.error('openPrintableReport', err);
+      alert('Не удалось открыть отчёт: ' + (err?.message || err));
+    }
   };
 
   // User card modal
@@ -2927,16 +3073,36 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     const lbl = sel.querySelector(`.custom-select__option[data-value="${val}"]`)?.firstChild?.textContent?.trim()
       || sel.querySelector(`.custom-select__option[data-value="${val}"]`)?.childNodes[0]?.textContent?.trim();
     sel.querySelector('.custom-select__value').textContent = lbl || 'Студент';
-    // For admin role hide УО / Факультет / Номер группы (not applicable)
-    const isAdmin = val === 'admin';
+    // Staff roles: hide faculty/group in form
+    const isStaff = val === 'admin' || val === 'superadmin';
     ['ue-uo', 'ue-faculty', 'ue-group'].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       const field = el.closest('.ue-field');
-      if (field) field.style.display = isAdmin ? 'none' : '';
+      if (field) field.style.display = isStaff ? 'none' : '';
     });
+    const uoField = document.getElementById('ue-uo')?.closest('.ue-field');
+    if (uoField && __isUniAdmin) uoField.style.display = 'none';
   };
   let userEditMode = 'edit'; // 'edit' | 'create'
+  function applyUePasswordPolicy(mode, user) {
+    const pwdInput = document.getElementById('ue-password');
+    const pwdToggle = document.getElementById('ue-pwd-toggle');
+    const hint = document.getElementById('ue-pwd-hint');
+    const readOnly = mode === 'edit' && user && user.passwordEditable === false;
+    if (!pwdInput) return;
+    pwdInput.readOnly = readOnly;
+    pwdInput.disabled = false;
+    if (readOnly) {
+      pwdInput.type = 'text';
+      if (pwdToggle) pwdToggle.style.display = 'none';
+      if (hint) hint.hidden = false;
+    } else {
+      pwdInput.type = 'password';
+      if (pwdToggle) pwdToggle.style.display = '';
+      if (hint) hint.hidden = true;
+    }
+  }
   const openUserEdit = (u) => {
     userEditMode = 'edit';
     editingUserLogin = u.login;
@@ -2948,6 +3114,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     setUeUO(u.uo || appConfig.uos[0] || 'БГУИР');
     setUeFaculty(u.faculty || '');
     document.getElementById('ue-group').value = u.group || '';
+    applyUePasswordPolicy('edit', u);
     userEditModal.hidden = false;
   };
   const openUserCreate = () => {
@@ -2958,9 +3125,10 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     document.getElementById('ue-login').value = '';
     document.getElementById('ue-password').value = '';
     setRoleSelect('student');
-    setUeUO(appConfig.uos[0] || 'БГУИР');
+    setUeUO(__isUniAdmin ? (__currentAdminUser.institution || appConfig.uos[0] || 'БГУИР') : (appConfig.uos[0] || 'БГУИР'));
     setUeFaculty('');
     document.getElementById('ue-group').value = '';
+    applyUePasswordPolicy('create', null);
     userEditModal.hidden = false;
   };
   document.getElementById('usersAddBtn').addEventListener('click', openUserCreate);
@@ -3106,8 +3274,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
         }
         await loadUsers();
         closeUserCard();
-        buildDocuments();
-        if (typeof renderAllDash === 'function') renderAllDash();
+        if (typeof loadDashboardFromApi === 'function') await loadDashboardFromApi();
       }
     );
   });
@@ -3129,15 +3296,18 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
   userEditForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const role = document.getElementById('ue-role').dataset.value;
-    const isAdmin = role === 'admin';
+    const isStaff = role === 'admin' || role === 'superadmin';
+    const defaultUo = __isUniAdmin
+      ? (__currentAdminUser.institution || 'БГУИР')
+      : ((document.getElementById('ue-uo').dataset.value || '').trim() || (appConfig.uos[0] || 'БГУИР'));
     const payload = {
       name: document.getElementById('ue-name').value.trim(),
       login: document.getElementById('ue-login').value.trim(),
       password: document.getElementById('ue-password').value,
       role,
-      uo: isAdmin ? '—' : ((document.getElementById('ue-uo').dataset.value || '').trim() || (appConfig.uos[0] || 'БГУИР')),
-      faculty: isAdmin ? '—' : ((document.getElementById('ue-faculty').dataset.value || '').trim()),
-      group: isAdmin ? '—' : (document.getElementById('ue-group').value.trim() || '—'),
+      uo: isStaff ? defaultUo : defaultUo,
+      faculty: isStaff ? undefined : ((document.getElementById('ue-faculty').dataset.value || '').trim()),
+      group: isStaff ? undefined : (document.getElementById('ue-group').value.trim() || '—'),
     };
     if (userEditMode === 'create') {
       if (!payload.login || !payload.name) {
@@ -3153,9 +3323,9 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
         password: payload.password,
         role: payload.role,
         fullName: payload.name,
-        institution: isAdmin ? undefined : payload.uo,
-        faculty: isAdmin ? undefined : payload.faculty,
-        group: isAdmin ? undefined : payload.group,
+        institution: isStaff ? defaultUo : payload.uo,
+        faculty: isStaff ? undefined : payload.faculty,
+        group: isStaff ? undefined : payload.group,
       });
       if (!ok || !data.success) {
         alert(data.error || 'Не удалось создать пользователя');
@@ -3163,22 +3333,25 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       }
       closeUserEdit();
       await loadUsers();
-      buildDocuments();
-      if (typeof renderAllDash === 'function') renderAllDash();
+      if (typeof loadDashboardFromApi === 'function') await loadDashboardFromApi();
       const created = users.find((x) => x.login === payload.login);
       if (created) openUserCard(created);
       return;
     }
     const u = users.find((x) => x.login === editingUserLogin);
     if (!u) return closeUserEdit();
+    if (payload.password && payload.password.length < 6) {
+      alert('Пароль должен содержать минимум 6 символов.');
+      return;
+    }
     const updateData = {
       fullName: payload.name,
       role: payload.role,
-      institution: isAdmin ? undefined : payload.uo,
-      faculty: isAdmin ? undefined : payload.faculty,
-      group: isAdmin ? undefined : payload.group,
+      institution: isStaff ? defaultUo : payload.uo,
+      faculty: isStaff ? undefined : payload.faculty,
+      group: isStaff ? undefined : payload.group,
     };
-    if (payload.password) updateData.password = payload.password;
+    if (payload.password && u.passwordEditable !== false) updateData.password = payload.password;
     const { ok, data } = await ApApi.updateAdminUser(editingUserLogin, updateData);
     if (!ok || !data.success) {
       alert(data.error || 'Не удалось обновить пользователя');
@@ -3186,8 +3359,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     }
     closeUserEdit();
     await loadUsers();
-    buildDocuments();
-    if (typeof renderAllDash === 'function') renderAllDash();
+    if (typeof loadDashboardFromApi === 'function') await loadDashboardFromApi();
     const updated = users.find((x) => x.login === editingUserLogin);
     if (updated) openUserCard(updated);
   });
@@ -3197,9 +3369,14 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
   async function loadUsers() {
     const { ok, data } = await ApApi.getAdminUsers();
     if (ok && data.users) {
+      if (Array.isArray(data.creatableRoles)) __creatableRoles = data.creatableRoles;
+      populateRoleOptions();
       users = data.users.map((u) => ({
         name:       u.fullName || u.username,
         login:      u.username,
+        password:   u.password || '',
+        passwordEditable: u.passwordEditable !== false,
+        institutionId: u.institutionId || null,
         role:       u.role,
         uo:         u.institution || 'БГУИР',
         faculty:    u.faculty || '—',
@@ -3216,6 +3393,15 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
 
   // Submissions/repository — loaded from API
   let submissions = [];
+  function resolveSubmissionOrg(s) {
+    const uo = s.uo && s.uo !== '—' ? s.uo : null;
+    const faculty = s.faculty && s.faculty !== '—' ? s.faculty : null;
+    if (uo || faculty) return { uo: uo || 'БГУИР', faculty: faculty || '—' };
+    const byLogin = s.userId && users.find((u) => u.login === s.userId);
+    if (byLogin) return { uo: byLogin.uo || 'БГУИР', faculty: byLogin.faculty || '—' };
+    const byName = users.find((u) => s.author && u.name && s.author.startsWith(u.name.split(' ')[0]));
+    return { uo: (byName && byName.uo) || 'БГУИР', faculty: (byName && byName.faculty) || '—' };
+  }
   async function loadSubmissions() {
     const { ok, data } = await ApApi.getAdminDocuments();
     if (ok && data.documents) {
@@ -3223,21 +3409,24 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
         id:             d.id,
         title:          d.title,
         author:         d.author || d.userId || '—',
+        userId:         d.userId || null,
+        uo:             d.institution || null,
+        faculty:        d.faculty || null,
         type:           normalizeDocType(d.category || d.categoryLabel || '—'),
         category:       d.category || 'uncategorized',
         percent:        Math.round(d.originalityPercent ?? 0),
         ai:             Math.round(d.aiPercentMl ?? 0),
+        wordCount:      d.wordCount ?? null,
         date:           d.uploadDate ? d.uploadDate.slice(0, 10) : '—',
         status:         d.status,
         _expiresAt:     d.expiresAt ? new Date(d.expiresAt).getTime() : null,
         processingTime: d.processingTimeMs ? Math.round(d.processingTimeMs / 1000) : null,
       }));
     }
-    if (typeof refreshDashboardTypes === 'function') refreshDashboardTypes();
-    if (typeof buildDocuments === 'function') buildDocuments();
+    rebuildRepository();
     renderSubmissions();
     renderRepo();
-    if (typeof renderAllDash === 'function') renderAllDash();
+    if (typeof loadDashboardFromApi === 'function') await loadDashboardFromApi();
   }
   // loadSubmissions() is invoked from bootstrapAdminData after dashboard init
 
@@ -3295,7 +3484,38 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
   let usersFilterRoleVal = [], usersFilterUoVal = [], usersFilterFacultyVal = [], usersFilterGroupVal = '';
   const usersTbody = document.getElementById('usersTbody');
   const usersPagi = document.getElementById('usersPagination');
-  const roleLabel = { student: 'Студент', teacher: 'Преподаватель', admin: 'Администратор' };
+  const roleLabel = { student: 'Студент', teacher: 'Преподаватель', admin: 'Администратор УО', superadmin: 'Главный администратор' };
+  function populateRoleOptions() {
+    const sel = document.getElementById('ue-role');
+    if (!sel) return;
+    const menu = sel.querySelector('.custom-select__menu');
+    const labels = roleLabel;
+    menu.innerHTML = __creatableRoles.map((r) => `
+      <li class="custom-select__option" role="option" data-value="${r}">
+        ${labels[r] || r}
+        <i data-lucide="check" class="icon-16 custom-select__option-check"></i>
+      </li>
+    `).join('');
+    if (window.lucide) window.lucide.createIcons();
+    menu.querySelectorAll('.custom-select__option').forEach((opt) => {
+      opt.addEventListener('click', () => {
+        setRoleSelect(opt.dataset.value);
+        sel.classList.remove('is-open');
+        menu.hidden = true;
+      });
+    });
+  }
+  function passwordCellHtml(password) {
+    const pwd = password || '';
+    return `
+      <div class="adm-table__pwd">
+        <code class="adm-table__pwd-val" data-pwd="${escapeHtml(pwd)}" data-revealed="0">${pwd ? '••••••••' : '—'}</code>
+        ${pwd ? `<button class="uc-icon-btn adm-table__pwd-toggle" type="button" aria-label="Показать пароль" title="Показать пароль">
+          <i data-lucide="eye" class="icon-16"></i>
+        </button>` : ''}
+      </div>
+    `;
+  }
   function renderUsers() {
     const q = usersQuery.toLowerCase().trim();
     const groupTerms = usersFilterGroupVal.toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
@@ -3309,20 +3529,21 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     const { slice, page } = paginate(filtered, usersPage);
     usersPage = page;
     if (!filtered.length) {
-      usersTbody.innerHTML = `<tr><td colspan="7" class="empty">Пользователи не найдены</td></tr>`;
+      usersTbody.innerHTML = `<tr><td colspan="8" class="empty">Пользователи не найдены</td></tr>`;
     } else {
       usersTbody.innerHTML = slice.map((u) => {
-        const isAdmin = u.role === 'admin';
+        const isStaff = u.role === 'admin' || u.role === 'superadmin';
         return `
         <tr class="adm-table__row" data-open-user="${escapeHtml(u.login)}">
           <td>
             <div class="adm-table__name">${escapeHtml(u.name)}</div>
             <div class="adm-table__sub">логин <code>${escapeHtml(u.login)}</code></div>
           </td>
-          <td><span class="role-pill role-pill--${u.role}">${roleLabel[u.role]}</span></td>
-          <td>${isAdmin ? '—' : escapeHtml(u.uo || 'БГУИР')}</td>
-          <td>${isAdmin ? '—' : escapeHtml(u.faculty || '—')}</td>
-          <td>${isAdmin ? '—' : escapeHtml(u.group || '—')}</td>
+          <td><span class="role-pill role-pill--${u.role}">${roleLabel[u.role] || u.role}</span></td>
+          <td>${passwordCellHtml(u.password)}</td>
+          <td class="admin-col-uo">${isStaff ? '—' : escapeHtml(u.uo || 'БГУИР')}</td>
+          <td>${isStaff ? '—' : escapeHtml(u.faculty || '—')}</td>
+          <td>${isStaff ? '—' : escapeHtml(u.group || '—')}</td>
           <td><b>${u.checks}</b></td>
           <td>${fmtDate(u.registered)}</td>
         </tr>
@@ -3338,6 +3559,33 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     }
     renderPagination(usersPagi, filtered.length, usersPage, (p) => { usersPage = p; renderUsers(); });
   }
+  usersTbody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.adm-table__pwd-toggle');
+    if (!btn) return;
+    e.stopPropagation();
+    const pwdEl = btn.closest('.adm-table__pwd')?.querySelector('.adm-table__pwd-val');
+    if (!pwdEl || !pwdEl.dataset.pwd) return;
+    const revealed = pwdEl.dataset.revealed === '1';
+    if (revealed) {
+      pwdEl.textContent = '••••••••';
+      pwdEl.dataset.revealed = '0';
+      btn.setAttribute('aria-label', 'Показать пароль');
+      btn.title = 'Показать пароль';
+    } else {
+      pwdEl.textContent = pwdEl.dataset.pwd;
+      pwdEl.dataset.revealed = '1';
+      btn.setAttribute('aria-label', 'Скрыть пароль');
+      btn.title = 'Скрыть пароль';
+    }
+    const old = btn.querySelector('svg, i');
+    if (old) {
+      const next = document.createElement('i');
+      next.setAttribute('data-lucide', revealed ? 'eye' : 'eye-off');
+      next.className = 'icon-16';
+      old.replaceWith(next);
+      if (window.lucide) window.lucide.createIcons();
+    }
+  });
   document.getElementById('usersSearch').addEventListener('input', (e) => { usersQuery = e.target.value; usersPage = 1; renderUsers(); });
   renderUsers();
 
@@ -3517,92 +3765,95 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     renderUsers();
   });
 
-  // Export XLSX
-  document.getElementById('usersExportBtn').addEventListener('click', () => {
-    if (!window.XLSX) { alert('Библиотека XLSX не загружена.'); return; }
+  // Export / import XLSX — users
+  const reverseRoleImport = {
+    'Студент': 'student',
+    'Преподаватель': 'teacher',
+    'Администратор УО': 'admin',
+    'Администратор': 'admin',
+    'Главный администратор': 'superadmin',
+  };
+  function filterUsersForExport() {
     const q = usersQuery.toLowerCase().trim();
     const groupTerms = usersFilterGroupVal.toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
-    const data = users.filter((u) =>
+    return users.filter((u) =>
       (!usersFilterRoleVal.length || usersFilterRoleVal.includes(u.role)) &&
       (!usersFilterUoVal.length || usersFilterUoVal.includes(u.uo || 'БГУИР')) &&
       (!q || u.name.toLowerCase().includes(q) || u.login.toLowerCase().includes(q) || u.faculty.toLowerCase().includes(q) || (u.group || '').toLowerCase().includes(q)) &&
       (!usersFilterFacultyVal.length || usersFilterFacultyVal.includes(u.faculty)) &&
       (!groupTerms.length || groupTerms.some((g) => (u.group || '').toLowerCase().includes(g)))
-    ).map((u) => ({
-      'ФИО': u.name,
-      'Логин': u.login,
-      'Пароль': u.password || '',
-      'Роль': roleLabel[u.role] || u.role,
-      'УО': u.uo || 'БГУИР',
-      'Факультет': u.faculty,
-      'Группа': u.group || '',
-      'Проверок': u.checks,
-      'Последний вход': fmtDate(u.registered),
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch: 30},{wch: 16},{wch: 14},{wch: 16},{wch: 8},{wch: 10},{wch: 10},{wch: 10},{wch: 14}];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Пользователи');
-    XLSX.writeFile(wb, `users_${new Date().toISOString().slice(0,10)}.xlsx`);
+    );
+  }
+  document.getElementById('usersExportBtn').addEventListener('click', () => {
+    const data = filterUsersForExport().map((u) => {
+      const row = {
+        'ФИО': u.name,
+        'Логин': u.login,
+        'Пароль': u.password || '',
+        'Роль': roleLabel[u.role] || u.role,
+        'Факультет': u.faculty,
+        'Группа': u.group || '',
+        'Проверок': u.checks,
+        'Последний вход': fmtDate(u.registered),
+      };
+      if (__isSuperAdmin) row['УО'] = u.uo || 'БГУИР';
+      return row;
+    });
+    const cols = [{ wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 20 }];
+    if (__isSuperAdmin) cols.push({ wch: 12 });
+    cols.push({ wch: 28 }, { wch: 10 }, { wch: 10 }, { wch: 14 });
+    exportXlsx(`users_${xlsxDate()}.xlsx`, 'Пользователи', data, cols);
   });
 
-  // Import XLSX
   const importInput = document.getElementById('usersImportInput');
   document.getElementById('usersImportBtn').addEventListener('click', () => importInput.click());
-  importInput.addEventListener('change', (e) => {
+  importInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!window.XLSX) { alert('Библиотека XLSX не загружена.'); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        const reverseRole = { 'Студент': 'student', 'Преподаватель': 'teacher', 'Администратор': 'admin' };
-        let added = 0, updated = 0;
-        rows.forEach((r) => {
-          const login = String(r['Логин'] || '').trim();
-          if (!login) return;
-          const existing = users.find((u) => u.login === login);
-          const payload = {
-            name: String(r['ФИО'] || '').trim(),
-            login,
-            password: String(r['Пароль'] || ''),
-            role: reverseRole[String(r['Роль'] || '').trim()] || 'student',
-            uo: String(r['УО'] || 'БГУИР').trim(),
-            faculty: String(r['Факультет'] || '').trim(),
-            group: String(r['Группа'] || '—').trim() || '—',
-            checks: Number(r['Проверок']) || 0,
-            registered: existing?.registered || new Date().toISOString().slice(0, 10),
-          };
-          // Auto-register UO / Faculty if unknown
-          if (payload.uo && !appConfig.uos.includes(payload.uo)) {
-            appConfig.uos.push(payload.uo);
-            appConfig.facultiesByUo[payload.uo] = appConfig.facultiesByUo[payload.uo] || [];
-          }
-          if (payload.faculty && payload.uo) {
-            appConfig.facultiesByUo[payload.uo] = appConfig.facultiesByUo[payload.uo] || [];
-            if (!appConfig.facultiesByUo[payload.uo].includes(payload.faculty)) {
-              appConfig.facultiesByUo[payload.uo].push(payload.faculty);
-            }
-          }
-          if (existing) { Object.assign(existing, payload); updated++; }
-          else { users.push(payload); added++; }
-        });
-        saveAppConfig();
-        alert(`Импорт завершён.\nДобавлено: ${added}\nОбновлено: ${updated}`);
-        usersPage = 1;
-        buildDocuments();
-        renderUsers();
-        if (typeof renderAllDash === 'function') renderAllDash();
-      } catch (err) {
-        alert('Не удалось прочитать файл: ' + err.message);
-      } finally {
-        importInput.value = '';
+    try {
+      const rows = await readXlsxRows(file);
+      let added = 0, updated = 0, failed = 0;
+      for (const r of rows) {
+        const login = String(r['Логин'] || '').trim();
+        if (!login) continue;
+        const fullName = String(r['ФИО'] || '').trim();
+        const password = String(r['Пароль'] || '').trim();
+        const roleKey = reverseRoleImport[String(r['Роль'] || '').trim()] || 'student';
+        const payload = {
+          fullName: fullName || undefined,
+          institution: String(r['УО'] || __currentAdminUser?.institution || 'БГУИР').trim(),
+          faculty: String(r['Факультет'] || '').trim() || undefined,
+          group: String(r['Группа'] || '').trim() || undefined,
+        };
+        const existing = users.find((u) => u.login === login);
+        if (existing) {
+          const patch = { ...payload };
+          if (password && existing.passwordEditable !== false) patch.password = password;
+          if (__isSuperAdmin && roleKey) patch.role = roleKey;
+          const { ok, data } = await ApApi.updateAdminUser(login, patch);
+          if (ok && data.success) updated++;
+          else failed++;
+        } else {
+          if (!password) { failed++; continue; }
+          const { ok, data } = await ApApi.createAdminUser({
+            username: login,
+            password,
+            role: roleKey,
+            ...payload,
+          });
+          if (ok && data.success) added++;
+          else failed++;
+        }
       }
-    };
-    reader.readAsArrayBuffer(file);
+      await loadUsers();
+      renderUsers();
+      if (typeof loadDashboardFromApi === 'function') await loadDashboardFromApi();
+      alert(`Импорт завершён.\nДобавлено: ${added}\nОбновлено: ${updated}${failed ? `\nОшибок: ${failed}` : ''}`);
+    } catch (err) {
+      alert('Не удалось прочитать файл: ' + err.message);
+    } finally {
+      importInput.value = '';
+    }
   });
 
   // ===== Submissions =====
@@ -3712,9 +3963,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       if (subFilter.dateFrom && s.date < subFilter.dateFrom) return false;
       if (subFilter.dateTo && s.date > subFilter.dateTo) return false;
       if (subFilter.uo.length || subFilter.faculty.length) {
-        const author = users.find((u) => s.author.startsWith(u.name.split(' ')[0]));
-        const auo = (author && author.uo) || 'БГУИР';
-        const afac = (author && author.faculty) || '';
+        const { uo: auo, faculty: afac } = resolveSubmissionOrg(s);
         if (subFilter.uo.length && !subFilter.uo.includes(auo)) return false;
         if (subFilter.faculty.length && !subFilter.faculty.includes(afac)) return false;
       }
@@ -3732,14 +3981,12 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
                <i data-lucide="clock" class="icon-16"></i>
                <span>Хранится <strong>${formatRemaining(s._expiresAt - Date.now())}</strong></span>
              </span>` : '';
-        const author = users.find((u) => s.author.startsWith(u.name.split(' ')[0]));
-        const uo = (author && author.uo) || 'БГУИР';
-        const faculty = (author && author.faculty) || '—';
+        const { uo, faculty } = resolveSubmissionOrg(s);
         return `
         <tr>
           <td><div class="adm-table__name">${escapeHtml(s.title)}</div></td>
           <td>${escapeHtml(s.author)}</td>
-          <td>${escapeHtml(uo)}</td>
+          <td class="admin-col-uo">${escapeHtml(uo)}</td>
           <td>${escapeHtml(faculty)}</td>
           <td>${escapeHtml(s.type)}</td>
           <td><b style="color: var(--primary);">${s.percent}%</b></td>
@@ -3754,6 +4001,9 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
           </td>
           <td>
             <div class="sub-actions">
+              <button class="uc-icon-btn" type="button" data-sub-action="matches" data-id="${s.id}" title="Заимствования" aria-label="Заимствования">
+                <i data-lucide="file-search-2" class="icon-16"></i>
+              </button>
               <button class="uc-icon-btn" type="button" data-sub-action="download" data-id="${s.id}" title="Скачать отчёт" aria-label="Скачать отчёт">
                 <i data-lucide="download" class="icon-16"></i>
               </button>
@@ -3773,7 +4023,10 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
           const item = submissions.find((x) => String(x.id) === String(btn.dataset.id));
           if (!item) return;
           const action = btn.dataset.subAction;
-          if (action === 'download') openPrintableReport(item, null);
+          if (action === 'matches') {
+            const matchPct = Math.max(0, 100 - (item.percent || 0));
+            openAdminMatches(item.id, matchPct, item.ai ?? 0);
+          } else if (action === 'download') openPrintableReport(item, null);
           else if (action === 'edit') openSubEdit(item);
           else if (action === 'delete') {
             confirmAction(`Удалить работу «${item.title}»?`, async () => {
@@ -3885,31 +4138,38 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       // Avoid jitter: only update when diff > 8px (small reflows ignored)
       if (Math.abs(newH - curH) > 8) iframe.style.height = newH + 'px';
     } else if (e.data.type === 'ap-show-matches') {
-      adminMatchesPct = { match: e.data.matchPct ?? 0, ai: e.data.aiPct ?? 0 };
-      adminMatchesPage = 1;
-      adminMatchesTab = 'matches';
-      adminMatchesModal.querySelectorAll('.modal__tab').forEach((t) => t.classList.toggle('is-active', t.dataset.amtab === 'matches'));
-      renderAdminMatches();
-      adminMatchesModal.hidden = false;
+      openAdminMatches(e.data.documentId, e.data.matchPct ?? 0, e.data.aiPct ?? 0);
     }
   });
 
   const renderAdminMatches = () => {
     const isAi = adminMatchesTab === 'ai';
-    const dataset = isAi ? mockAiGenerations : mockMatches;
+    const dataset = isAi ? adminAiMatches : adminBorrowMatches;
     const total = dataset.length;
+    adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}% · ИИ-генерация: ${adminMatchesPct.ai}%`;
+    if (!total) {
+      const sub = adminMatchesSub?.textContent || '';
+      const pctMatch = sub.match(/Совпадения:\s*(\d+)%/);
+      const matchPct = pctMatch ? Number(pctMatch[1]) : 0;
+      const emptyMsg = (!isAi && matchPct > 0)
+        ? `Конкретные работы в базе сравнения не найдены. Показатель совпадений (${matchPct}%) сформирован семантическим анализом (ML/Qdrant).`
+        : (isAi ? 'ИИ-фрагменты не обнаружены.' : 'Заимствования не обнаружены.');
+      adminMatchesList.innerHTML = `<li class="uc-empty">${emptyMsg}</li>`;
+      adminMatchesPagi.hidden = true;
+      adminMatchesPagi.innerHTML = '';
+      return;
+    }
     const pages = Math.max(1, Math.ceil(total / ADMIN_MATCHES_PER_PAGE));
     if (adminMatchesPage > pages) adminMatchesPage = pages;
     const start = (adminMatchesPage - 1) * ADMIN_MATCHES_PER_PAGE;
     const slice = dataset.slice(start, start + ADMIN_MATCHES_PER_PAGE);
-    adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}% · ИИ-генерация: ${adminMatchesPct.ai}%`;
     adminMatchesList.innerHTML = slice.map((m) => {
       const cls = isAi ? 'matches-list__item matches-list__item--ai' : 'matches-list__item';
       if (isAi) {
         return `
           <li class="${cls}">
             <span class="matches-list__percent matches-list__percent--corner">${m.percent}%</span>
-            <div class="matches-list__meta"><span>Достоверность: <b>${m.confidence}</b></span></div>
+            <div class="matches-list__meta"><span>Достоверность: <b>${escapeHtml(m.confidence)}</b></span></div>
             <p class="matches-list__quote">«${escapeHtml(m.quote)}»</p>
           </li>`;
       }
@@ -3919,7 +4179,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
             <span class="matches-list__source">${escapeHtml(m.source)}</span>
             <span class="matches-list__percent">${m.percent}%</span>
           </div>
-          <p class="matches-list__quote">${escapeHtml(m.title || m.quote)}</p>
+          <p class="matches-list__quote">«${escapeHtml(m.quote)}»</p>
           <div class="matches-list__meta"><span>ID документа <code>${escapeHtml(m.docId)}</code></span></div>
         </li>`;
     }).join('');
@@ -3963,12 +4223,10 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     });
   });
 
-  // Export submissions to XLSX
-  document.getElementById('subsExportBtn').addEventListener('click', () => {
-    if (!window.XLSX) { alert('Библиотека XLSX не загружена.'); return; }
+  function filterSubmissionsList() {
     const q = subQuery.toLowerCase().trim();
     const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
-    const data = submissions.filter((s) => {
+    return submissions.filter((s) => {
       if (!(!q || s.title.toLowerCase().includes(q) || s.author.toLowerCase().includes(q))) return false;
       if (subFilter.type.length && !subFilter.type.includes(s.type)) return false;
       if (subFilter.status.length && !subFilter.status.includes(getEffectiveStatus(s))) return false;
@@ -3977,22 +4235,38 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       if (!inRange(s.processingTime || 0, subFilter.timeMin, subFilter.timeMax)) return false;
       if (subFilter.dateFrom && s.date < subFilter.dateFrom) return false;
       if (subFilter.dateTo && s.date > subFilter.dateTo) return false;
+      if (subFilter.uo.length || subFilter.faculty.length) {
+        const { uo: auo, faculty: afac } = resolveSubmissionOrg(s);
+        if (subFilter.uo.length && !subFilter.uo.includes(auo)) return false;
+        if (subFilter.faculty.length && !subFilter.faculty.includes(afac)) return false;
+      }
       return true;
-    }).map((s) => ({
-      'Работа': s.title,
-      'Автор': s.author,
-      'Тип': s.type,
-      'Оригинальность, %': s.percent,
-      'ИИ, %': s.ai,
-      'Время ОФ, сек': s.processingTime || 0,
-      'Дата': fmtDate(s.date),
-      'Статус': statusLabel(getEffectiveStatus(s)),
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch: 44},{wch: 18},{wch: 26},{wch: 16},{wch: 8},{wch: 12},{wch: 12},{wch: 12}];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Проверки');
-    XLSX.writeFile(wb, `submissions_${new Date().toISOString().slice(0,10)}.xlsx`);
+    });
+  }
+
+  // Export submissions to XLSX
+  document.getElementById('subsExportBtn').addEventListener('click', () => {
+    const data = filterSubmissionsList().map((s) => {
+      const { uo, faculty } = resolveSubmissionOrg(s);
+      const row = {
+        'ID': s.id,
+        'Работа': s.title,
+        'Автор': s.author,
+        'Факультет': faculty,
+        'Тип': s.type,
+        'Оригинальность, %': s.percent,
+        'ИИ, %': s.ai,
+        'Время ОФ, сек': s.processingTime || 0,
+        'Дата': fmtDate(s.date),
+        'Статус': statusLabel(getEffectiveStatus(s)),
+      };
+      if (__isSuperAdmin) row['УО'] = uo;
+      return row;
+    });
+    const cols = [{ wch: 8 }, { wch: 44 }, { wch: 28 }];
+    if (__isSuperAdmin) cols.push({ wch: 12 });
+    cols.push({ wch: 28 }, { wch: 26 }, { wch: 16 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 12 });
+    exportXlsx(`submissions_${xlsxDate()}.xlsx`, 'Проверки', data, cols);
   });
 
   // ===== Repository =====
@@ -4005,11 +4279,14 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
   };
   const repoGrid = document.getElementById('repoGrid');
   const repoPagi = document.getElementById('repoPagination');
-  const repository = submissions.filter((s) => s.status === 'final').map((s, i) => ({
-    ...s,
-    id: 'AP-DOC-' + (i + 1).toString(36).toUpperCase().padStart(4, '0'),
-    indexed: s.date,
-  }));
+  let repository = [];
+  function rebuildRepository() {
+    repository = submissions.filter((s) => s.status === 'final').map((s, i) => ({
+      ...s,
+      id: 'AP-DOC-' + (i + 1).toString(36).toUpperCase().padStart(4, '0'),
+      indexed: s.date,
+    }));
+  }
   function renderRepo() {
     const q = repoQuery.toLowerCase().trim();
     const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
@@ -4028,9 +4305,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       repoGrid.innerHTML = `<div class="empty">Работы не найдены</div>`;
     } else {
       repoGrid.innerHTML = slice.map((r) => {
-        const author = users.find((u) => r.author.startsWith(u.name.split(' ')[0]));
-        const uo = (author && author.uo) || 'БГУИР';
-        const faculty = (author && author.faculty) || '—';
+        const { uo, faculty } = resolveSubmissionOrg(r);
         return `
         <div class="repo-row">
           <div>
@@ -4142,12 +4417,10 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     renderRepo();
   });
 
-  // Repo export
-  document.getElementById('repoExportBtn').addEventListener('click', () => {
-    if (!window.XLSX) { alert('Библиотека XLSX не загружена.'); return; }
+  function filterRepositoryList() {
     const q = repoQuery.toLowerCase().trim();
     const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
-    const data = repository.filter((r) => {
+    return repository.filter((r) => {
       if (!(!q || r.title.toLowerCase().includes(q) || r.author.toLowerCase().includes(q))) return false;
       if (repoFilter.type.length && !repoFilter.type.includes(r.type)) return false;
       if (!inRange(r.percent, repoFilter.origMin, repoFilter.origMax)) return false;
@@ -4155,20 +4428,30 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       if (repoFilter.dateFrom && (r.indexed || '') < repoFilter.dateFrom) return false;
       if (repoFilter.dateTo && (r.indexed || '') > repoFilter.dateTo) return false;
       return true;
-    }).map((r) => ({
-      'ID': r.id,
-      'Работа': r.title,
-      'Автор': r.author,
-      'Тип': r.type,
-      'Оригинальность, %': r.percent,
-      'ИИ, %': r.ai ?? 0,
-      'Дата индексации': fmtDate(r.indexed),
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch: 14},{wch: 44},{wch: 18},{wch: 26},{wch: 16},{wch: 8},{wch: 14}];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Хранилище');
-    XLSX.writeFile(wb, `repository_${new Date().toISOString().slice(0,10)}.xlsx`);
+    });
+  }
+
+  // Repo export
+  document.getElementById('repoExportBtn').addEventListener('click', () => {
+    const data = filterRepositoryList().map((r) => {
+      const { uo, faculty } = resolveSubmissionOrg(r);
+      const row = {
+        'ID': r.id,
+        'Работа': r.title,
+        'Автор': r.author,
+        'Факультет': faculty,
+        'Тип': r.type,
+        'Оригинальность, %': r.percent,
+        'ИИ, %': r.ai ?? 0,
+        'Дата индексации': fmtDate(r.indexed),
+      };
+      if (__isSuperAdmin) row['УО'] = uo;
+      return row;
+    });
+    const cols = [{ wch: 14 }, { wch: 44 }, { wch: 28 }];
+    if (__isSuperAdmin) cols.push({ wch: 12 });
+    cols.push({ wch: 28 }, { wch: 26 }, { wch: 16 }, { wch: 8 }, { wch: 14 });
+    exportXlsx(`repository_${xlsxDate()}.xlsx`, 'Хранилище', data, cols);
   });
 
   renderRepo();
@@ -4292,13 +4575,8 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     'Источник': l.source,
   }));
   document.getElementById('logExportXlsxBtn').addEventListener('click', () => {
-    if (!window.XLSX) { alert('Библиотека XLSX не загружена.'); return; }
     const data = buildLogExportData();
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch: 22},{wch: 8},{wch: 12},{wch: 70},{wch: 14}];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Логи');
-    XLSX.writeFile(wb, `logs_${new Date().toISOString().slice(0,10)}.xlsx`);
+    exportXlsx(`logs_${xlsxDate()}.xlsx`, 'Логи', data, [{ wch: 22 }, { wch: 8 }, { wch: 12 }, { wch: 70 }, { wch: 14 }]);
   });
   document.getElementById('logExportCsvBtn').addEventListener('click', () => {
     const data = buildLogExportData();
@@ -4319,30 +4597,27 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
 
   renderLogs();
 
-  // ===== Dashboard: documents table + 5 charts =====
-  // Build enriched documents list from submissions
-  const userIdByLogin = Object.fromEntries(users.map((u, i) => [u.login, 'AP-USR-' + String(i + 1).padStart(6, '0')]));
-  const surnameToLogin = (sn) => users.find((u) => u.name.startsWith(sn))?.login || users[0].login;
+  // ===== Dashboard: documents table + 5 charts (data from GET /api/admin/statistics) =====
   let documents = [];
-  const buildDocuments = () => {
-    documents = submissions.map((s, i) => {
-      const login = surnameToLogin(s.author.split(' ')[0]);
-      const u = users.find((x) => x.login === login);
-      return {
-        docId: 'AP-DOC-' + String(i + 1).padStart(4, '0'),
-        userId: userIdByLogin[login] || 'AP-USR-000000',
-        type: normalizeDocType(s.type),
-        status: getEffectiveStatus(s),
-        percent: s.percent,
-        ai: s.ai,
-        matches: Math.max(0, 100 - s.percent),
-        date: s.date && s.date !== '—' ? s.date : '',
-        uo: (u && u.uo) || 'БГУИР',
-        faculty: (u && u.faculty) || '',
-      };
-    });
+  let dashboardLoading = false;
+
+  const applyStatisticsToDashboard = (statistics) => {
+    if (!statistics) return;
+    documents = (statistics.dashboardDocuments || []).map((d) => ({
+      id: d.id,
+      docId: String(d.docId ?? d.id),
+      userId: d.userId || '—',
+      type: normalizeDocType(d.type || d.categoryLabel || d.category || '—'),
+      status: d.status,
+      percent: Math.round(d.percent ?? d.originalityPercent ?? 0),
+      ai: Math.round(d.ai ?? d.aiPercent ?? 0),
+      matches: Math.round(d.matches ?? d.plagiarismPercent ?? 0),
+      date: d.date || (d.uploadDate ? d.uploadDate.slice(0, 10) : ''),
+      uo: d.uo || d.institution || '—',
+      faculty: d.faculty || '',
+    }));
+    if (typeof refreshDashboardTypes === 'function') refreshDashboardTypes();
   };
-  buildDocuments();
 
   let typesAll = appConfig.types.slice();
   const typeShortBase = { 'Дипломная работа / проект':'Дипломные', 'Курсовая работа / проект':'Курсовые', 'Лабораторная работа':'Лабораторные', 'Практическая работа':'Практические', 'Статьи':'Статьи' };
@@ -4480,6 +4755,23 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     renderStats(); renderHeatmap(); renderPie(); renderLine(); renderBar1(); renderBar2(); renderDocs();
   };
 
+  async function loadDashboardFromApi() {
+    if (dashboardLoading) return;
+    dashboardLoading = true;
+    try {
+      const params = {};
+      if (dashGlobal.dateFrom) params.startDate = dashGlobal.dateFrom;
+      if (dashGlobal.dateTo) params.endDate = dashGlobal.dateTo;
+      const { ok, data } = await ApApi.getAdminStatistics(params);
+      if (ok && data.success && data.statistics) {
+        applyStatisticsToDashboard(data.statistics);
+        renderAllDash();
+      }
+    } finally {
+      dashboardLoading = false;
+    }
+  }
+
   // Init global filter widgets
   const dashGlobalMsUO = initMultiSelect('dashGlobalUO', 'Все');
   const dashGlobalMsFaculty = initMultiSelect('dashGlobalFaculty', 'Все');
@@ -4492,15 +4784,15 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       if (el) window.flatpickr(el, fpOpts);
     });
   }
-  document.getElementById('dashGlobalApply').addEventListener('click', () => {
+  document.getElementById('dashGlobalApply').addEventListener('click', async () => {
     dashGlobal.dateFrom = document.getElementById('dashGlobalDateFrom').value;
     dashGlobal.dateTo = document.getElementById('dashGlobalDateTo').value;
     dashGlobal.uo = dashGlobalMsUO.getValues();
     dashGlobal.faculty = dashGlobalMsFaculty.getValues();
     lineWeekStart = null;
-    renderAllDash();
+    await loadDashboardFromApi();
   });
-  document.getElementById('dashGlobalReset').addEventListener('click', () => {
+  document.getElementById('dashGlobalReset').addEventListener('click', async () => {
     const dfEl = document.getElementById('dashGlobalDateFrom');
     const dtEl = document.getElementById('dashGlobalDateTo');
     if (dfEl._flatpickr) dfEl._flatpickr.clear(); else dfEl.value = '';
@@ -4509,7 +4801,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     dashGlobalMsFaculty.setValues([]);
     dashGlobal.dateFrom = ''; dashGlobal.dateTo = ''; dashGlobal.uo = []; dashGlobal.faculty = [];
     lineWeekStart = null;
-    renderAllDash();
+    await loadDashboardFromApi();
   });
 
   // Apply/reset buttons
@@ -5028,13 +5320,12 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     const { slice, page } = paginate(filtered, docPage);
     docPage = page;
     if (!filtered.length) {
-      docTbody.innerHTML = '<tr><td colspan="9" class="empty">Документы не найдены</td></tr>';
+      docTbody.innerHTML = '<tr><td colspan="8" class="empty">Документы не найдены</td></tr>';
     } else {
       docTbody.innerHTML = slice.map((d) => `
         <tr>
           <td><code>${d.docId}</code></td>
           <td><code>${d.userId}</code></td>
-          <td>${escapeHtml(d.uo || '—')}</td>
           <td>${escapeHtml(d.faculty || '—')}</td>
           <td>${escapeHtml(d.type)}</td>
           <td><span class="status-pill status-pill--${d.status}">${statusLabel(d.status)}</span></td>
@@ -5046,6 +5337,35 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     }
     renderPagination(docPagi, filtered.length, docPage, (p) => { docPage = p; renderDocs(); });
   };
+
+  document.getElementById('docExportBtn').addEventListener('click', () => {
+    const f = dashFilter.doc;
+    const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
+    const filtered = applyGlobal(documents).filter((d) => {
+      if (f.type.length && !f.type.includes(d.type)) return false;
+      if (f.status.length && !f.status.includes(d.status)) return false;
+      if (!inRange(d.percent, f.origMin, f.origMax)) return false;
+      if (!inRange(d.matches, f.matchMin, f.matchMax)) return false;
+      if (f.dateFrom && d.date < f.dateFrom) return false;
+      if (f.dateTo && d.date > f.dateTo) return false;
+      if (f.uo.length && !f.uo.includes(d.uo)) return false;
+      if (f.faculty.length && !f.faculty.includes(d.faculty)) return false;
+      return true;
+    });
+    const data = filtered.map((d) => ({
+      'ID документа': d.docId,
+      'ID пользователя': d.userId,
+      'Факультет': d.faculty || '—',
+      'Тип работы': d.type,
+      'Статус': statusLabel(d.status),
+      'Оригинальность, %': d.percent,
+      'Совпадения, %': d.matches,
+      'Дата загрузки': fmtDate(d.date),
+    }));
+    exportXlsx(`documents_${xlsxDate()}.xlsx`, 'Документы', data, [
+      { wch: 14 }, { wch: 16 }, { wch: 28 }, { wch: 28 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+    ]);
+  });
 
   // Stats card — recomputed from filtered docs
   const renderStats = () => {
@@ -5095,15 +5415,6 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       if (window.lucide) window.lucide.createIcons();
     }
   };
-
-  // Initial render
-  renderStats();
-  renderHeatmap();
-  renderPie();
-  renderLine();
-  renderBar1();
-  renderBar2();
-  renderDocs();
 
   (async function bootstrapAdminData() {
     await loadAppConfigFromApi();

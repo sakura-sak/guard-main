@@ -10,7 +10,7 @@ import jsPDF from "jspdf"
 import QRCode from "qrcode"
 import fs from "fs"
 import path from "path"
-import { signDocumentAccess } from "@/lib/report-access"
+import { buildReportQrLinks } from "@/lib/report-qr-links"
 
 const FONT = "DejaVu"
 
@@ -490,11 +490,7 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
   if (isFinal && baseUrl) {
     try {
       const id = result.documentId!
-      const sigReport = signDocumentAccess("report", id)
-      const sigOriginal = signDocumentAccess("original", id)
-      // Левый QR — загруженный файл работы; правый — PDF справки.
-      const originalFileUrl = `${baseUrl}/api/report/${id}/original?sig=${encodeURIComponent(sigOriginal)}`
-      const reportPdfViewUrl = `${baseUrl}/api/report/${id}/view?sig=${encodeURIComponent(sigReport)}`
+      const { verifyUrl, originalUrl } = buildReportQrLinks(id, baseUrl)
 
       // Два блока: [QR] [текст справа], расположенные в одну строку.
       const qrSize = 30
@@ -511,19 +507,18 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
       const textOffsetX = 6
       const captionW = blockWidth - qrSize - textOffsetX
 
-      const qr1 = await QRCode.toDataURL(originalFileUrl, { width: 200, margin: 1 })
-      const qr2 = await QRCode.toDataURL(reportPdfViewUrl, { width: 200, margin: 1 })
+      const qr1 = await QRCode.toDataURL(verifyUrl, { width: 200, margin: 1 })
+      const qr2 = await QRCode.toDataURL(originalUrl, { width: 200, margin: 1 })
 
       doc.addImage(qr1, "PNG", qr1X, qrY, qrSize, qrSize)
       doc.setFontSize(8)
       doc.setFont(FONT, "normal")
-      // Текст располагаем справа от каждого QR‑кода, как на оригинальном бланке.
       const qr1Lines = doc.splitTextToSize(
-        "Для открытия оригинального файла проверенной работы (как при загрузке) отсканируйте QR-код",
+        "Для подтверждения подлинности и актуальности данной справки отсканируйте QR-код",
         captionW,
       )
       const qr2Lines = doc.splitTextToSize(
-        "Для просмотра электронной версии данной справки в формате PDF отсканируйте QR-код",
+        "Для просмотра оригинальной электронной версии документа отсканируйте QR-код",
         captionW,
       )
       const textY = qrY + 6

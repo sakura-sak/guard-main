@@ -2,18 +2,20 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAllDocumentsFromDb, deleteDocumentFromDb, getDocumentCountFromDb, computeDraftExpiresAt } from "@/lib/local-storage"
 import { writeAuditLog } from "@/lib/audit-log"
 import { requireAdminApi } from "@/lib/require-admin-api"
-import { requireSessionApi } from "@/lib/require-session-api"
 import { getAllDocumentTypes } from "@/lib/document-types"
 import { categoryLabel as staticCategoryLabel } from "@/lib/category-labels"
 
-// GET - Список всех документов (admin / teacher)
+// GET - Список всех документов (superadmin / admin УО)
 export async function GET(request: NextRequest) {
-  const gate = await requireSessionApi(request, ["admin", "superadmin", "teacher"])
+  const gate = await requireAdminApi(request)
   if (!gate.ok) return gate.response
   try {
     const { searchParams } = new URL(request.url)
     const statusFilter = searchParams.get("status")
-    let documents = await getAllDocumentsFromDb()
+    let documents = await getAllDocumentsFromDb(
+      undefined,
+      gate.isUniversityAdmin ? gate.institutionId ?? undefined : undefined,
+    )
 
     if (statusFilter) {
       documents = documents.filter((d) => d.status === statusFilter)
@@ -36,6 +38,7 @@ export async function GET(request: NextRequest) {
       status: doc.status,
       userId: doc.userId,
       institution: doc.institution,
+      faculty: doc.faculty,
       originalityPercent: doc.originalityPercent,
       plagiarismPercentMl: doc.plagiarismPercentMl,
       aiPercentMl: doc.aiPercentMl,

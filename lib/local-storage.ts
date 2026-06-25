@@ -28,8 +28,12 @@ export interface StoredDocument {
   userId?: string
   /** Institution id (FK slug, e.g. "bsuir") */
   institutionId?: string
+  /** Display name of institution (e.g. "БГУИР") */
+  institution?: string
   /** Faculty id (FK slug) */
   facultyId?: string
+  /** Display name of faculty */
+  faculty?: string
   /** DocumentType FK id */
   documentTypeId?: number
   minhashSignature: number[]
@@ -46,7 +50,6 @@ export interface StoredDocument {
 const DATA_DIR = path.join(process.cwd(), "data")
 const REPORTS_DIR = path.join(DATA_DIR, "reports")
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
-const ARCHIVED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 export function computeDraftExpiresAt(uploadDate: string | Date): string {
   const base = uploadDate instanceof Date ? uploadDate.getTime() : new Date(uploadDate).getTime()
@@ -89,12 +92,27 @@ async function initDb() {
   return prisma
 }
 
+const DOC_ORG_INCLUDE = {
+  institution: { select: { name: true } },
+  faculty: { select: { name: true } },
+  user: {
+    select: {
+      fullName: true,
+      institution: { select: { name: true } },
+      faculty: { select: { name: true } },
+    },
+  },
+} as const
+
 function mapRowToStoredDocument(row: any): StoredDocument {
   const docType = row.fileFormat === "pdf" || row.fileFormat === "word" ? row.fileFormat : undefined
+  const institutionName =
+    row.institution?.name ?? row.user?.institution?.name ?? undefined
+  const facultyName = row.faculty?.name ?? row.user?.faculty?.name ?? undefined
   return {
     id: row.id,
     title: row.title,
-    author: row.author ?? null,
+    author: row.author?.trim() || row.user?.fullName?.trim() || row.userId || null,
     filename: row.filename ?? null,
     documentType: docType,
     filePath: row.filePath ?? null,
@@ -105,7 +123,9 @@ function mapRowToStoredDocument(row: any): StoredDocument {
     status: row.status,
     userId: row.userId ?? undefined,
     institutionId: row.institutionId ?? undefined,
+    institution: institutionName,
     facultyId: row.facultyId ?? undefined,
+    faculty: facultyName,
     documentTypeId: row.documentTypeId ?? undefined,
     minhashSignature: row.minhashSignatureJson ? JSON.parse(row.minhashSignatureJson) : [],
     shingleCount: row.shingleCount ?? 0,
@@ -244,7 +264,14 @@ async function archiveExpiredDraft(doc: StoredDocument): Promise<void> {
   const db = await initDb()
   await db.document.update({
     where: { id: doc.id },
-    data: { status: "archived", filePath: null, filename: doc.filename },
+    data: {
+      status: "archived",
+      filePath: null,
+      filename: doc.filename,
+      content: "",
+      minhashSignatureJson: "[]",
+      shingleCount: 0,
+    },
   })
 }
 
@@ -253,7 +280,7 @@ async function filterDraftTtlAndCleanup(documents: StoredDocument[]): Promise<St
   for (const doc of documents) {
     if (doc.status === "draft" && isDraftExpired(doc)) {
       await archiveExpiredDraft(doc)
-      out.push({ ...doc, status: "archived", filePath: null })
+      out.push({ ...doc, status: "archived", filePath: null, content: "", minhashSignature: [], shingleCount: 0 })
     } else {
       out.push(doc)
     }
@@ -286,6 +313,7 @@ export async function getAllDocumentsFromDb(
   const rows = await db.document.findMany({
     where,
     orderBy: { uploadDate: "desc" },
+    include: DOC_ORG_INCLUDE,
   })
   let docs: StoredDocument[] = rows.map(mapRowToStoredDocument)
 
@@ -296,6 +324,37 @@ export async function getAllDocumentsFromDb(
 
   docs = await filterDraftTtlAndCleanup(docs)
   return docs.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime())
+}
+
+/**
+ * Пул для сравнения: черновики и финальные работы той же категории (включая работы автора).
+ */
+export async function getDocumentsForComparison(
+  category: string,
+  institutionId?: string | null,
+  excludeDocumentId?: number,
+): Promise<StoredDocument[]> {
+  const safeCategory = category.replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_").trim() || "uncategorized"
+  const db = await initDb()
+
+  const where: {
+    category: string
+    status: { in: DocumentStatus[] }
+    institutionId?: string
+    id?: { not: number }
+  } = {
+    category: safeCategory,
+    status: { in: ["draft", "final"] },
+  }
+  if (institutionId) where.institutionId = institutionId
+  if (typeof excludeDocumentId === "number") where.id = { not: excludeDocumentId }
+
+  const rows = await db.document.findMany({
+    where,
+    orderBy: { uploadDate: "desc" },
+    include: DOC_ORG_INCLUDE,
+  })
+  return filterDraftTtlAndCleanup(rows.map(mapRowToStoredDocument))
 }
 
 export async function getUserFinalDocuments(userId: string): Promise<StoredDocument[]> {
@@ -317,9 +376,20 @@ export async function getUserDocuments(userId: string): Promise<StoredDocument[]
   return filterDraftTtlAndCleanup(docs)
 }
 
+export function getDocumentAuthorLabel(doc: {
+  author?: string | null
+  userId?: string | null
+}): string {
+  const name = doc.author?.trim()
+  if (name && name !== "—") return name
+  const login = doc.userId?.trim()
+  if (login) return login
+  return "—"
+}
+
 export async function getDocumentByIdFromDb(id: number): Promise<StoredDocument | null> {
   const db = await initDb()
-  const row = await db.document.findUnique({ where: { id } })
+  const row = await db.document.findUnique({ where: { id }, include: DOC_ORG_INCLUDE })
   return row ? mapRowToStoredDocument(row) : null
 }
 
@@ -366,6 +436,27 @@ export async function updateDocumentMlScores(
   return info.count > 0
 }
 
+export async function updateDocumentCheckScores(
+  documentId: number,
+  originalityPercent: number,
+  plagiarismPercentMl: number,
+  aiPercentMl?: number,
+): Promise<boolean> {
+  const db = await initDb()
+  const o = Math.round(originalityPercent * 100) / 100
+  const p = Math.round(plagiarismPercentMl * 100) / 100
+  const data: {
+    originalityPercent: number
+    plagiarismPercentMl: number
+    aiPercentMl?: number
+  } = { originalityPercent: o, plagiarismPercentMl: p }
+  if (typeof aiPercentMl === "number" && Number.isFinite(aiPercentMl)) {
+    data.aiPercentMl = Math.round(aiPercentMl * 100) / 100
+  }
+  const info = await db.document.updateMany({ where: { id: documentId }, data })
+  return info.count > 0
+}
+
 export async function updateDocumentStatus(documentId: number, status: DocumentStatus): Promise<boolean> {
   const db = await initDb()
   const patch: { status: DocumentStatus; expiresAt?: Date | null } = { status }
@@ -395,20 +486,63 @@ export async function updateDocumentCategory(documentId: number, category: strin
   return info.count > 0
 }
 
-/** Ночная очистка: удаляет archived записи старше ARCHIVED_RETENTION_MS */
-export async function cleanupArchivedRecords(): Promise<number> {
+/** Удаляет с диска файлы архивных работ и текст/minhash из БД; метаданные и проценты остаются для статистики. */
+export async function purgeArchivedDocumentStorage(): Promise<{
+  purged: number
+  filesDeleted: number
+  reportsDeleted: number
+}> {
   const db = await initDb()
-  const cutoff = new Date(Date.now() - ARCHIVED_RETENTION_MS)
-  const old = await db.document.findMany({
-    where: { status: "archived", uploadDate: { lt: cutoff } },
-    select: { id: true },
+  const rows = await db.document.findMany({
+    where: { status: "archived" },
+    select: { id: true, filePath: true, content: true, minhashSignatureJson: true },
   })
-  let removed = 0
-  for (const row of old) {
-    deleteReportPdf(row.id)
-    if (await deleteDocumentFromDb(row.id)) removed++
+
+  let purged = 0
+  let filesDeleted = 0
+  let reportsDeleted = 0
+
+  for (const row of rows) {
+    const hasFile = Boolean(row.filePath)
+    const hasContent = Boolean(row.content && row.content.length > 0)
+    const hasMinhash = Boolean(
+      row.minhashSignatureJson && row.minhashSignatureJson !== "[]" && row.minhashSignatureJson !== "null",
+    )
+    if (!hasFile && !hasContent && !hasMinhash) continue
+
+    if (row.filePath) {
+      const fullPath = path.join(process.cwd(), row.filePath)
+      if (fs.existsSync(fullPath)) {
+        try {
+          fs.unlinkSync(fullPath)
+          filesDeleted++
+        } catch (err) {
+          console.error(`Error deleting archived upload file ${row.filePath}:`, err)
+        }
+      }
+    }
+
+    if (deleteReportPdf(row.id)) reportsDeleted++
+
+    await db.document.update({
+      where: { id: row.id },
+      data: {
+        filePath: null,
+        content: "",
+        minhashSignatureJson: "[]",
+        shingleCount: 0,
+      },
+    })
+    purged++
   }
-  return removed
+
+  return { purged, filesDeleted, reportsDeleted }
+}
+
+/** @deprecated Use purgeArchivedDocumentStorage — stats rows are kept, only files/text are removed. */
+export async function cleanupArchivedRecords(): Promise<number> {
+  const result = await purgeArchivedDocumentStorage()
+  return result.purged
 }
 
 export async function getStorageStats(): Promise<{

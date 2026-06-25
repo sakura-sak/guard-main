@@ -19,6 +19,8 @@ export interface StoredUser {
   fullName?: string
   /** Display name of the institution (e.g. "БГУИР") */
   institution?: string
+  /** Institution FK slug (e.g. "bsuir") */
+  institutionId?: string
   /** Display name of the faculty */
   faculty?: string
   group?: string
@@ -50,6 +52,7 @@ function mapRowToStoredUser(row: {
   lastLogin: Date | null
   institution?: { name: string } | null
   faculty?: { name: string } | null
+  institutionId?: string | null
 }): StoredUser {
   return {
     username: row.username,
@@ -59,6 +62,7 @@ function mapRowToStoredUser(row: {
     email: row.email ?? undefined,
     fullName: row.fullName ?? undefined,
     institution: row.institution?.name ?? undefined,
+    institutionId: row.institutionId ?? undefined,
     faculty: row.faculty?.name ?? undefined,
     group: row.groupName ?? undefined,
     createdAt: row.createdAt.toISOString(),

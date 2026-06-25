@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from "next/server"
-import { getDocumentByIdFromDb, getReportPdfPath } from "@/lib/local-storage"
+import { getDocumentByIdFromDb, getReportPdfPath, getDocumentAuthorLabel } from "@/lib/local-storage"
 import { verifyDocumentAccess } from "@/lib/report-access"
 
 /** Извлекает подпись из query; учитывает битые ссылки вида …?documentId=1&amp;sig=… */
@@ -55,12 +55,14 @@ export async function reportVerifyResponse(
   }
 
   const reportExists = !!getReportPdfPath(documentIdNum)
+  const authorLabel = getDocumentAuthorLabel(doc)
 
   const payload = {
     success: true,
     documentId: doc.id,
     title: doc.title,
-    author: doc.author,
+    author: authorLabel,
+    username: doc.userId ?? null,
     institution: doc.institution ?? "БГУИР",
     status: doc.status,
     uploadDate: doc.uploadDate,
@@ -73,7 +75,7 @@ export async function reportVerifyResponse(
   }
 
   return new NextResponse(
-    `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Верификация справки</title></head><body style="font-family:system-ui;max-width:480px;margin:2rem auto;padding:1rem;"><h1>Проверка подлинности справки</h1><p>Документ №${doc.id} — <strong>${doc.title ?? "—"}</strong></p><p>Автор: ${doc.author ?? "—"}</p><p>Дата загрузки: ${doc.uploadDate ? new Date(doc.uploadDate).toLocaleString("ru-RU") : "—"}</p><p>Отчёт в хранилище: ${reportExists ? "да" : "нет"}</p><p style="color:#666;font-size:0.9rem;">Верификация выполнена в системе БГУИР.ПЛАГИАТ.</p></body></html>`,
+    `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Верификация справки</title></head><body style="font-family:system-ui;max-width:480px;margin:2rem auto;padding:1rem;"><h1>Проверка подлинности справки</h1><p>Документ №${doc.id} — <strong>${doc.title ?? "—"}</strong></p><p>Автор: ${authorLabel}</p><p>Дата загрузки: ${doc.uploadDate ? new Date(doc.uploadDate).toLocaleString("ru-RU") : "—"}</p><p>Отчёт в хранилище: ${reportExists ? "да" : "нет"}</p>${reportExists ? `<p><a href="/api/report/${doc.id}/view?sig=${encodeURIComponent(sig!)}">Открыть PDF справки</a></p>` : ""}<p style="color:#666;font-size:0.9rem;">Верификация выполнена в системе БГУИР.ПЛАГИАТ.</p></body></html>`,
     {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     },

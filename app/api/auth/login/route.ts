@@ -132,37 +132,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 3. Fallback на тестовых пользователей
-    const testUsers: Record<string, { username: string; password: string; role: string; email?: string; fullName?: string }> = {
-      student: { username: "student", password: "student", role: "student", fullName: "Студент Тестовый" },
-      teacher: { username: "teacher", password: "teacher", role: "teacher", fullName: "Преподаватель Тестовый" },
-      admin: { username: "admin", password: "admin", role: "admin", fullName: "Администратор Тестовый" },
-      superadmin: { username: "superadmin", password: "superadmin", role: "superadmin", fullName: "Главный Администратор" },
-    }
-
-    const testUser = testUsers[normalizedUsername]
-    if (testUser && testUser.password === normalizedPassword) {
-      logInfo("Тестовый пользователь авторизован", normalizedUsername, testUser.role, "login")
-      return jsonWithSessionCookie(
-        {
-          success: true,
-          user: {
-            username: testUser.username,
-            role: testUser.role as UserRole,
-            additionalRoles: [],
-            email: testUser.email,
-            fullName: testUser.fullName,
-            middleName: undefined,
-          },
-        },
-        {
-          username: testUser.username,
-          role: testUser.role,
-          additionalRoles: [],
-        },
-      )
-    }
-
     logError("Неудачная попытка входа", `Invalid credentials for ${username}`, username, undefined, "login")
     return NextResponse.json({ success: false, error: "Неверный логин или пароль" }, { status: 401 })
   } catch (error) {

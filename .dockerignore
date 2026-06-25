@@ -1,44 +1,18 @@
-# Исключаем всё, что не нужно в Docker-контейнере
-node_modules
-.next
-out
-dist
-build
-coverage
-.turbo
-.swc
-
-# Git и метаданные
 .git
 .gitignore
-.dockerignore
-.github
-
-# IDE / редакторы
-.idea
-.vscode
-*.log
-*.tmp
-*.swp
-*.swo
-
-# env-файлы (в Docker лучше передавать через переменные окружения / secrets)
+node_modules
+.next
+.turbo
+data
+coverage
+*.md
 .env
 .env.*
-
-# локальные данные и загруженные файлы
-data/uploads
-
-# кэш и артефакты
-__pycache__/
-*.py[cod]
-*.pyo
-
-# прочее
-Dockerfile*
-docker-compose*.yml
-README.md
-*.md
-scripts/
-public/placeholder-*.*
-
+.env.local
+!.env.example
+docker-compose.yml
+nginx.conf
+tsconfig.tsbuildinfo
+.idea
+*.log
+scripts

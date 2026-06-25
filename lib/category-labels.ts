@@ -5,10 +5,11 @@
  */
 
 export const CATEGORY_LABELS: Record<string, string> = {
-  diploma: "Дипломная работа",
-  coursework: "Курсовая работа / Проект",
+  diploma: "Дипломная работа / проект",
+  coursework: "Курсовая работа / проект",
   lab: "Лабораторная работа",
-  practice: "Практическое задание",
+  practice: "Практическая работа",
+  article: "Статьи",
   uncategorized: "Не указано",
 }
 
