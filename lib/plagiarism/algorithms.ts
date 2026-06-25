@@ -27,6 +27,92 @@ export function preprocessText(text: string): string {
     .trim()
 }
 
+const COVER_LINE_PATTERNS = [
+  /министерств[оа]\s+образования/i,
+  /республики\s+беларусь/i,
+  /учреждение\s+образования/i,
+  /белорусск(?:ий|ого)\s+государственн(?:ый|ого)\s+университет/i,
+  /информатики\s+и\s+радиоэлектроники/i,
+  /\bбгуир\b/i,
+  /^кафедр[аы]\b/i,
+  /учебная\s+дисциплина/i,
+  /отч[её]т\s+по\s+лабораторной\s+работе/i,
+  /\bлабораторная\s+работа\s*№?\s*\d*/i,
+  /\bвыполнил\b/i,
+  /\bпроверил\b/i,
+  /^минск\b/i,
+]
+
+const CONTENT_START_MARKERS = [
+  "введение",
+  "цель работы",
+  "цель лабораторной работы",
+  "задание",
+  "вариант",
+  "ход работы",
+  "ход выполнения",
+  "теоретические сведения",
+  "постановка задачи",
+  "основная часть",
+  "практическая часть",
+  "реализация",
+  "результаты выполнения",
+  "описание алгоритма",
+  "вывод",
+  "заключение",
+]
+
+const FIGURE_REFERENCE_PATTERNS = [
+  /(^|\s)(?:представлен[аыо]?|показан[аыо]?|приведен[аыо]?|изображен[аыо]?|отображен[аыо]?|расположен[аыо]?)\s+(?:на|в)\s+(?:рисунк[еа]|рис\.?|таблиц[еа]|табл\.?)\s*№?\s*\d+(?:\.\d+)?/gi,
+  /(^|\s)(?:рисунок|рис\.|таблица|табл\.)\s*№?\s*\d+(?:\.\d+)?/gi,
+]
+
+function countCoverMarkers(text: string): number {
+  return COVER_LINE_PATTERNS.reduce((count, pattern) => count + (pattern.test(text) ? 1 : 0), 0)
+}
+
+function stripFigureReferences(text: string): string {
+  return FIGURE_REFERENCE_PATTERNS.reduce((out, pattern) => out.replace(pattern, " "), text)
+}
+
+function hasFigureReference(text: string): boolean {
+  return FIGURE_REFERENCE_PATTERNS.some((pattern) => {
+    pattern.lastIndex = 0
+    return pattern.test(text)
+  })
+}
+
+export function isLikelyBoilerplateText(text: string): boolean {
+  const normalized = preprocessText(text)
+  if (!normalized) return false
+  const withoutFigureRefs = preprocessText(stripFigureReferences(normalized))
+  if (hasFigureReference(normalized) && (!withoutFigureRefs || withoutFigureRefs.length < 20)) return true
+  const coverMarkers = countCoverMarkers(normalized)
+  const hasContentMarker = CONTENT_START_MARKERS.some((marker) => normalized.includes(marker))
+  return coverMarkers >= 3 && !hasContentMarker
+}
+
+function stripLeadingCoverBlock(text: string): string {
+  const normalizedForSearch = text.toLowerCase().replace(/\s+/g, " ")
+  const firstWindow = normalizedForSearch.slice(0, 5000)
+  const hasCover = countCoverMarkers(firstWindow) >= 3
+  if (!hasCover) return text
+
+  const marker = CONTENT_START_MARKERS
+    .map((m) => ({ marker: m, index: firstWindow.indexOf(m) }))
+    .filter((m) => m.index >= 0)
+    .sort((a, b) => a.index - b.index)[0]
+
+  if (!marker || marker.index < 100 || marker.index > 4500) return text
+
+  const flexibleMarker = marker.marker
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\s+/g, "\\s+")
+  const originalMarkerMatch = new RegExp(flexibleMarker, "i").exec(text.slice(0, 6000))
+  if (!originalMarkerMatch?.index) return text
+  return text.slice(originalMarkerMatch.index)
+}
+
 /**
  * Черновое удаление служебных разделов документа
  * (титульный лист, содержание/оглавление, приложения)
@@ -36,7 +122,8 @@ export function preprocessText(text: string): string {
  * всё, что идёт после заголовка «Приложение», исключается.
  */
 export function stripNonContentSections(rawText: string): string {
-  const lines = rawText.split(/\r?\n/)
+  const withoutCoverBlock = stripFigureReferences(stripLeadingCoverBlock(rawText))
+  const lines = withoutCoverBlock.split(/\r?\n/)
   const result: string[] = []
 
   let inAppendix = false
@@ -61,6 +148,10 @@ export function stripNonContentSections(rawText: string): string {
 
     // Удаляем явные упоминания титульного листа
     if (lower.includes("титульный лист")) {
+      continue
+    }
+
+    if (trimmed.length < 250 && COVER_LINE_PATTERNS.some((pattern) => pattern.test(trimmed))) {
       continue
     }
 
@@ -302,6 +393,9 @@ export function findMatchingFragments(text1: string, text2: string, minWords = 5
 
     if (matchEnd > i + minWords - 1) {
       const matchedText = words1.slice(i, matchEnd).join(" ")
+      if (isLikelyBoilerplateText(matchedText)) {
+        continue
+      }
       const posInText2 = text2Str.indexOf(matchedText)
 
       matches.push({

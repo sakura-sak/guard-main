@@ -112,7 +112,7 @@ function mapRowToStoredDocument(row: any): StoredDocument {
   return {
     id: row.id,
     title: row.title,
-    author: row.author?.trim() || row.user?.fullName?.trim() || row.userId || null,
+    author: row.user?.fullName?.trim() || row.userId || null,
     filename: row.filename ?? null,
     documentType: docType,
     filePath: row.filePath ?? null,
@@ -174,7 +174,6 @@ export async function addDocumentToDb(
   content: string,
   minhashSignature: number[],
   shingleCount: number,
-  author?: string,
   filename?: string,
   savedFilename?: string,
   category = "uncategorized",
@@ -200,7 +199,6 @@ export async function addDocumentToDb(
   const created = await db.document.create({
     data: {
       title,
-      author: author || null,
       filename: filename || null,
       fileFormat: documentType ?? null,
       filePath: relativeFilePath,
@@ -222,32 +220,11 @@ export async function addDocumentToDb(
       expiresAt,
     },
   })
-  const id = created.id
-  const uploadIso = uploadDate.toISOString()
-  return {
-    id,
-    title,
-    author: author || null,
-    filename: filename || null,
-    documentType,
-    filePath: relativeFilePath,
-    content,
-    wordCount,
-    uploadDate: uploadIso,
-    category: normCategory,
-    status,
-    userId,
-    institutionId,
-    facultyId,
-    documentTypeId,
-    minhashSignature,
-    shingleCount,
-    originalityPercent,
-    plagiarismPercentMl,
-    aiPercentMl,
-    processingTimeMs,
-    expiresAt: expiresAt?.toISOString(),
-  }
+  const row = await db.document.findUnique({
+    where: { id: created.id },
+    include: DOC_ORG_INCLUDE,
+  })
+  return row ? mapRowToStoredDocument(row) : mapRowToStoredDocument(created)
 }
 
 async function archiveExpiredDraft(doc: StoredDocument): Promise<void> {

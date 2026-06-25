@@ -3,7 +3,7 @@
  */
 
 import { createShingles, MinHash, compareMinHashSignatures, normalizeContentForCheck } from "@/lib/plagiarism/algorithms"
-import { getAllDocumentsFromDb, getDocumentByIdFromDb } from "@/lib/local-storage"
+import { getDocumentByIdFromDb, getDocumentsForComparison } from "@/lib/local-storage"
 import type { SimilarDocumentForReport } from "@/lib/pdf-report"
 
 const NUM_HASHES = 128
@@ -28,7 +28,7 @@ export async function getSimilarDocumentsForReport(
   if (!doc) return []
 
   const normCat = normalizeCategory(doc.category)
-  const pool = await getAllDocumentsFromDb(doc.userId ?? undefined, undefined, [normCat])
+  const pool = await getDocumentsForComparison(normCat, doc.institutionId, documentId)
 
   const normalizedContent = normalizeContentForCheck(doc.content)
   const queryShingles = createShingles(normalizedContent, 5)

@@ -339,7 +339,6 @@
     const w = window.open(url, '_blank', 'noopener,noreferrer');
     if (!w) {
       URL.revokeObjectURL(url);
-      alert('Разрешите всплывающие окна в браузере, чтобы открыть отчёт.');
       return;
     }
     w.addEventListener('load', () => {

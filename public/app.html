@@ -702,7 +702,7 @@ a { color: inherit; text-decoration: none; }
   <header class="header">
     <a href="index.html" class="brand">
       <span class="brand__logo">
-        <img src="image 1 [Vectorized].svg" alt="БГУИР" class="brand__img"/>
+        <img src="bsuir-logo.png" alt="БГУИР" class="brand__img"/>
         <span>АНТИПЛАГИАТ · БГУИР</span>
       </span>
     </a>
@@ -1836,6 +1836,7 @@ a { color: inherit; text-decoration: none; }
         throw new Error(uploadRes.data?.error || 'Не удалось сохранить документ в базу');
       }
       const docId = uploadRes.data.document.id;
+      checkData.savedDocument = uploadRes.data.document;
 
       // 4. Finish animation
       animating = false;
@@ -1876,6 +1877,10 @@ a { color: inherit; text-decoration: none; }
       typeSlug: workType.dataset.value,
       fileName: file.name,
       fileSize: file.size,
+      wordCount: apiData?.savedDocument?.wordCount || null,
+      author: __currentUser?.fullName || __currentUser?.username || '—',
+      institution: __currentUser?.institution || 'БГУИР',
+      savedAt: new Date().toISOString(),
       similarDocuments: apiData ? apiData.similarDocuments : [],
     };
     document.getElementById('resultValue').textContent = percent;
@@ -1901,47 +1906,13 @@ a { color: inherit; text-decoration: none; }
   const matchesModal = document.getElementById('matchesModal');
   const matchesList = document.getElementById('matchesList');
   const matchesSub = document.getElementById('matchesModalSub');
-  const mockMatches = [
-    { source: 'Дипломная работа / проект', percent: 5.4, authorId: 'AP-USR-184372', docId: 'AP-DOC-7Z4K2A',
-      title: 'Разработка системы оценки оригинальности текстовых документов',
-      quote: 'В современных условиях развития информационных технологий вопросы оценки оригинальности текстов приобретают особую актуальность.' },
-    { source: 'Курсовая работа / проект', percent: 3.8, authorId: 'AP-USR-091284', docId: 'AP-DOC-3M9R1B',
-      title: 'Алгоритмы предварительной обработки документов',
-      quote: 'Алгоритм сегментации документа на блоки выполняется на этапе предварительной обработки.' },
-    { source: 'Лабораторная работа', percent: 2.1, authorId: 'AP-USR-220915', docId: 'AP-DOC-K8X5Q2',
-      title: 'Организация локального хранилища оригиналов работ',
-      quote: 'Локальное хранилище оригиналов обновляется автоматически при сохранении финальной версии работы.' },
-    { source: 'Практическая работа', percent: 1.6, authorId: 'AP-USR-058103', docId: 'AP-DOC-N2P7F4',
-      title: 'Перекрёстная сверка по объединённому репозиторию',
-      quote: 'Для повышения точности проверки используется перекрёстная сверка по объединённому репозиторию.' },
-    { source: 'Статьи', percent: 1.2, authorId: 'AP-USR-073921', docId: 'AP-DOC-G5T8H1',
-      title: 'Методы исключения самоплагиата при проверке работ',
-      quote: 'Алгоритм исключает ранее загруженные работы автора, предотвращая ложные срабатывания на самоплагиат.' },
-    { source: 'Курсовая работа / проект', percent: 0.9, authorId: 'AP-USR-145668', docId: 'AP-DOC-W6L3J9',
-      title: 'Надёжность оценки оригинальности при перекрёстной проверке',
-      quote: 'Перекрёстная проверка курсовых и дипломных работ повышает надёжность оценки оригинальности текста.' },
-    { source: 'Дипломная работа / проект', percent: 0.7, authorId: 'AP-USR-302184', docId: 'AP-DOC-D9C4M5',
-      title: 'Учёт метаданных документа при формировании отчёта',
-      quote: 'Метаданные документа учитываются при формировании отчёта о проверке.' },
-    { source: 'Статьи', percent: 0.5, authorId: 'AP-USR-487130', docId: 'AP-DOC-B1V6E8',
-      title: 'Извлечение текста из PDF с сохранением форматирования',
-      quote: 'Извлечение текста из PDF-файлов выполняется с сохранением исходного форматирования.' },
-  ];
-
-  const mockAiGenerations = [
-    { source: 'ChatGPT (GPT-4)', percent: 2.4, confidence: 'высокая', detectionId: 'AP-AI-7H3K9P',
-      quote: 'Анализ предметной области показал, что существующие подходы к решению задачи демонстрируют ряд ограничений, связанных с производительностью и масштабируемостью.' },
-    { source: 'Claude 3 Opus', percent: 1.8, confidence: 'средняя', detectionId: 'AP-AI-2M5R7T',
-      quote: 'Современные требования к подобным системам предполагают комплексный подход, включающий как архитектурные, так и алгоритмические решения.' },
-    { source: 'Gemini Pro', percent: 1.2, confidence: 'высокая', detectionId: 'AP-AI-N8X1Q4',
-      quote: 'Ключевым преимуществом предложенного решения является сочетание гибкости конфигурации и высокой степени автоматизации рабочих процессов.' },
-    { source: 'YandexGPT 3', percent: 0.6, confidence: 'низкая', detectionId: 'AP-AI-G6F2L9',
-      quote: 'Таким образом, на основании проведённого исследования можно сделать вывод о целесообразности применения данного подхода в практических задачах.' },
-  ];
 
   const MATCHES_PER_PAGE = 5;
   let matchesPage = 1;
   let matchesTab = 'matches';
+  let borrowMatchesData = [];
+  let aiMatchesData = [];
+  let borrowMatchStats = { matches: 0, local: 0, ml: 0 };
   const buildPageList = (cur, total) => {
     if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
     if (cur <= 3) return [1, 2, 3, '…', total];
@@ -1951,8 +1922,18 @@ a { color: inherit; text-decoration: none; }
 
   const renderMatches = () => {
     const isAi = matchesTab === 'ai';
-    const dataset = isAi ? mockAiGenerations : mockMatches;
+    const dataset = isAi ? aiMatchesData : borrowMatchesData;
     const total = dataset.length;
+    if (!total) {
+      const msg = !isAi && borrowMatchStats.matches > 0 && borrowMatchStats.ml >= borrowMatchStats.local
+        ? `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${borrowMatchStats.matches}%) сформирован семантическим анализом ML/Qdrant.`
+        : (isAi ? 'ИИ-фрагменты не обнаружены.' : 'Заимствования не обнаружены.');
+      matchesList.innerHTML = `<li class="uc-empty">${escapeHtml(msg)}</li>`;
+      const pagi = document.getElementById('matchesPagination');
+      pagi.hidden = true;
+      pagi.innerHTML = '';
+      return;
+    }
     const pages = Math.max(1, Math.ceil(total / MATCHES_PER_PAGE));
     if (matchesPage > pages) matchesPage = pages;
     const start = (matchesPage - 1) * MATCHES_PER_PAGE;
@@ -1960,24 +1941,24 @@ a { color: inherit; text-decoration: none; }
     matchesList.innerHTML = slice.map((m) => {
       const cls = isAi ? 'matches-list__item matches-list__item--ai' : 'matches-list__item';
       const meta = isAi
-        ? `<span>Достоверность: <b>${m.confidence}</b></span>`
-        : `<span>ID документа <code>${m.docId}</code></span>`;
+        ? `<span>Достоверность: <b>${escapeHtml(m.confidence || '—')}</b></span>`
+        : `<span>ID документа <code>${escapeHtml(m.docId || '—')}</code></span>`;
       if (isAi) {
         return `
           <li class="${cls}">
             <span class="matches-list__percent matches-list__percent--corner">${m.percent}%</span>
             <div class="matches-list__meta">${meta}</div>
-            <p class="matches-list__quote">«${m.quote}»</p>
+            <p class="matches-list__quote">«${escapeHtml(m.quote || '—')}»</p>
           </li>
         `;
       }
       return `
         <li class="${cls}">
           <div class="matches-list__head">
-            <span class="matches-list__source">${m.source}</span>
+            <span class="matches-list__source">${escapeHtml(m.source || '—')}</span>
             <span class="matches-list__percent">${m.percent}%</span>
           </div>
-          <p class="matches-list__quote">${m.title || m.quote}</p>
+          <p class="matches-list__quote">«${escapeHtml(m.quote || m.title || '—')}»</p>
           <div class="matches-list__meta">${meta}</div>
         </li>
       `;
@@ -2009,14 +1990,49 @@ a { color: inherit; text-decoration: none; }
     if (window.lucide) window.lucide.createIcons();
   };
 
-  const openMatches = (sourceItem) => {
+  const loadMatchRows = async (item) => {
+    borrowMatchesData = [];
+    aiMatchesData = [];
+    borrowMatchStats = { matches: item?.matches ?? 0, local: 0, ml: 0 };
+    if (!item?.id || !ApApi.getDocumentMatches) return;
+    const { ok, data } = await ApApi.getDocumentMatches(item.id);
+    if (!ok || !data?.success) return;
+    const local = Math.round(data.localPlagiarismPercent ?? 0);
+    const ml = Math.round(data.mlPlagiarismPercent ?? 0);
+    const matches = Math.round(data.plagiarismPercent ?? Math.max(local, ml));
+    borrowMatchStats = { matches, local, ml };
+    borrowMatchesData = (data.borrowMatches || []).map((m) => ({
+      source: m.sourceTitle || '—',
+      title: m.sourceTitle || '—',
+      percent: Math.round((m.similarity ?? 0) * 10) / 10,
+      docId: m.sourceId ? String(m.sourceId) : '—',
+      quote: m.quote || '—',
+    }));
+    if (!borrowMatchesData.length && matches > 0 && ml >= local) {
+      borrowMatchesData = [{
+        source: 'Семантический анализ (ML / Qdrant)',
+        title: 'Семантический анализ (ML / Qdrant)',
+        percent: matches,
+        docId: '—',
+        quote: `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${matches}%) сформирован векторным поиском.`,
+      }];
+    }
+    aiMatchesData = (data.aiMatches || []).map((m) => ({
+      source: m.sourceTitle || 'AI-детектор',
+      percent: Math.round((m.similarity ?? 0) * 10) / 10,
+      confidence: m.confidence || (m.similarity >= 50 ? 'высокая' : m.similarity >= 20 ? 'средняя' : 'низкая'),
+      quote: m.quote || '—',
+    }));
+  };
+
+  const openMatches = async (sourceItem) => {
     const item = sourceItem || currentResult;
     if (!item) return;
     const matches = item.matches != null ? item.matches : Math.max(0, 100 - (item.percent || 0));
     const ai = item.ai != null ? item.ai : 0;
     // In admin embed mode, delegate to the parent — show modal there with full-screen dim
     if (__embedAdmin) {
-      try { parent.postMessage({ type: 'ap-show-matches', matchPct: matches, aiPct: ai }, '*'); } catch (_) {}
+      try { parent.postMessage({ type: 'ap-show-matches', documentId: item.id, matchPct: matches, aiPct: ai }, '*'); } catch (_) {}
       return;
     }
     matchesSub.textContent = `Совпадения: ${matches}%`;
@@ -2025,9 +2041,11 @@ a { color: inherit; text-decoration: none; }
     matchesModal.querySelectorAll('.modal__tab').forEach((t) => {
       t.classList.toggle('is-active', t.dataset.tab === 'matches');
     });
-    renderMatches();
     matchesModal.hidden = false;
     document.body.style.overflow = 'hidden';
+    matchesList.innerHTML = '<li class="uc-empty">Загрузка заимствований…</li>';
+    await loadMatchRows(item);
+    renderMatches();
   };
 
   matchesModal.querySelectorAll('.modal__tab').forEach((tab) => {
@@ -2185,6 +2203,9 @@ a { color: inherit; text-decoration: none; }
           savedAt: doc.uploadDate,
           expiresAt: doc.expiresAt,
           fileName: doc.filename,
+          wordCount: doc.wordCount,
+          author: doc.author,
+          institution: doc.institution || (__currentUser && __currentUser.institution) || 'БГУИР',
         }));
       }
     }
@@ -2326,26 +2347,32 @@ a { color: inherit; text-decoration: none; }
   // Printable PDF
   const openPrintableReport = async (item) => {
     try {
-    if (item?.id && window.ApApi?.generateReport) {
-      try { await ApApi.generateReport(item.id); } catch (_) { /* отчёт в БД необязателен для печати */ }
+    const reportDocumentId = item?.dbId || item?.documentId || item?.realId || item?.id;
+    let orig = item.percent ?? 0;
+    let matches = item.matches ?? Math.max(0, 100 - orig);
+    let ai = item.ai ?? 0;
+    let sources = [];
+
+    if (reportDocumentId && ApApi.fetchReportMatchRows) {
+      const { rows, stats } = await ApApi.fetchReportMatchRows(reportDocumentId);
+      sources = ApApi.buildReportTableRows(rows, stats);
+      if (stats) {
+        if (stats.orig != null) orig = stats.orig;
+        if (stats.matches != null) matches = stats.matches;
+        if (stats.ai != null) ai = stats.ai;
+      }
     }
 
-    const orig = item.percent ?? 0;
-    const matches = item.matches ?? Math.max(0, 100 - orig);
-    const ai = item.ai ?? 0;
-
-    const sources = mockMatches.slice(0, 5);
-
     const id = item.id || ('AP-' + Date.now().toString(36).toUpperCase());
-    const { verifyUrl, docUrl } = item.id && ApApi.resolveReportQrUrls
-      ? await ApApi.resolveReportQrUrls(item.id)
+    const { verifyUrl, docUrl } = reportDocumentId && ApApi.resolveReportQrUrls
+      ? await ApApi.resolveReportQrUrls(reportDocumentId)
       : { verifyUrl: '', docUrl: '' };
     const qr = (url) => url
       ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`
       : '';
     const qrVerify = qr(verifyUrl);
     const qrDoc = qr(docUrl);
-    const logoUrl = new URL('image 1 [Vectorized].svg', location.href).href;
+    const logoUrl = new URL('bsuir-logo.png', location.href).href;
 
     // Circle helper (same style as on the site)
     const C = 2 * Math.PI * 42;
@@ -2362,9 +2389,12 @@ a { color: inherit; text-decoration: none; }
     const sourcesHtml = sources.map((m, i) => `
       <tr>
         <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
-        <td class="src-table__quote">${escapeHtml(m.title || m.quote)}</td>
+        <td class="src-table__quote">
+          <div style="font-style: normal; font-weight: 600; color: var(--ink);">${escapeHtml(m.title || '—')}</div>
+          ${(m.quote && m.quote !== m.title) ? `<div style="margin-top:4px; color: var(--muted); font-size: 11px;">«${escapeHtml(m.quote)}»</div>` : ''}
+        </td>
         <td><code>${escapeHtml(m.docId)}</code></td>
-        <td class="src-table__pct"><span>${m.percent != null ? m.percent + '%' : '—'}</span></td>
+        <td class="src-table__pct"><span>${ApApi.formatReportPercentCell ? ApApi.formatReportPercentCell(m) : (m.percent != null ? m.percent + '%' : '—')}</span></td>
       </tr>
     `).join('');
 
@@ -2556,9 +2586,9 @@ a { color: inherit; text-decoration: none; }
     <h2>Сведения о работе</h2>
     <dl class="meta">
       <dt>Автор</dt><dd>${escapeHtml((__currentUser && __currentUser.fullName) || item.author || '—')}</dd>
-      <dt>Учебное заведение</dt><dd>БГУИР</dd>
+      <dt>Учебное заведение</dt><dd>${escapeHtml(item.institution || (__currentUser && __currentUser.institution) || '—')}</dd>
       <dt>Тип работы</dt><dd>${escapeHtml(item.type)}</dd>
-      <dt>Количество символов</dt><dd>${Math.round((item.fileSize || 30000) * 0.7).toLocaleString('ru-RU')}</dd>
+      <dt>Количество слов</dt><dd>${item.wordCount ? Number(item.wordCount).toLocaleString('ru-RU') : '—'}</dd>
       <dt>Дата проверки</dt><dd>${formatDate(item.savedAt || new Date().toISOString())}</dd>
     </dl>
   </div>

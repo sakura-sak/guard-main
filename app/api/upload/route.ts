@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get("file") as File | null
     const title = formData.get("title") as string
-    const author = formData.get("author") as string | null
     const category = formData.get("category") as string | null
     const content = formData.get("content") as string
     const status = (formData.get("status") as "draft" | "final") || "draft"
@@ -104,7 +103,6 @@ export async function POST(request: NextRequest) {
       normalizedContent,
       signature,
       shingles.size,
-      author || undefined,
       file.name,
       savedFilename,
       normCategory,

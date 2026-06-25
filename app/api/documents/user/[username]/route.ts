@@ -29,6 +29,8 @@ export async function GET(
       author: doc.author,
       filename: doc.filename,
       wordCount: doc.wordCount,
+      institution: doc.institution,
+      faculty: doc.faculty,
       uploadDate: doc.uploadDate,
       category: doc.category,
       categoryLabel: labelByCategory[doc.category] ?? categoryLabel(doc.category),

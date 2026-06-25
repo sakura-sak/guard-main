@@ -3,6 +3,8 @@
  * Включается переменной ANALYSIS_SERVICE_URL.
  */
 
+import { logError, logInfo } from "@/lib/logger"
+
 export type MlAnalysisResult = {
   plagiarismPercent: number
   aiPercent: number
@@ -36,6 +38,7 @@ export async function analyzeWithMlService(
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const startedAt = Date.now()
 
   try {
     const headers: Record<string, string> = {
@@ -43,6 +46,15 @@ export async function analyzeWithMlService(
     }
     const apiKey = getApiKey()
     if (apiKey) headers["X-API-Key"] = apiKey
+
+    logInfo("Запрос в ML-сервис анализа", undefined, undefined, "analysis_request", {
+      url: `${base}/v1/analyze`,
+      filename: options?.filename ?? "document.txt",
+      documentId: options?.documentId ?? null,
+      contentChars: content.length,
+      timeoutMs,
+      apiKeyConfigured: Boolean(apiKey),
+    })
 
     const res = await fetch(`${base}/v1/analyze`, {
       method: "POST",
@@ -57,7 +69,12 @@ export async function analyzeWithMlService(
 
     if (!res.ok) {
       const text = await res.text().catch(() => "")
-      console.error("[analysis-client] ML service error", res.status, text.slice(0, 500))
+      logError("ML-сервис вернул ошибку", `HTTP ${res.status}: ${text.slice(0, 500)}`, undefined, undefined, "analysis_request", {
+        url: `${base}/v1/analyze`,
+        filename: options?.filename ?? "document.txt",
+        documentId: options?.documentId ?? null,
+        durationMs: Date.now() - startedAt,
+      })
       return null
     }
 
@@ -66,16 +83,31 @@ export async function analyzeWithMlService(
       ai_percent?: number
     }
     if (typeof data.plagiarism_percent !== "number" || typeof data.ai_percent !== "number") {
-      console.error("[analysis-client] unexpected response shape", data)
+      logError("ML-сервис вернул неожиданный ответ", JSON.stringify(data).slice(0, 500), undefined, undefined, "analysis_request", {
+        durationMs: Date.now() - startedAt,
+      })
       return null
     }
+
+    logInfo("Ответ ML-сервиса анализа", undefined, undefined, "analysis_response", {
+      filename: options?.filename ?? "document.txt",
+      documentId: options?.documentId ?? null,
+      durationMs: Date.now() - startedAt,
+      plagiarismPercent: data.plagiarism_percent,
+      aiPercent: data.ai_percent,
+    })
 
     return {
       plagiarismPercent: data.plagiarism_percent,
       aiPercent: data.ai_percent,
     }
   } catch (e) {
-    console.error("[analysis-client] request failed", e)
+    logError("Запрос в ML-сервис не выполнен", e instanceof Error ? e : String(e), undefined, undefined, "analysis_request", {
+      url: `${base}/v1/analyze`,
+      filename: options?.filename ?? "document.txt",
+      documentId: options?.documentId ?? null,
+      durationMs: Date.now() - startedAt,
+    })
     return null
   } finally {
     clearTimeout(timer)

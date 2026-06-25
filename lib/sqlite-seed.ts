@@ -81,7 +81,6 @@ export async function ensureSqliteSeededFromLocalJson() {
         data: {
           id,
           title: String(d.title ?? ""),
-          author: d.author ?? null,
           filename: d.filename ?? null,
           filePath: d.filePath ?? null,
           content: String(d.content ?? ""),

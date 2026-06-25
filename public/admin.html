@@ -1074,7 +1074,7 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   <header class="header">
     <a href="index.html" class="brand">
       <span class="brand__logo">
-        <img src="image 1 [Vectorized].svg" alt="БГУИР" class="brand__img"/>
+        <img src="bsuir-logo.png" alt="БГУИР" class="brand__img"/>
         <span>АНТИПЛАГИАТ · БГУИР · АДМИН</span>
       </span>
     </a>
@@ -2181,6 +2181,7 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   // Raw API data (for settings CRUD)
   let __institutions = [];
   let __docTypes = [];
+  const multiSelectRegistry = {};
 
   async function loadAppConfigFromApi() {
     const [dirRes, typesRes] = await Promise.all([
@@ -2200,8 +2201,7 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
       appConfig.types = __docTypes.map((t) => t.displayName || t.name);
     }
     // Re-populate filter selects
-    setOpts(['dashGlobalUO','hmFilterUO','pieFilterUO','lineFilterUO','bar1FilterUO','bar2FilterUO','docFilterUO','usersFilterUO','subsFilterUO'], appConfig.uos);
-    setOpts(['dashGlobalFaculty','hmFilterFaculty','pieFilterFaculty','lineFilterFaculty','bar1FilterFaculty','bar2FilterFaculty','docFilterFaculty','usersFilterFaculty','subsFilterFaculty'], allFaculties());
+    refreshOrgFilterOptions();
     setOpts(['hmFilterType','docFilterType','subsFilterType','repoFilterType'], appConfig.types);
     if (typeof refreshDashboardTypes === 'function') refreshDashboardTypes();
     if (typeof populateSubTypeOptions === 'function') populateSubTypeOptions();
@@ -2240,6 +2240,29 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   // Config loaded after dashboard init (see bootstrapAdminData at end of initAdminApp)
 
   const allFaculties = () => [...new Set(Object.values(appConfig.facultiesByUo).flat())];
+  const mergeUnique = (...lists) => [...new Set(lists.flat().filter((v) => v && v !== '—'))];
+  const refreshOrgFilterOptions = () => {
+    const orgRows = [
+      ...(typeof users !== 'undefined' ? users : []).map((u) => ({ uo: u.uo, faculty: u.faculty })),
+      ...(typeof submissions !== 'undefined' ? submissions : []).map((s) => ({ uo: s.uo, faculty: s.faculty })),
+      ...(typeof documents !== 'undefined' ? documents : []).map((d) => ({ uo: d.uo, faculty: d.faculty })),
+    ];
+    orgRows.forEach(({ uo, faculty }) => {
+      if (!uo || uo === '—' || !faculty || faculty === '—') return;
+      if (!appConfig.facultiesByUo[uo]) appConfig.facultiesByUo[uo] = [];
+      if (!appConfig.facultiesByUo[uo].includes(faculty)) appConfig.facultiesByUo[uo].push(faculty);
+    });
+    const dataUos = mergeUnique(
+      appConfig.uos,
+      orgRows.map((r) => r.uo),
+    );
+    const dataFaculties = mergeUnique(
+      allFaculties(),
+      orgRows.map((r) => r.faculty),
+    );
+    setOpts(['dashGlobalUO','hmFilterUO','pieFilterUO','lineFilterUO','bar1FilterUO','bar2FilterUO','docFilterUO','usersFilterUO','subsFilterUO'], dataUos);
+    setOpts(['dashGlobalFaculty','hmFilterFaculty','pieFilterFaculty','lineFilterFaculty','bar1FilterFaculty','bar2FilterFaculty','docFilterFaculty','usersFilterFaculty','subsFilterFaculty'], dataFaculties);
+  };
   const cascadeFacultyOptions = (uoMs, facMs) => {
     uoMs.onChange(() => {
       const uoVals = uoMs.getValues();
@@ -2256,8 +2279,13 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   };
   // Override data-options on multi-selects driven by config
   const setOpts = (ids, items) => {
-    const opts = JSON.stringify(items.map((v) => ({ value: v, label: v })));
-    ids.forEach((id) => { const el = document.getElementById(id); if (el) el.dataset.options = opts; });
+    const normalized = [...new Set((items || []).filter(Boolean))].map((v) => ({ value: v, label: v }));
+    const opts = JSON.stringify(normalized);
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.dataset.options = opts;
+      if (multiSelectRegistry[id]) multiSelectRegistry[id].setOptions(normalized);
+    });
   };
   setOpts(['dashGlobalUO','hmFilterUO','pieFilterUO','lineFilterUO','bar1FilterUO','bar2FilterUO','docFilterUO','usersFilterUO','subsFilterUO'], appConfig.uos);
   setOpts(['dashGlobalFaculty','hmFilterFaculty','pieFilterFaculty','lineFilterFaculty','bar1FilterFaculty','bar2FilterFaculty','docFilterFaculty','usersFilterFaculty','subsFilterFaculty'], allFaculties());
@@ -2772,40 +2800,104 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   };
 
   // ===== Admin-side matches modal (popped out of iframe for fullscreen dim) =====
-  const mockAiGenerations = [
-    { source: 'ChatGPT (GPT-4)', percent: 2.4, confidence: 'высокая', quote: 'Анализ предметной области показал, что существующие подходы к решению задачи демонстрируют ряд ограничений, связанных с производительностью и масштабируемостью.' },
-    { source: 'Claude 3 Opus', percent: 1.8, confidence: 'средняя', quote: 'Современные требования к подобным системам предполагают комплексный подход, включающий как архитектурные, так и алгоритмические решения.' },
-    { source: 'Gemini Pro', percent: 1.2, confidence: 'высокая', quote: 'Ключевым преимуществом предложенного решения является сочетание гибкости конфигурации и высокой степени автоматизации рабочих процессов.' },
-    { source: 'YandexGPT 3', percent: 0.6, confidence: 'низкая', quote: 'Таким образом, на основании проведённого исследования можно сделать вывод о целесообразности применения данного подхода в практических задачах.' },
-  ];
   const adminMatchesModal = document.getElementById('adminMatchesModal');
   const adminMatchesList = document.getElementById('adminMatchesList');
   const adminMatchesSub = document.getElementById('adminMatchesSub');
   const adminMatchesPagi = document.getElementById('adminMatchesPagination');
+  let adminBorrowMatches = [];
+  let adminAiMatches = [];
   let adminMatchesPage = 1, adminMatchesTab = 'matches', adminMatchesPct = { match: 0, ai: 0 };
+  let adminMatchStats = { matches: 0, local: 0, ml: 0 };
   const ADMIN_MATCHES_PER_PAGE = 5;
+
+  const mapAdminMatchesApi = (data) => {
+    const borrows = (data.borrowMatches || []).map((m) => ({
+      source: m.sourceTitle || '—',
+      title: m.sourceTitle || '—',
+      percent: Math.round((m.similarity ?? 0) * 10) / 10,
+      docId: m.sourceId ? String(m.sourceId) : '—',
+      quote: m.quote || '—',
+    }));
+    const ai = (data.aiMatches || []).map((m) => ({
+      source: m.sourceTitle || 'AI-детектор',
+      percent: Math.round((m.similarity ?? 0) * 10) / 10,
+      confidence: m.confidence || (m.similarity >= 50 ? 'высокая' : m.similarity >= 20 ? 'средняя' : 'низкая'),
+      quote: m.quote || '—',
+    }));
+    return { borrows, ai };
+  };
+
+  async function openAdminMatches(documentId, matchPct, aiPct) {
+    adminMatchesPct = { match: matchPct ?? 0, ai: aiPct ?? 0 };
+    adminMatchesPage = 1;
+    adminMatchesTab = 'matches';
+    adminBorrowMatches = [];
+    adminAiMatches = [];
+    adminMatchStats = { matches: adminMatchesPct.match, local: 0, ml: 0 };
+    adminMatchesModal.querySelectorAll('.modal__tab').forEach((t) => t.classList.toggle('is-active', t.dataset.amtab === 'matches'));
+    adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}% · ИИ-генерация: ${adminMatchesPct.ai}%`;
+    adminMatchesList.innerHTML = '<li class="uc-empty">Загрузка заимствований…</li>';
+    adminMatchesModal.hidden = false;
+
+    if (!documentId) {
+      renderAdminMatches();
+      return;
+    }
+
+    const { ok, data } = await ApApi.getDocumentMatches(documentId);
+    if (ok && data?.success) {
+      const mapped = mapAdminMatchesApi(data);
+      adminBorrowMatches = mapped.borrows;
+      adminAiMatches = mapped.ai;
+      if (data.plagiarismPercent != null) adminMatchesPct.match = Math.round(data.plagiarismPercent);
+      if (data.aiPercent != null) adminMatchesPct.ai = Math.round(data.aiPercent);
+      const local = Math.round(data.localPlagiarismPercent ?? 0);
+      const ml = Math.round(data.mlPlagiarismPercent ?? 0);
+      const matches = Math.round(data.plagiarismPercent ?? Math.max(local, ml));
+      adminMatchStats = { matches, local, ml };
+      if (!adminBorrowMatches.length && matches > 0 && ml >= local) {
+        adminBorrowMatches = [{
+          source: 'Семантический анализ (ML / Qdrant)',
+          title: 'Семантический анализ (ML / Qdrant)',
+          percent: matches,
+          docId: '—',
+          quote: `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${matches}%) сформирован векторным поиском.`,
+        }];
+      }
+    } else {
+      adminMatchesList.innerHTML = `<li class="uc-empty">${escapeHtml(data?.error || 'Не удалось загрузить заимствования')}</li>`;
+      return;
+    }
+    renderAdminMatches();
+  }
 
   // ===== Printable PDF report =====
   const openPrintableReport = async (item, currentUser) => {
     try {
-    if (item?.id && window.ApApi?.generateReport) {
-      try { await ApApi.generateReport(item.id); } catch (_) { /* optional */ }
+    const reportDocumentId = item?.dbId || item?.documentId || item?.realId || item?.id;
+    let orig = item.percent ?? 0;
+    let matches = item.matches ?? Math.max(0, 100 - (item.percent ?? 0));
+    let ai = item.ai ?? 0;
+    let sources = [];
+
+    if (reportDocumentId && ApApi.fetchReportMatchRows) {
+      const { rows, stats } = await ApApi.fetchReportMatchRows(reportDocumentId);
+      sources = ApApi.buildReportTableRows(rows, stats);
+      if (stats) {
+        if (stats.orig != null) orig = stats.orig;
+        if (stats.matches != null) matches = stats.matches;
+        if (stats.ai != null) ai = stats.ai;
+      }
     }
 
-    const orig = item.percent ?? 0;
-    const matches = item.matches ?? Math.max(0, 100 - (item.percent ?? 0));
-    const ai = item.ai ?? 0;
-
-    const sources = mockMatches.slice(0, 5);
-
     const id = item?.id ? String(item.id) : 'AP-' + (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).toUpperCase();
-    const { verifyUrl, docUrl } = item?.id && ApApi.resolveReportQrUrls
-      ? await ApApi.resolveReportQrUrls(item.id)
+    const { verifyUrl, docUrl } = reportDocumentId && ApApi.resolveReportQrUrls
+      ? await ApApi.resolveReportQrUrls(reportDocumentId)
       : { verifyUrl: '', docUrl: '' };
     const qr = (url) => url
       ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`
       : '';
-    const logoUrl = new URL('image 1 [Vectorized].svg', location.href).href;
+    const logoUrl = new URL('bsuir-logo.png', location.href).href;
     const C = 2 * Math.PI * 42;
     const ringSvg = (p, color, w = 10) => `
       <svg viewBox="0 0 100 100" width="100%" height="100%">
@@ -2815,12 +2907,15 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
     const sourcesHtml = sources.map((m, i) => `
       <tr>
         <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
-        <td class="src-table__quote">«${escapeHtml(m.quote)}»</td>
+        <td class="src-table__quote">
+          <div style="font-style: normal; font-weight: 600; color: var(--ink);">${escapeHtml(m.title || '—')}</div>
+          ${(m.quote && m.quote !== m.title) ? `<div style="margin-top:4px; color: var(--muted); font-size: 11px;">«${escapeHtml(m.quote)}»</div>` : ''}
+        </td>
         <td><code>${escapeHtml(m.docId)}</code></td>
-        <td class="src-table__pct"><span>${m.percent != null ? m.percent + '%' : '—'}</span></td>
+        <td class="src-table__pct"><span>${ApApi.formatReportPercentCell ? ApApi.formatReportPercentCell(m) : (m.percent != null ? m.percent + '%' : '—')}</span></td>
       </tr>
     `).join('');
-    const charCount = item.wordCount || item.charCount || 0;
+    const wordCount = item.wordCount || 0;
     const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Отчёт — ${escapeHtml(item.title)}</title>
 <style>
 :root { --primary: #2563eb; --primary-dark: #1d4ed8; --primary-soft: #dbeafe; --ink: #0a1f44; --ink-2: #1e293b; --muted: #64748b; --bg-2: #f4f8fd; --border: rgba(15, 41, 92, 0.08); }
@@ -2894,10 +2989,10 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
 <div class="card">
   <h2>Сведения о работе</h2>
   <dl class="meta">
-    <dt>Автор</dt><dd>${escapeHtml(currentUser ? currentUser.name : item.author)}</dd>
-    <dt>Учебное заведение</dt><dd>БГУИР</dd>
+    <dt>Автор</dt><dd>${escapeHtml(currentUser ? currentUser.name : item.author || '—')}</dd>
+    <dt>Учебное заведение</dt><dd>${escapeHtml(item.uo || item.institution || '—')}</dd>
     <dt>Тип работы</dt><dd>${escapeHtml(item.type)}</dd>
-    <dt>Количество символов</dt><dd>${charCount ? charCount.toLocaleString('ru-RU') : '—'}</dd>
+    <dt>Количество слов</dt><dd>${wordCount ? Number(wordCount).toLocaleString('ru-RU') : '—'}</dd>
     <dt>Дата проверки</dt><dd>${fmtDate(item.date)}</dd>
   </dl>
 </div>
@@ -2908,7 +3003,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
 <div class="card">
   <h2>Найденные заимствования</h2>
   <table class="src-table">
-    <thead><tr><th>№</th><th>Цитата / источник</th><th>ID документа</th><th style="text-align:right;">Схожесть</th></tr></thead>
+    <thead><tr><th>№</th><th>Название работы</th><th>ID документа</th><th style="text-align:right;">Схожесть</th></tr></thead>
     <tbody>${sourcesHtml}</tbody>
   </table>
 </div>
@@ -3386,6 +3481,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
         email:      u.email,
         additionalRoles: u.additionalRoles || [],
       }));
+      refreshOrgFilterOptions();
       renderUsers();
     }
   }
@@ -3422,6 +3518,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
         _expiresAt:     d.expiresAt ? new Date(d.expiresAt).getTime() : null,
         processingTime: d.processingTimeMs ? Math.round(d.processingTimeMs / 1000) : null,
       }));
+      refreshOrgFilterOptions();
     }
     rebuildRepository();
     renderSubmissions();
@@ -3727,7 +3824,9 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       if (window.lucide) window.lucide.createIcons();
     };
     const onChange = (cb) => { onChangeCb = cb; };
-    return { getValues, setValues, setOptions, onChange };
+    const api = { getValues, setValues, setOptions, onChange };
+    multiSelectRegistry[rootId] = api;
+    return api;
   };
   const msRole = initMultiSelect('usersFilterRole', 'Все');
   const msUO = initMultiSelect('usersFilterUO', 'Все');
@@ -4148,11 +4247,8 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     const total = dataset.length;
     adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}% · ИИ-генерация: ${adminMatchesPct.ai}%`;
     if (!total) {
-      const sub = adminMatchesSub?.textContent || '';
-      const pctMatch = sub.match(/Совпадения:\s*(\d+)%/);
-      const matchPct = pctMatch ? Number(pctMatch[1]) : 0;
-      const emptyMsg = (!isAi && matchPct > 0)
-        ? `Конкретные работы в базе сравнения не найдены. Показатель совпадений (${matchPct}%) сформирован семантическим анализом (ML/Qdrant).`
+      const emptyMsg = (!isAi && adminMatchStats.matches > 0 && adminMatchStats.ml >= adminMatchStats.local)
+        ? `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${adminMatchStats.matches}%) сформирован семантическим анализом ML/Qdrant.`
         : (isAi ? 'ИИ-фрагменты не обнаружены.' : 'Заимствования не обнаружены.');
       adminMatchesList.innerHTML = `<li class="uc-empty">${emptyMsg}</li>`;
       adminMatchesPagi.hidden = true;
@@ -4283,6 +4379,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
   function rebuildRepository() {
     repository = submissions.filter((s) => s.status === 'final').map((s, i) => ({
       ...s,
+      dbId: s.id,
       id: 'AP-DOC-' + (i + 1).toString(36).toUpperCase().padStart(4, '0'),
       indexed: s.date,
     }));
@@ -4616,6 +4713,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       uo: d.uo || d.institution || '—',
       faculty: d.faculty || '',
     }));
+    refreshOrgFilterOptions();
     if (typeof refreshDashboardTypes === 'function') refreshDashboardTypes();
   };
 

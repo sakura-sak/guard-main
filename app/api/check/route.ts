@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createShingles, MinHash, compareMinHashSignatures, normalizeContentForCheck } from "@/lib/plagiarism/algorithms"
 import { analyzeWithMlService } from "@/lib/analysis-client"
-import { getAllDocumentsFromDb, type StoredDocument } from "@/lib/local-storage"
+import { getDocumentsForComparison, type StoredDocument } from "@/lib/local-storage"
+import { resolveInstitutionId } from "@/lib/directories"
 import { logInfo, logError } from "@/lib/logger"
 import { requireSessionApi } from "@/lib/require-session-api"
 
@@ -28,20 +29,15 @@ const LOCAL_SIMILARITY_THRESHOLD = 10
 
 /**
  * Выбирает базу для локального сравнения:
- * - только финальные документы;
- * - исключает документы текущего пользователя;
+ * - черновики и финальные документы;
  * - оставляет документы только того же модуля (category);
  * - фильтрует по institution (вуз).
  */
-async function getComparisonPoolForModule(
-  userId: string | undefined,
-  category: string | undefined,
-  institution?: string,
-): Promise<StoredDocument[]> {
+async function getComparisonPoolForModule(category: string | undefined, institutionId?: string | null): Promise<StoredDocument[]> {
   if (!category) return []
   const safeCategory = String(category).replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_").trim()
   if (!safeCategory) return []
-  return getAllDocumentsFromDb(userId, institution || undefined, [safeCategory])
+  return getDocumentsForComparison(safeCategory, institutionId)
 }
 
 function buildLocalSimilarDocuments(
@@ -80,7 +76,6 @@ export async function POST(request: NextRequest) {
     const { content, filename: checkFilename } = body
     const category = typeof body?.category === "string" && body.category.trim() ? body.category.trim() : "uncategorized"
     const status = body?.status === "final" ? "final" : "draft"
-    const userId = gate.user.username
     const institution = typeof body?.institution === "string" ? body.institution : gate.user.institution || "БГУИР"
 
     if (!content) {
@@ -95,7 +90,8 @@ export async function POST(request: NextRequest) {
 
     // Убираем титульный лист, содержание и приложения перед расчётом оригинальности
     const normalizedContent = normalizeContentForCheck(content)
-    const comparisonPool = await getComparisonPoolForModule(userId, category, institution)
+    const institutionId = await resolveInstitutionId(institution)
+    const comparisonPool = await getComparisonPoolForModule(category, institutionId)
     const similarDocuments = buildLocalSimilarDocuments(normalizedContent, comparisonPool, 5)
 
     const ml = await analyzeWithMlService(normalizedContent, {
@@ -122,17 +118,28 @@ export async function POST(request: NextRequest) {
     const localPlagiarismPercent = roundPercent(
       similarDocuments.length > 0 ? similarDocuments[0].similarity : 0,
     )
-    const plagiarismPercent = localPlagiarismPercent
-    const uniquenessPercent = roundPercent(100 - localPlagiarismPercent)
+    const mlPlagiarismPercent = roundPercent(ml.plagiarismPercent)
+    const plagiarismPercent = Math.max(localPlagiarismPercent, mlPlagiarismPercent)
+    const uniquenessPercent = roundPercent(100 - plagiarismPercent)
 
-    logInfo("Проверка документа завершена", userId, gate.user.role, "check", {
+    logInfo("Проверка документа завершена", gate.user.username, gate.user.role, "check", {
       uniquenessPercent,
       plagiarismPercent,
+      localPlagiarismPercent,
+      mlPlagiarismPercent,
       processingTimeMs: processingTime,
       category,
       status,
       mlAnalysisUsed: Boolean(ml),
       localCandidatesChecked: comparisonPool.length,
+      originalContentChars: content.length,
+      normalizedContentChars: normalizedContent.length,
+      topLocalCandidates: similarDocuments.map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        similarity: doc.similarity,
+        category: doc.category,
+      })),
     })
 
     return NextResponse.json({
@@ -142,7 +149,8 @@ export async function POST(request: NextRequest) {
       uniquenessPercent,
       totalDocumentsChecked: comparisonPool.length,
       similarDocuments,
-      mlPlagiarismPercent: roundPercent(ml.plagiarismPercent),
+      localPlagiarismPercent,
+      mlPlagiarismPercent,
       mlAiPercent: roundPercent(ml.aiPercent),
     })
   } catch (error) {

@@ -84,26 +84,6 @@ export function migrate(db: SqliteDb) {
     CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
     CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
     CREATE INDEX IF NOT EXISTS idx_documents_institution ON documents(institution);
-
-    CREATE TABLE IF NOT EXISTS jobs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type TEXT NOT NULL,
-      payload_json TEXT NOT NULL,
-      status TEXT NOT NULL,
-      result_json TEXT,
-      error TEXT,
-      created_at TEXT NOT NULL,
-      started_at TEXT,
-      finished_at TEXT,
-      attempts INTEGER NOT NULL DEFAULT 0,
-      max_attempts INTEGER NOT NULL DEFAULT 3,
-      run_after_ms INTEGER,
-      locked_by TEXT,
-      locked_at_ms INTEGER
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_jobs_status_run_after ON jobs(status, run_after_ms, id);
-    CREATE INDEX IF NOT EXISTS idx_jobs_locked_at ON jobs(locked_at_ms);
   `)
 
   if (!tableHasColumn(db, "documents", "plagiarism_percent_ml")) {
@@ -117,16 +97,6 @@ export function migrate(db: SqliteDb) {
   }
   if (!tableHasColumn(db, "documents", "processing_time_ms")) {
     db.exec(`ALTER TABLE documents ADD COLUMN processing_time_ms INTEGER`)
-  }
-
-  if (!tableHasColumn(db, "jobs", "run_after_ms")) {
-    db.exec(`ALTER TABLE jobs ADD COLUMN run_after_ms INTEGER`)
-  }
-  if (!tableHasColumn(db, "jobs", "locked_by")) {
-    db.exec(`ALTER TABLE jobs ADD COLUMN locked_by TEXT`)
-  }
-  if (!tableHasColumn(db, "jobs", "locked_at_ms")) {
-    db.exec(`ALTER TABLE jobs ADD COLUMN locked_at_ms INTEGER`)
   }
 }
 
