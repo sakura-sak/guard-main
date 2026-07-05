@@ -335,9 +335,10 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
 }
 .hero-cta:hover { background: var(--primary-dark); transform: translateY(-2px); }
 .hero-cta__arrow {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: rgba(255,255,255,0.2);
-  display: grid; place-items: center; font-size: 14px;
+  width: 28px; height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
 }
 .hero-cta--dark {
   position: static; background: var(--ink);
@@ -346,7 +347,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
 .hero-cta--dark:hover { background: #000; }
 .hero-cta--block { width: 100%; justify-content: center; }
 .hero-cta--header { position: static; padding: 12px 22px; font-size: 14px; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25); }
-.hero-cta--header .hero-cta__arrow { width: 24px; height: 24px; font-size: 12px; }
+.hero-cta--header .hero-cta__arrow { width: 24px; height: 24px; }
 .hero-side { padding: 28px; }
 .hero-side--photo {
   display: flex; flex-direction: column; gap: 18px;
@@ -989,6 +990,16 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
   background: #fff; border-radius: 20px;
   max-height: 92vh; overflow-y: auto;
 }
+#loginModal .modal__dialog {
+  overflow: hidden;
+  max-height: none;
+}
+#loginModal.is-open { overflow: hidden; }
+html.login-modal-open,
+html.login-modal-open body {
+  overflow: hidden;
+  height: 100%;
+}
 .login-modal__logo {
   display: flex; justify-content: center; margin-bottom: 18px;
 }
@@ -1459,7 +1470,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
   <header class="header">
     <a href="index.html" class="brand">
       <span class="brand__logo">
-        <img src="bsuir-logo.png" alt="БГУИР" class="brand__img"/>
+        <img src="bsuir-logo.jpg" alt="БГУИР" class="brand__img"/>
         <span>АНТИПЛАГИАТ · БГУИР</span>
       </span>
     </a>
@@ -1471,7 +1482,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
 
     <a href="#login" class="hero-cta hero-cta--header" id="loginBtn">
       Начать проверку
-      <span class="hero-cta__arrow">↗</span>
+      <img src="arrow.png" class="hero-cta__arrow" alt="" width="24" height="24"/>
     </a>
   </header>
 
@@ -1560,7 +1571,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
 
           <a href="#login" class="hero-cta">
             Начать проверку
-            <span class="hero-cta__arrow">↗</span>
+            <img src="arrow.png" class="hero-cta__arrow" alt="" width="28" height="28"/>
           </a>
         </div>
       </div>
@@ -1779,7 +1790,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
         <div class="cta-card__actions">
           <a href="#login" class="hero-cta hero-cta--dark">
             Начать проверку
-            <span class="hero-cta__arrow">↗</span>
+            <img src="arrow.png" class="hero-cta__arrow" alt="" width="28" height="28"/>
           </a>
           <div class="cta-card__meta">
             <strong>До 5 минут</strong>
@@ -1835,7 +1846,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
       <div>
         <a href="index.html" class="brand">
           <span class="brand__logo">
-            <img src="bsuir-logo.png" alt="БГУИР" class="brand__img"/>
+            <img src="bsuir-logo.jpg" alt="БГУИР" class="brand__img"/>
             <span>АНТИПЛАГИАТ · БГУИР</span>
           </span>
         </a>
@@ -1863,7 +1874,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
     <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
 
     <div class="login-modal__logo">
-      <img src="bsuir-logo.png" alt="БГУИР"/>
+      <img src="bsuir-logo.jpg" alt="БГУИР"/>
     </div>
 
     <h2 class="modal__title modal__title--center" id="loginModalTitle">Вход в систему</h2>
@@ -1875,7 +1886,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
           <i data-lucide="user-round" class="icon-16"></i>
           Логин
         </label>
-        <input class="field__input" id="loginInput" type="text" value="student" placeholder="student"/>
+        <input class="field__input" id="loginInput" type="text" placeholder="Введите логин" autocomplete="username"/>
       </div>
 
       <div class="field">
@@ -1884,7 +1895,7 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
           Пароль
         </label>
         <div class="field--with-action">
-          <input class="field__input" id="passwordInput" type="password" value="student" placeholder="student"/>
+          <input class="field__input" id="passwordInput" type="password" placeholder="Введите пароль" autocomplete="current-password"/>
           <button type="button" class="field__action" id="togglePassword" aria-label="Показать пароль">
             <i data-lucide="eye" class="icon-18" id="togglePasswordIcon"></i>
           </button>
@@ -2006,10 +2017,12 @@ em { font-style: italic; color: var(--primary); font-weight: 500; }
   const modal = document.getElementById('loginModal');
   const openModal = () => {
     modal.classList.add('is-open');
+    document.documentElement.classList.add('login-modal-open');
     document.body.style.overflow = 'hidden';
   };
   const closeModal = () => {
     modal.classList.remove('is-open');
+    document.documentElement.classList.remove('login-modal-open');
     document.body.style.overflow = '';
   };
   document.querySelectorAll('a[href="#login"]').forEach((a) => {

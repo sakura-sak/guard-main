@@ -326,6 +326,10 @@ a { color: inherit; text-decoration: none; }
 }
 .scan-log li.is-visible { opacity: 1; transform: translateY(0); }
 .scan-log li::before { content: "✓"; color: #16a34a; font-weight: 700; }
+.scan-log li.scan-log__err::before { content: "⚠"; color: var(--bad); }
+.scan-error-actions { margin-top: 20px; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; }
+.scan-error-actions[hidden] { display: none !important; }
+.scan-error-actions .submit-btn { width: auto; min-width: 200px; }
 
 .metric-row {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: stretch;
@@ -582,6 +586,18 @@ a { color: inherit; text-decoration: none; }
   display: flex; flex-direction: column; gap: 8px;
   border-left: 3px solid var(--primary);
 }
+/*
+.matches-list__circle-wrap {
+  flex-shrink: 0; width: 64px; height: 64px; position: relative;
+  display: grid; place-items: center;
+}
+.matches-list__circle-wrap svg { width: 100%; height: 100%; }
+.matches-list__circle-value {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 13px; font-weight: 700; color: var(--ink);
+}
+.matches-list__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+*/
 .matches-list__head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   font-size: 13px;
@@ -597,6 +613,9 @@ a { color: inherit; text-decoration: none; }
   background: #fff7ed; padding: 10px 12px; border-radius: 10px;
   border-left: 2px solid #fb923c;
   font-style: italic;
+}
+.matches-list__quote--name {
+  font-style: normal; font-weight: 600; color: var(--ink);
 }
 .matches-list__meta {
   font-size: 12px; color: var(--muted);
@@ -702,7 +721,7 @@ a { color: inherit; text-decoration: none; }
   <header class="header">
     <a href="index.html" class="brand">
       <span class="brand__logo">
-        <img src="bsuir-logo.png" alt="БГУИР" class="brand__img"/>
+        <img src="bsuir-logo.jpg" alt="БГУИР" class="brand__img"/>
         <span>АНТИПЛАГИАТ · БГУИР</span>
       </span>
     </a>
@@ -797,6 +816,16 @@ a { color: inherit; text-decoration: none; }
           <div class="scan-progress__label" id="scanLabel">0%</div>
         </div>
         <ul class="scan-log" id="scanLog"></ul>
+        <div class="scan-error-actions" id="scanErrorActions" hidden>
+          <button class="submit-btn" type="button" id="scanRetryBtn">
+            <i data-lucide="refresh-cw" class="icon-18"></i>
+            Отправить заново
+          </button>
+          <button class="btn btn--ghost" type="button" id="scanChooseBtn">
+            <i data-lucide="file-up" class="icon-18"></i>
+            Выбрать другой документ
+          </button>
+        </div>
       </div>
 
       <div class="stage-card" data-stage-card="3" hidden>
@@ -856,7 +885,8 @@ a { color: inherit; text-decoration: none; }
           </button>
           <button class="btn btn--ghost" type="button" id="viewMatchesBtn">
             <i data-lucide="file-search-2" class="icon-18"></i>
-            Просмотреть заимствования и ИИ-генерации
+            Просмотреть заимствования
+            <!-- Просмотреть заимствования и ИИ-генерации -->
           </button>
           <button class="btn btn--primary" type="button" id="finalizeBtn">
             <i data-lucide="check" class="icon-18"></i>
@@ -883,11 +913,11 @@ a { color: inherit; text-decoration: none; }
           </div>
           <div class="final-panel__qrs">
             <div class="final-panel__qr">
-              <img id="finalQrVerify" alt="QR-код верификации" />
+              <img id="finalQrVerify" alt="" width="140" height="140" />
               <span>Для подтверждения подлинности и актуальности данной справки отсканируйте QR-код</span>
             </div>
             <div class="final-panel__qr">
-              <img id="finalQrDoc" alt="QR-код оригинальной версии документа" />
+              <img id="finalQrDoc" alt="" width="140" height="140" />
               <span>Для просмотра оригинальной электронной версии документа отсканируйте QR-код</span>
             </div>
           </div>
@@ -1035,12 +1065,14 @@ a { color: inherit; text-decoration: none; }
   <div class="modal__backdrop" data-close></div>
   <div class="modal__dialog modal__dialog--lg">
     <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
-    <h2 class="modal__title" id="matchesModalTitle">Заимствования и ИИ-генерации документа</h2>
+    <h2 class="modal__title" id="matchesModalTitle">Заимствования документа</h2>
+    <!-- <h2 class="modal__title" id="matchesModalTitle">Заимствования и ИИ-генерации документа</h2> -->
     <p class="modal__subtitle" id="matchesModalSub">—</p>
+    <!--
     <div class="modal__tabs" role="tablist">
       <button class="modal__tab is-active" type="button" data-tab="matches" role="tab">Заимствования</button>
-      <button class="modal__tab" type="button" data-tab="ai" role="tab">ИИ-генерации</button>
     </div>
+    -->
     <ul class="matches-list" id="matchesList"></ul>
     <nav class="pagination" id="matchesPagination" hidden aria-label="Страницы"></nav>
   </div>
@@ -1266,6 +1298,7 @@ a { color: inherit; text-decoration: none; }
     if (typesRes.ok && typesRes.data.types && typesRes.data.types.length) {
       appConfig.types = typesRes.data.types.map((t) => t.displayName || t.name);
       populateWorkTypeOptions(typesRes.data.types);
+      if (ApApi.setCategoryLabelsFromTypes) ApApi.setCategoryLabelsFromTypes(typesRes.data.types);
     }
     refreshProfileUi();
     applyProfilePolicyUi();
@@ -1759,6 +1792,48 @@ a { color: inherit; text-decoration: none; }
   const scanFill = document.getElementById('scanFill');
   const scanLabel = document.getElementById('scanLabel');
   const scanLog = document.getElementById('scanLog');
+  const scanErrorActions = document.getElementById('scanErrorActions');
+  const scanRetryBtn = document.getElementById('scanRetryBtn');
+  const scanChooseBtn = document.getElementById('scanChooseBtn');
+  let pendingScanFile = null;
+  let scanAnimating = false;
+
+  const hideScanError = () => {
+    if (scanErrorActions) scanErrorActions.hidden = true;
+  };
+
+  const showScanError = (message, retryable) => {
+    scanAnimating = false;
+    scanFill.style.width = '0%';
+    scanLabel.textContent = 'Ошибка';
+    scanLog.innerHTML = '';
+    const li = document.createElement('li');
+    li.textContent = message || 'Произошла ошибка';
+    li.className = 'scan-log__err';
+    li.style.color = 'var(--bad)';
+    scanLog.appendChild(li);
+    requestAnimationFrame(() => li.classList.add('is-visible'));
+    if (scanErrorActions) {
+      scanErrorActions.hidden = false;
+      if (scanRetryBtn) scanRetryBtn.hidden = !retryable;
+    }
+    if (window.lucide) window.lucide.createIcons();
+  };
+
+  if (scanRetryBtn) {
+    scanRetryBtn.addEventListener('click', () => {
+      hideScanError();
+      if (pendingScanFile) startScan(pendingScanFile);
+    });
+  }
+
+  if (scanChooseBtn) {
+    scanChooseBtn.addEventListener('click', () => {
+      hideScanError();
+      pendingScanFile = null;
+      resetCheckFlow();
+    });
+  }
   const scanSteps = [
     'Проверка формата и извлечение текста',
     'Сегментация документа на блоки',
@@ -1769,15 +1844,18 @@ a { color: inherit; text-decoration: none; }
   ];
 
   const startScan = async (file) => {
+    pendingScanFile = file;
+    hideScanError();
     showStage(2);
     scanFill.style.width = '0%';
     scanLabel.textContent = '0%';
     scanLog.innerHTML = '';
 
     // Animate progress bar while real API call runs
-    let p = 0, step = 0, animating = true;
+    let p = 0, step = 0;
+    scanAnimating = true;
     const animTick = () => {
-      if (!animating) return;
+      if (!scanAnimating) return;
       p = Math.min(90, p + (2 + Math.random() * 5)); // max 90% until API responds
       scanFill.style.width = p + '%';
       scanLabel.textContent = Math.round(p) + '%';
@@ -1812,7 +1890,7 @@ a { color: inherit; text-decoration: none; }
       });
 
       if (!checkRes.ok || !checkRes.data.success) {
-        throw new Error(checkRes.data.error || 'Ошибка при проверке документа');
+        throw Object.assign(new Error('Произошла ошибка'), { retryable: true });
       }
 
       const checkData = checkRes.data;
@@ -1833,13 +1911,13 @@ a { color: inherit; text-decoration: none; }
 
       const uploadRes = await ApApi.uploadDocument(fd);
       if (!uploadRes.ok || !uploadRes.data.success) {
-        throw new Error(uploadRes.data?.error || 'Не удалось сохранить документ в базу');
+        throw Object.assign(new Error('Произошла ошибка'), { retryable: true });
       }
       const docId = uploadRes.data.document.id;
       checkData.savedDocument = uploadRes.data.document;
 
       // 4. Finish animation
-      animating = false;
+      scanAnimating = false;
       scanFill.style.width = '100%';
       scanLabel.textContent = '100%';
       while (step < scanSteps.length) {
@@ -1849,19 +1927,19 @@ a { color: inherit; text-decoration: none; }
         requestAnimationFrame(() => li.classList.add('is-visible'));
       }
 
+      pendingScanFile = null;
       await renderHistory();
       setTimeout(() => showResult(file, checkData, docId), 400);
 
     } catch (err) {
-      animating = false;
-      scanFill.style.width = '0%';
-      scanLabel.textContent = 'Ошибка';
-      const li = document.createElement('li');
-      li.textContent = '⚠ ' + (err.message || 'Неизвестная ошибка');
-      li.style.color = 'var(--bad)';
-      scanLog.appendChild(li);
-      requestAnimationFrame(() => li.classList.add('is-visible'));
-      setTimeout(() => showStage(1), 3000);
+      const retryable = Boolean(err && err.retryable);
+      const msg = retryable
+        ? 'Произошла ошибка'
+        : (err.message || 'Произошла ошибка');
+      showScanError(msg, retryable);
+      if (!retryable) {
+        setTimeout(() => showStage(1), 3000);
+      }
     }
   };
 
@@ -1911,8 +1989,9 @@ a { color: inherit; text-decoration: none; }
   let matchesPage = 1;
   let matchesTab = 'matches';
   let borrowMatchesData = [];
-  let aiMatchesData = [];
+  // let aiMatchesData = [];
   let borrowMatchStats = { matches: 0, local: 0, ml: 0 };
+  const categoryLabel = (cat) => (ApApi.categoryLabel ? ApApi.categoryLabel(cat) : (cat || '—'));
   const buildPageList = (cur, total) => {
     if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
     if (cur <= 3) return [1, 2, 3, '…', total];
@@ -1921,13 +2000,15 @@ a { color: inherit; text-decoration: none; }
   };
 
   const renderMatches = () => {
-    const isAi = matchesTab === 'ai';
-    const dataset = isAi ? aiMatchesData : borrowMatchesData;
+    // const isAi = matchesTab === 'ai';
+    const isAi = false;
+    const dataset = borrowMatchesData;
     const total = dataset.length;
     if (!total) {
-      const msg = !isAi && borrowMatchStats.matches > 0 && borrowMatchStats.ml >= borrowMatchStats.local
+      const msg = borrowMatchStats.matches > 0 && borrowMatchStats.ml >= borrowMatchStats.local
         ? `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${borrowMatchStats.matches}%) сформирован семантическим анализом ML/Qdrant.`
-        : (isAi ? 'ИИ-фрагменты не обнаружены.' : 'Заимствования не обнаружены.');
+        : 'Заимствования не обнаружены.';
+        // : (isAi ? 'ИИ-фрагменты не обнаружены.' : 'Заимствования не обнаружены.');
       matchesList.innerHTML = `<li class="uc-empty">${escapeHtml(msg)}</li>`;
       const pagi = document.getElementById('matchesPagination');
       pagi.hidden = true;
@@ -1939,29 +2020,33 @@ a { color: inherit; text-decoration: none; }
     const start = (matchesPage - 1) * MATCHES_PER_PAGE;
     const slice = dataset.slice(start, start + MATCHES_PER_PAGE);
     matchesList.innerHTML = slice.map((m) => {
-      const cls = isAi ? 'matches-list__item matches-list__item--ai' : 'matches-list__item';
-      const meta = isAi
-        ? `<span>Достоверность: <b>${escapeHtml(m.confidence || '—')}</b></span>`
-        : `<span>ID документа <code>${escapeHtml(m.docId || '—')}</code></span>`;
-      if (isAi) {
-        return `
-          <li class="${cls}">
-            <span class="matches-list__percent matches-list__percent--corner">${m.percent}%</span>
-            <div class="matches-list__meta">${meta}</div>
-            <p class="matches-list__quote">«${escapeHtml(m.quote || '—')}»</p>
-          </li>
-        `;
-      }
+      const title = m.title || m.source || '—';
+      const docType = m.docType || '—';
+      const docId = m.docId || '—';
       return `
-        <li class="${cls}">
+        <li class="matches-list__item">
           <div class="matches-list__head">
-            <span class="matches-list__source">${escapeHtml(m.source || '—')}</span>
+            <span class="matches-list__source">${escapeHtml(docType)}</span>
             <span class="matches-list__percent">${m.percent}%</span>
           </div>
-          <p class="matches-list__quote">«${escapeHtml(m.quote || m.title || '—')}»</p>
-          <div class="matches-list__meta">${meta}</div>
+          <p class="matches-list__quote matches-list__quote--name">${escapeHtml(title)}</p>
+          <div class="matches-list__meta"><span>ID документа <code>${escapeHtml(docId)}</code></span></div>
         </li>
       `;
+      /*
+      return `
+        <li class="matches-list__item">
+          ${borrowMatchCircleHtml(m.percent)}
+          <div class="matches-list__body">
+            <div class="matches-list__source">${escapeHtml(m.title || m.source || '—')}</div>
+            <div class="matches-list__meta">
+              <span>Тип: <b>${escapeHtml(m.docType || '—')}</b></span>
+              <span>ID: <code>${escapeHtml(m.docId || '—')}</code></span>
+            </div>
+          </div>
+        </li>
+      `;
+      */
     }).join('');
     const pagi = document.getElementById('matchesPagination');
     if (total <= MATCHES_PER_PAGE) {
@@ -1992,11 +2077,13 @@ a { color: inherit; text-decoration: none; }
 
   const loadMatchRows = async (item) => {
     borrowMatchesData = [];
-    aiMatchesData = [];
+    // aiMatchesData = [];
     borrowMatchStats = { matches: item?.matches ?? 0, local: 0, ml: 0 };
     if (!item?.id || !ApApi.getDocumentMatches) return;
+    if (ApApi.loadCategoryLabels) await ApApi.loadCategoryLabels();
     const { ok, data } = await ApApi.getDocumentMatches(item.id);
     if (!ok || !data?.success) return;
+    const simById = new Map((data.similarDocuments || []).map((s) => [s.id, s]));
     const local = Math.round(data.localPlagiarismPercent ?? 0);
     const ml = Math.round(data.mlPlagiarismPercent ?? 0);
     const matches = Math.round(data.plagiarismPercent ?? Math.max(local, ml));
@@ -2006,7 +2093,8 @@ a { color: inherit; text-decoration: none; }
       title: m.sourceTitle || '—',
       percent: Math.round((m.similarity ?? 0) * 10) / 10,
       docId: m.sourceId ? String(m.sourceId) : '—',
-      quote: m.quote || '—',
+      docType: categoryLabel(simById.get(m.sourceId)?.category),
+      // quote: m.quote || '—',
     }));
     if (!borrowMatchesData.length && matches > 0 && ml >= local) {
       borrowMatchesData = [{
@@ -2014,33 +2102,38 @@ a { color: inherit; text-decoration: none; }
         title: 'Семантический анализ (ML / Qdrant)',
         percent: matches,
         docId: '—',
-        quote: `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${matches}%) сформирован векторным поиском.`,
+        docType: '—',
+        // quote: `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${matches}%) сформирован векторным поиском.`,
       }];
     }
+    /*
     aiMatchesData = (data.aiMatches || []).map((m) => ({
       source: m.sourceTitle || 'AI-детектор',
       percent: Math.round((m.similarity ?? 0) * 10) / 10,
       confidence: m.confidence || (m.similarity >= 50 ? 'высокая' : m.similarity >= 20 ? 'средняя' : 'низкая'),
       quote: m.quote || '—',
     }));
+    */
   };
 
   const openMatches = async (sourceItem) => {
     const item = sourceItem || currentResult;
     if (!item) return;
     const matches = item.matches != null ? item.matches : Math.max(0, 100 - (item.percent || 0));
-    const ai = item.ai != null ? item.ai : 0;
-    // In admin embed mode, delegate to the parent — show modal there with full-screen dim
+    // const ai = item.ai != null ? item.ai : 0;
     if (__embedAdmin) {
-      try { parent.postMessage({ type: 'ap-show-matches', documentId: item.id, matchPct: matches, aiPct: ai }, '*'); } catch (_) {}
+      try { parent.postMessage({ type: 'ap-show-matches', documentId: item.id, matchPct: matches }, '*'); } catch (_) {}
+      // try { parent.postMessage({ type: 'ap-show-matches', documentId: item.id, matchPct: matches, aiPct: ai }, '*'); } catch (_) {}
       return;
     }
     matchesSub.textContent = `Совпадения: ${matches}%`;
     matchesPage = 1;
     matchesTab = 'matches';
+    /*
     matchesModal.querySelectorAll('.modal__tab').forEach((t) => {
       t.classList.toggle('is-active', t.dataset.tab === 'matches');
     });
+    */
     matchesModal.hidden = false;
     document.body.style.overflow = 'hidden';
     matchesList.innerHTML = '<li class="uc-empty">Загрузка заимствований…</li>';
@@ -2048,6 +2141,7 @@ a { color: inherit; text-decoration: none; }
     renderMatches();
   };
 
+  /*
   matchesModal.querySelectorAll('.modal__tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       matchesTab = tab.dataset.tab;
@@ -2058,6 +2152,7 @@ a { color: inherit; text-decoration: none; }
       renderMatches();
     });
   });
+  */
   const closeMatches = () => {
     matchesModal.hidden = true;
     document.body.style.overflow = '';
@@ -2143,14 +2238,13 @@ a { color: inherit; text-decoration: none; }
     document.getElementById('finalPercent').textContent = item.percent + '%';
     document.getElementById('finalMatches').textContent = (item.matches != null ? item.matches : Math.max(0, 100 - (item.percent || 0))) + '%';
     document.getElementById('finalAi').textContent = (item.ai != null ? item.ai : 0) + '%';
-    const { verifyUrl, docUrl } = item.id && ApApi.resolveReportQrUrls
+    const qr = item.id && ApApi.resolveReportQrUrls
       ? await ApApi.resolveReportQrUrls(item.id)
-      : { verifyUrl: '', docUrl: '' };
-    const qrApi = (url) => url
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`
-      : '';
-    document.getElementById('finalQrVerify').src = qrApi(verifyUrl);
-    document.getElementById('finalQrDoc').src = qrApi(docUrl);
+      : { verifyUrl: '', docUrl: '', verifyQrImage: '', originalQrImage: '' };
+    if (ApApi.applyQrToImg) {
+      ApApi.applyQrToImg(document.getElementById('finalQrVerify'), qr.verifyUrl, qr.verifyQrImage);
+      ApApi.applyQrToImg(document.getElementById('finalQrDoc'), qr.docUrl, qr.originalQrImage);
+    }
     showStage(4);
   };
 
@@ -2232,7 +2326,8 @@ a { color: inherit; text-decoration: none; }
         : '';
       const actionBtn = isDraft
         ? `<div class="history-list__actions">
-             <button class="history-list__btn history-list__btn--icon" data-action="view" data-id="${it.id}" aria-label="Просмотреть заимствования и ИИ-генерации" title="Просмотреть заимствования и ИИ-генерации"><i data-lucide="file-search-2" class="icon-16"></i></button>
+             <button class="history-list__btn history-list__btn--icon" data-action="view" data-id="${it.id}" aria-label="Просмотреть заимствования" title="Просмотреть заимствования"><i data-lucide="file-search-2" class="icon-16"></i></button>
+             <!-- aria-label="Просмотреть заимствования и ИИ-генерации" title="Просмотреть заимствования и ИИ-генерации" -->
              <button class="history-list__btn history-list__btn--primary" data-action="finalize" data-id="${it.id}"><i data-lucide="check" class="icon-16"></i> Финальная</button>
            </div>`
         : `<div class="history-list__actions">
@@ -2364,20 +2459,18 @@ a { color: inherit; text-decoration: none; }
     }
 
     const id = item.id || ('AP-' + Date.now().toString(36).toUpperCase());
-    const { verifyUrl, docUrl } = reportDocumentId && ApApi.resolveReportQrUrls
+    const { verifyUrl, docUrl, verifyQrImage, originalQrImage } = reportDocumentId && ApApi.resolveReportQrUrls
       ? await ApApi.resolveReportQrUrls(reportDocumentId)
-      : { verifyUrl: '', docUrl: '' };
-    const qr = (url) => url
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`
-      : '';
-    const qrVerify = qr(verifyUrl);
-    const qrDoc = qr(docUrl);
-    const logoUrl = new URL('bsuir-logo.png', location.href).href;
+      : { verifyUrl: '', docUrl: '', verifyQrImage: '', originalQrImage: '' };
+    const qrSrc = (dataUrl, url) => dataUrl || (url && ApApi.qrImageUrl ? ApApi.qrImageUrl(url) : '');
+    const qrVerify = qrSrc(verifyQrImage, verifyUrl);
+    const qrDoc = qrSrc(originalQrImage, docUrl);
+    const logoUrl = new URL('bsuir-logo.jpg', location.href).href;
 
     // Circle helper (same style as on the site)
     const C = 2 * Math.PI * 42;
-    const ringSvg = (p, color, w = 10) => `
-      <svg viewBox="0 0 100 100" width="100%" height="100%">
+    const ringSvg = (p, color, w = 10, size = 48) => `
+      <svg viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true">
         <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" stroke-width="${w}"/>
         <circle cx="50" cy="50" r="42" fill="none" stroke="${color}" stroke-width="${w}"
           stroke-linecap="round" stroke-dasharray="${C}"
@@ -2386,13 +2479,18 @@ a { color: inherit; text-decoration: none; }
       </svg>`;
 
     // Matches table from GET /api/documents/:id/matches
+    /*
+    const pctCircleHtml = (p, color, size = 48) => `
+      <div class="src-table__pct-circle">
+        ${ringSvg(p, color, 8, size)}
+        <span class="src-table__pct-circle__val">${p}%</span>
+      </div>`;
+    */
     const sourcesHtml = sources.map((m, i) => `
       <tr>
         <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
-        <td class="src-table__quote">
-          <div style="font-style: normal; font-weight: 600; color: var(--ink);">${escapeHtml(m.title || '—')}</div>
-          ${(m.quote && m.quote !== m.title) ? `<div style="margin-top:4px; color: var(--muted); font-size: 11px;">«${escapeHtml(m.quote)}»</div>` : ''}
-        </td>
+        <td class="src-table__title">${escapeHtml(m.title || '—')}</td>
+        <td>${escapeHtml(m.docType || '—')}</td>
         <td><code>${escapeHtml(m.docId)}</code></td>
         <td class="src-table__pct"><span>${ApApi.formatReportPercentCell ? ApApi.formatReportPercentCell(m) : (m.percent != null ? m.percent + '%' : '—')}</span></td>
       </tr>
@@ -2500,6 +2598,16 @@ a { color: inherit; text-decoration: none; }
     padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
     display: inline-block;
   }
+  /*
+  .src-table__pct-circle {
+    position: relative; width: 48px; height: 48px; margin-left: auto;
+  }
+  .src-table__pct-circle svg { display: block; width: 48px; height: 48px; }
+  .src-table__pct-circle__val {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; color: var(--ink); line-height: 1;
+  }
+  */
 
   .signature {
     display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
@@ -2560,21 +2668,21 @@ a { color: inherit; text-decoration: none; }
     <div class="metrics">
       <div class="metric">
         <div class="metric__circle">
-          ${ringSvg(ai, '#8b5cf6')}
+          ${ringSvg(ai, '#8b5cf6', 10, 110)}
           <span class="metric__val"><span>${ai}</span><span>%</span></span>
         </div>
         <div class="metric__label">ИИ-генерация</div>
       </div>
       <div class="metric metric--main">
         <div class="metric__circle">
-          ${ringSvg(orig, '#2563eb', 12)}
+          ${ringSvg(orig, '#2563eb', 12, 110)}
           <span class="metric__val"><span>${orig}</span><span>%</span></span>
         </div>
         <div class="metric__label">Оригинальность</div>
       </div>
       <div class="metric">
         <div class="metric__circle">
-          ${ringSvg(matches, '#dc2626')}
+          ${ringSvg(matches, '#dc2626', 10, 110)}
           <span class="metric__val"><span>${matches}</span><span>%</span></span>
         </div>
         <div class="metric__label">Совпадения</div>
@@ -2611,6 +2719,7 @@ a { color: inherit; text-decoration: none; }
         <tr>
           <th>№</th>
           <th>Название работы</th>
+          <th>Тип работы</th>
           <th>ID документа</th>
           <th style="text-align: right;">Схожесть</th>
         </tr>
@@ -2620,12 +2729,12 @@ a { color: inherit; text-decoration: none; }
   </div>
 
   <div class="qrs">
-    <div class="qr">
-      <img src="${qrVerify}" alt="QR-код верификации"/>
+    <div class="qr"${qrVerify ? '' : ' hidden'}>
+      ${qrVerify ? `<img src="${qrVerify}" alt=""/>` : ''}
       Для подтверждения подлинности и актуальности данной справки отсканируйте QR-код
     </div>
-    <div class="qr">
-      <img src="${qrDoc}" alt="QR-код оригинальной версии"/>
+    <div class="qr"${qrDoc ? '' : ' hidden'}>
+      ${qrDoc ? `<img src="${qrDoc}" alt=""/>` : ''}
       Для просмотра оригинальной электронной версии документа отсканируйте QR-код
     </div>
   </div>

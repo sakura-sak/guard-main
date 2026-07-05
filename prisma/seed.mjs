@@ -1,20 +1,32 @@
 /**
- * Idempotent DB seed: БГУИР, faculties, document types, default role accounts.
+ * Idempotent DB seed: УО, факультеты, типы работ, учётные записи по умолчанию.
  * Run: npx prisma db seed
  */
 import { PrismaClient } from "@prisma/client"
 
 const prisma = new PrismaClient()
 
-const INSTITUTION = {
-  id: "bsuir",
-  name: "БГУИР",
-  faculties: [
-    { id: "fitu", name: "Факультет информационных технологий и управления" },
-    { id: "fksis", name: "Факультет компьютерных систем и сетей" },
-    { id: "fkaf", name: "Факультет компьютерного проектирования" },
-  ],
-}
+const INSTITUTIONS = [
+  {
+    id: "bsuir",
+    name: "БГУИР",
+    faculties: [
+      { id: "fitu", name: "Факультет информационных технологий и управления" },
+      { id: "fksis", name: "Факультет компьютерных систем и сетей" },
+      { id: "fkaf", name: "Факультет компьютерного проектирования" },
+    ],
+  },
+  {
+    id: "bsu",
+    name: "БГУ",
+    faculties: [
+      { id: "bsu_mf", name: "Механико-математический факультет" },
+      { id: "bsu_ff", name: "Физический факультет" },
+    ],
+  },
+]
+
+const DEFAULT_INSTITUTION_ID = "bsuir"
 
 const DOCUMENT_TYPES = [
   { name: "diploma", displayName: "Дипломная работа / проект" },
@@ -25,25 +37,75 @@ const DOCUMENT_TYPES = [
 ]
 
 const DEFAULT_USERS = [
-  { username: "superadmin", password: "superadmin", role: "superadmin", fullName: "Главный администратор" },
-  { username: "admin", password: "admin", role: "admin", fullName: "Администратор БГУИР" },
-  { username: "student", password: "student", role: "student", fullName: "Студент Тестовый", facultyId: "fitu", groupName: "213801" },
-  { username: "teacher", password: "teacher", role: "teacher", fullName: "Преподаватель Тестовый", groupName: "—" },
+  {
+    username: "superadmin",
+    password: process.env.SEED_SUPERADMIN_PASSWORD || "BgPlg$S0uper9",
+    role: "superadmin",
+    fullName: "Главный администратор",
+    institutionId: DEFAULT_INSTITUTION_ID,
+  },
+  {
+    username: "admin",
+    password: process.env.SEED_ADMIN_PASSWORD || "BgPlg$Adm1n8",
+    role: "admin",
+    fullName: "Администратор БГУИР",
+    institutionId: "bsuir",
+  },
+  {
+    username: "admin_bsu",
+    password: process.env.SEED_BSU_ADMIN_PASSWORD || "BgPlg$Bsu8",
+    role: "admin",
+    fullName: "Администратор БГУ",
+    institutionId: "bsu",
+  },
+  {
+    username: "student",
+    password: process.env.SEED_STUDENT_PASSWORD || "BgPlg$Stud7",
+    role: "student",
+    fullName: "Студент Тестовый",
+    institutionId: "bsuir",
+    facultyId: "fitu",
+    groupName: "213801",
+  },
+  {
+    username: "teacher",
+    password: process.env.SEED_TEACHER_PASSWORD || "BgPlg$Tchr6",
+    role: "teacher",
+    fullName: "Преподаватель Тестовый",
+    institutionId: "bsuir",
+    groupName: "—",
+  },
 ]
 
-async function seedInstitution() {
-  await prisma.institution.upsert({
-    where: { id: INSTITUTION.id },
-    update: { name: INSTITUTION.name },
-    create: { id: INSTITUTION.id, name: INSTITUTION.name },
-  })
-  for (const f of INSTITUTION.faculties) {
-    await prisma.faculty.upsert({
-      where: { id: f.id },
-      update: { name: f.name, institutionId: INSTITUTION.id },
-      create: { id: f.id, name: f.name, institutionId: INSTITUTION.id },
-    })
+/** Найти УО по id или названию; создать с preferredId только если записи ещё нет. */
+async function resolveInstitutionId(preferredId, name) {
+  const byId = await prisma.institution.findUnique({ where: { id: preferredId } })
+  if (byId) {
+    if (byId.name !== name) {
+      await prisma.institution.update({ where: { id: preferredId }, data: { name } })
+    }
+    return preferredId
   }
+  const byName = await prisma.institution.findFirst({ where: { name } })
+  if (byName) return byName.id
+  await prisma.institution.create({ data: { id: preferredId, name } })
+  return preferredId
+}
+
+async function seedInstitutions() {
+  const institutionIds = {}
+  for (const inst of INSTITUTIONS) {
+    const institutionId = await resolveInstitutionId(inst.id, inst.name)
+    institutionIds[inst.id] = institutionId
+    for (const f of inst.faculties) {
+      await prisma.faculty.upsert({
+        where: { id: f.id },
+        update: { name: f.name, institutionId },
+        create: { id: f.id, name: f.name, institutionId },
+      })
+    }
+  }
+  return institutionIds
 }
 
 async function seedDocumentTypes() {
@@ -56,26 +118,24 @@ async function seedDocumentTypes() {
   }
 }
 
-async function seedUsers() {
+async function seedUsers(institutionIds) {
   const now = new Date()
   for (const u of DEFAULT_USERS) {
+    const logicalInst = u.institutionId ?? DEFAULT_INSTITUTION_ID
+    const data = {
+      password: u.password,
+      role: u.role,
+      fullName: u.fullName,
+      institutionId: institutionIds[logicalInst] ?? logicalInst,
+      facultyId: u.facultyId ?? null,
+      groupName: u.groupName ?? null,
+    }
     await prisma.user.upsert({
       where: { username: u.username },
-      update: {
-        role: u.role,
-        fullName: u.fullName,
-        institutionId: INSTITUTION.id,
-        facultyId: u.facultyId ?? null,
-        groupName: u.groupName ?? null,
-      },
+      update: data,
       create: {
         username: u.username,
-        password: u.password,
-        role: u.role,
-        fullName: u.fullName,
-        institutionId: INSTITUTION.id,
-        facultyId: u.facultyId ?? null,
-        groupName: u.groupName ?? null,
+        ...data,
         createdAt: now,
       },
     })
@@ -83,10 +143,10 @@ async function seedUsers() {
 }
 
 async function main() {
-  await seedInstitution()
+  const institutionIds = await seedInstitutions()
   await seedDocumentTypes()
-  await seedUsers()
-  console.log("Seed completed: institution, document types, default users.")
+  await seedUsers(institutionIds)
+  console.log("Seed completed: institutions, document types, default users.")
 }
 
 main()

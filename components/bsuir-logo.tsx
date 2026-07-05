@@ -5,7 +5,7 @@ export function BsuirLogo({ className = "", href }: { className?: string; href?:
   const content = (
     <div className={`flex items-center gap-2 ${className}`}>
       <Image
-        src="/bsuir-logo.png"
+        src="/bsuir-logo.jpg"
         alt="БГУИР"
         width={120}
         height={32}

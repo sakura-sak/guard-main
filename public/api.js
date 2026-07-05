@@ -156,23 +156,104 @@
     GET(`/api/report/${documentId}/links`);
 
   const resolveReportQrUrls = async (documentId) => {
-    if (!documentId) return { verifyUrl: '', docUrl: '' };
+    const empty = { verifyUrl: '', docUrl: '', verifyQrImage: '', originalQrImage: '' };
+    if (!documentId) return empty;
     const { ok, data } = await getReportQrLinks(documentId);
     if (ok && data.success) {
-      return { verifyUrl: data.verifyUrl, docUrl: data.originalUrl };
+      return {
+        verifyUrl: data.verifyUrl || '',
+        docUrl: data.originalUrl || '',
+        verifyQrImage: data.verifyQrImage || '',
+        originalQrImage: data.originalQrImage || '',
+      };
     }
-    return { verifyUrl: '', docUrl: '' };
+    return empty;
   };
+
+  function applyQrToImg(imgEl, targetUrl, dataUrl) {
+    if (!imgEl) return;
+    if (dataUrl) {
+      imgEl.src = dataUrl;
+      imgEl.hidden = false;
+      return;
+    }
+    if (targetUrl) {
+      imgEl.src = qrImageUrl(targetUrl);
+      imgEl.hidden = false;
+      return;
+    }
+    imgEl.removeAttribute('src');
+    imgEl.hidden = true;
+  }
+
+  /** Локальный PNG QR (GET /api/report/qr) — не зависит от api.qrserver.com */
+  function qrImageUrl(targetUrl) {
+    if (!targetUrl) return '';
+    return `/api/report/qr?data=${encodeURIComponent(targetUrl)}`;
+  }
+
+  /*
+  const CATEGORY_LABELS = {
+    diploma: 'Дипломная работа',
+    coursework: 'Курсовая работа / Проект',
+    lab: 'Лабораторная работа',
+    practice: 'Практическое задание',
+    uncategorized: 'Не указано',
+  };
+  */
+
+  let __categoryLabels = null;
+  let __categoryLabelsPromise = null;
+
+  /** Подставить кэш из уже загруженного списка типов (без повторного запроса). */
+  function setCategoryLabelsFromTypes(types) {
+    const map = {};
+    if (Array.isArray(types)) {
+      types.forEach((t) => {
+        if (t?.name) map[t.name] = t.displayName || t.name;
+      });
+    }
+    __categoryLabels = map;
+  }
+
+  /** Загрузить slug → displayName из GET /api/document-types (PostgreSQL). */
+  async function loadCategoryLabels() {
+    if (__categoryLabels) return __categoryLabels;
+    if (__categoryLabelsPromise) return __categoryLabelsPromise;
+    __categoryLabelsPromise = (async () => {
+      const map = {};
+      const { ok, data } = await getDocumentTypes();
+      if (ok && Array.isArray(data?.types)) {
+        data.types.forEach((t) => {
+          if (t?.name) map[t.name] = t.displayName || t.name;
+        });
+      }
+      __categoryLabels = map;
+      __categoryLabelsPromise = null;
+      return map;
+    })();
+    return __categoryLabelsPromise;
+  }
+
+  function categoryLabel(cat) {
+    if (!cat) return '—';
+    if (__categoryLabels && __categoryLabels[cat]) return __categoryLabels[cat];
+    // return CATEGORY_LABELS[cat] || cat;
+    return cat;
+  }
 
   /** Map GET /matches response to printable report table rows (real documents only, no ML duplicate). */
   function mapBorrowRowsFromMatchesApi(data) {
+    const simById = new Map((data.similarDocuments || []).map((s) => [s.id, s]));
     const rows = [];
     (data.borrowMatches || []).forEach((m) => {
       if (!m.sourceId || m.sourceId <= 0) return;
+      const sim = simById.get(m.sourceId);
       rows.push({
         title: m.sourceTitle || '—',
-        quote: m.quote || m.sourceTitle || '—',
+        // quote: m.quote || m.sourceTitle || '—',
         docId: String(m.sourceId),
+        docType: categoryLabel(sim?.category),
         percent: Math.round(m.similarity ?? 0),
         percentLabel: `${Math.round(m.similarity ?? 0)}%`,
         kind: 'local',
@@ -194,16 +275,19 @@
       const viaMl = ml >= local && ml > 0;
       return [{
         title: viaMl ? 'Семантический анализ (ML / Qdrant)' : 'Итоговая оценка',
-        quote: viaMl
-          ? `Конкретные работы в базе сравнения не найдены. Показатель «Совпадения» (${matches}%) сформирован векторным поиском.`
-          : `Конкретные источники в таблице не найдены. Показатель «Совпадения»: ${matches}%.`,
+        // quote: viaMl
+        //   ? `Конкретные работы в базе сравнения не найдены. Показатель «Совпадения» (${matches}%) сформирован векторным поиском.`
+        //   : `Конкретные источники в таблице не найдены. Показатель «Совпадения»: ${matches}%.`,
+        docType: '—',
         docId: '—',
-        percentLabel: '—',
+        percent: matches,
+        percentLabel: `${matches}%`,
       }];
     }
     return [{
       title: 'Заимствования не обнаружены',
-      quote: 'Заимствования не обнаружены',
+      // quote: 'Заимствования не обнаружены',
+      docType: '—',
       docId: '—',
       percent: 0,
       percentLabel: '0%',
@@ -224,6 +308,7 @@
     if (!documentId) {
       return { rows: [], stats: null };
     }
+    await loadCategoryLabels();
     const { ok, data } = await getDocumentMatches(documentId);
     if (!ok || !data?.success) {
       return { rows: [], stats: null, error: data?.error || 'Не удалось загрузить заимствования' };
@@ -360,7 +445,8 @@
     // documents
     getUserDocuments, updateDocumentStatus, updateDocumentTitle,
     deleteUserDocument, getDocumentMatches, generateReport, getReportQrLinks, resolveReportQrUrls,
-    fetchReportMatchRows, mapBorrowRowsFromMatchesApi, buildReportTableRows, formatReportPercentCell, openReportPrintWindow,
+    fetchReportMatchRows, mapBorrowRowsFromMatchesApi, buildReportTableRows, formatReportPercentCell,
+    loadCategoryLabels, setCategoryLabelsFromTypes, categoryLabel, qrImageUrl, applyQrToImg, openReportPrintWindow,
     updateAdminDocument,
     // admin: users
     getAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser,

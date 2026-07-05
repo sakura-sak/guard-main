@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDocumentByIdFromDb, updateDocumentStatus, getReportPdfPath, saveReportPdf, getDocumentAuthorLabel } from "@/lib/local-storage"
+import { getDocumentByIdFromDb, updateDocumentStatus, saveReportPdf, deleteReportPdf } from "@/lib/local-storage"
 import { generatePDFReport } from "@/lib/pdf-report"
-import { getSimilarDocumentsForReport } from "@/lib/similar-documents-for-report"
+import { buildReportPayloadForDocument } from "@/lib/report-payload-for-document"
 import { logInfo, logError } from "@/lib/logger"
 import type { DocumentStatus } from "@/lib/local-storage"
 import { requireSessionApi } from "@/lib/require-session-api"
@@ -55,37 +55,15 @@ export async function PATCH(
     const updated = await updateDocumentStatus(id, status as DocumentStatus)
 
     if (updated) {
-      // Если переводим документ в финальный статус из профиля и PDF-отчета еще нет —
-      // генерируем его на основе сохраненных данных документа.
-      if (status === "final" && !getReportPdfPath(id)) {
+      if (status === "final") {
         try {
-          const uniquenessPercent =
-            doc.originalityPercent !== null && doc.originalityPercent !== undefined
-              ? doc.originalityPercent
-              : 100
-          let similarDocuments: Awaited<ReturnType<typeof getSimilarDocumentsForReport>> = []
-          try {
-            similarDocuments = await getSimilarDocumentsForReport(id)
-          } catch {
-            similarDocuments = []
+          deleteReportPdf(id)
+          const payload = await buildReportPayloadForDocument(id, resolvePublicBaseUrl(request))
+          if (!payload) {
+            throw new Error(`Документ ${id} не найден при сборке PDF`)
           }
-          const pdfBytes = await generatePDFReport({
-            filename: doc.filename || `${doc.title || "document"}.txt`,
-            title: doc.title,
-            author: getDocumentAuthorLabel(doc),
-            category: doc.category,
-            uniquenessPercent,
-            totalDocumentsChecked: similarDocuments.length > 0 ? similarDocuments.length : 0,
-            similarDocuments,
-            processingTimeMs: doc.processingTimeMs ?? 0,
-            plagiarismPercentMl: doc.plagiarismPercentMl,
-            aiPercentMl: doc.aiPercentMl,
-            uploadDate: doc.uploadDate,
-            status: "final",
-            documentId: id,
-            baseUrl: resolvePublicBaseUrl(request),
-          })
-          saveReportPdf(id, Buffer.from(pdfBytes), uniquenessPercent)
+          const pdfBytes = await generatePDFReport(payload)
+          saveReportPdf(id, Buffer.from(pdfBytes))
         } catch (e) {
           // Не блокируем смену статуса, если генерация отчета не удалась
           logError(

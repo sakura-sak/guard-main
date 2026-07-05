@@ -684,6 +684,18 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   border-left: 3px solid var(--primary);
   position: relative;
 }
+/*
+.matches-list__circle-wrap {
+  flex-shrink: 0; width: 64px; height: 64px; position: relative;
+  display: grid; place-items: center;
+}
+.matches-list__circle-wrap svg { width: 100%; height: 100%; }
+.matches-list__circle-value {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 13px; font-weight: 700; color: var(--ink);
+}
+.matches-list__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+*/
 .matches-list__item--ai { border-left-color: #8b5cf6; }
 .matches-list__head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -702,6 +714,9 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   background: #fff7ed; padding: 10px 12px; border-radius: 10px;
   border-left: 2px solid #fb923c;
   font-style: italic;
+}
+.matches-list__quote--name {
+  font-style: normal; font-weight: 600; color: var(--ink);
 }
 .matches-list__item--ai .matches-list__quote { background: #f5f3ff; border-left-color: #8b5cf6; }
 .matches-list__meta {
@@ -732,17 +747,44 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
 }
 .modal__dialog--md { width: min(720px, 94%); }
 .modal__dialog--lg { width: min(960px, 94%); }
+#settingsModal .modal__dialog {
+  width: min(1180px, 96%);
+  max-height: 92vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 34px 24px;
+  gap: 0;
+}
+#settingsModal .settings-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0 0 12px;
+}
+body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 
 /* Settings modal */
-#settingsModal .modal__dialog { overflow: hidden; }
-.settings-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 18px; margin-bottom: 20px; }
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: stretch;
+}
 @media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr; } }
 .settings-section {
   background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px;
-  padding: 14px; display: flex; flex-direction: column; gap: 10px; height: 420px;
-  min-width: 0;
+  padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  height: 420px; min-height: 420px; max-height: 420px; min-width: 0;
 }
-.settings-section__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.settings-section__head,
+.settings-section__hint,
+.settings-add { flex-shrink: 0; }
+.settings-section__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  flex-wrap: wrap;
+}
 .settings-section__title { margin: 0; font-size: 14px; font-weight: 700; color: var(--ink); }
 .settings-section__sub { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 6px; }
 .settings-section__hint { font-size: 11px; color: var(--muted); margin-top: -4px; }
@@ -758,7 +800,20 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   position: absolute; inset: -4px; opacity: 0; cursor: pointer; border: none; padding: 0;
   width: calc(100% + 8px); height: calc(100% + 8px);
 }
-.settings-list { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px; }
+.settings-list {
+  display: flex; flex-direction: column; gap: 6px;
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
+}
+.settings-list::-webkit-scrollbar { width: 6px; }
+.settings-list::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 999px;
+}
+.settings-list::-webkit-scrollbar-track { background: transparent; }
 .settings-list__item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   background: #fff; border: 1px solid var(--border); border-radius: 10px;
@@ -782,7 +837,13 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
 .settings-add .btn { padding: 9px 14px; font-size: 13px; }
 .settings-footer {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  padding-top: 14px; border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  background: #fff;
+  position: relative;
+  z-index: 2;
 }
 .settings-footer__note { color: #b45309; font-size: 12px; margin-right: auto; }
 #subEditModal .modal__dialog { overflow: visible; }
@@ -983,7 +1044,7 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   .dash-filter { grid-template-columns: 1fr 1fr; }
   .dash-filter__actions { grid-column: 1 / -1; justify-content: flex-end; }
   .settings-grid { grid-template-columns: 1fr 1fr; }
-  .settings-section { height: auto; min-height: 320px; max-height: 480px; }
+  .settings-section { height: 360px; min-height: 360px; max-height: 360px; }
   .filter-popover__panel { min-width: 280px; max-width: calc(100vw - 40px); }
   .chart-canvas-wrap { height: 240px; }
   .check-iframe { min-height: 600px; }
@@ -1014,7 +1075,8 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   .chart-canvas-wrap { height: 220px; }
   .dash-filter { grid-template-columns: 1fr 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
-  .settings-section { height: auto; }
+  .settings-section { height: 320px; min-height: 320px; max-height: 320px; }
+  #settingsModal .modal__dialog { max-height: 94vh; }
   .modal__dialog { padding: 22px 20px; max-height: 90vh; }
   .modal__dialog--md { width: min(94%, 720px); }
   .modal__dialog--lg { width: min(94%, 960px); }
@@ -1074,7 +1136,7 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   <header class="header">
     <a href="index.html" class="brand">
       <span class="brand__logo">
-        <img src="bsuir-logo.png" alt="БГУИР" class="brand__img"/>
+        <img src="bsuir-logo.jpg" alt="БГУИР" class="brand__img"/>
         <span>АНТИПЛАГИАТ · БГУИР · АДМИН</span>
       </span>
     </a>
@@ -1535,7 +1597,6 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
               <tr>
                 <th>ФИО / Логин</th>
                 <th>Роль</th>
-                <th>Пароль</th>
                 <th class="admin-col-uo">УО</th>
                 <th>Факультет</th>
                 <th>Группа</th>
@@ -1808,17 +1869,19 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   </section>
 </div>
 
-<!-- Modal: Заимствования и ИИ-генерации (admin-level for iframe) -->
+<!-- Modal: Заимствования (admin-level for iframe) -->
 <div class="modal" id="adminMatchesModal" role="dialog" aria-modal="true" aria-labelledby="adminMatchesTitle" hidden>
   <div class="modal__backdrop" data-close></div>
   <div class="modal__dialog modal__dialog--lg">
     <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
-    <h2 class="modal__title" id="adminMatchesTitle">Заимствования и ИИ-генерации документа</h2>
+    <h2 class="modal__title" id="adminMatchesTitle">Заимствования документа</h2>
+    <!-- <h2 class="modal__title" id="adminMatchesTitle">Заимствования и ИИ-генерации документа</h2> -->
     <p class="user-card__sub" id="adminMatchesSub" style="margin-bottom: 20px;">—</p>
+    <!--
     <div class="modal__tabs" role="tablist">
       <button class="modal__tab is-active" type="button" data-amtab="matches" role="tab">Заимствования</button>
-      <button class="modal__tab" type="button" data-amtab="ai" role="tab">ИИ-генерации</button>
     </div>
+    -->
     <ul class="matches-list" id="adminMatchesList"></ul>
     <nav class="pagination" id="adminMatchesPagination" hidden></nav>
   </div>
@@ -1860,6 +1923,7 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
     <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
     <h2 class="modal__title" id="settingsTitle">Настройки справочников</h2>
     <p class="user-card__sub" style="margin-bottom: 18px;">Управление списками УО, факультетов и типов работ. Изменения применяются после обновления страницы.</p>
+    <div class="settings-modal__body">
     <div class="settings-grid">
       <div class="settings-section" id="settingsUoSection">
         <div class="settings-section__head">
@@ -1898,6 +1962,7 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
           <button class="btn btn--primary" type="button" data-add="type">Добавить</button>
         </div>
       </div>
+    </div>
     </div>
     <input type="file" id="settingsImportFile" accept=".xlsx,.xls,.csv" hidden/>
     <div class="settings-footer">
@@ -2805,26 +2870,31 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   const adminMatchesSub = document.getElementById('adminMatchesSub');
   const adminMatchesPagi = document.getElementById('adminMatchesPagination');
   let adminBorrowMatches = [];
-  let adminAiMatches = [];
+  // let adminAiMatches = [];
   let adminMatchesPage = 1, adminMatchesTab = 'matches', adminMatchesPct = { match: 0, ai: 0 };
   let adminMatchStats = { matches: 0, local: 0, ml: 0 };
   const ADMIN_MATCHES_PER_PAGE = 5;
+  const adminCategoryLabel = (cat) => (ApApi.categoryLabel ? ApApi.categoryLabel(cat) : (cat || '—'));
 
   const mapAdminMatchesApi = (data) => {
+    const simById = new Map((data.similarDocuments || []).map((s) => [s.id, s]));
     const borrows = (data.borrowMatches || []).map((m) => ({
       source: m.sourceTitle || '—',
       title: m.sourceTitle || '—',
       percent: Math.round((m.similarity ?? 0) * 10) / 10,
       docId: m.sourceId ? String(m.sourceId) : '—',
-      quote: m.quote || '—',
+      docType: adminCategoryLabel(simById.get(m.sourceId)?.category),
+      // quote: m.quote || '—',
     }));
+    /*
     const ai = (data.aiMatches || []).map((m) => ({
       source: m.sourceTitle || 'AI-детектор',
       percent: Math.round((m.similarity ?? 0) * 10) / 10,
       confidence: m.confidence || (m.similarity >= 50 ? 'высокая' : m.similarity >= 20 ? 'средняя' : 'низкая'),
       quote: m.quote || '—',
     }));
-    return { borrows, ai };
+    */
+    return { borrows };
   };
 
   async function openAdminMatches(documentId, matchPct, aiPct) {
@@ -2832,12 +2902,17 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
     adminMatchesPage = 1;
     adminMatchesTab = 'matches';
     adminBorrowMatches = [];
-    adminAiMatches = [];
+    // adminAiMatches = [];
     adminMatchStats = { matches: adminMatchesPct.match, local: 0, ml: 0 };
+    /*
     adminMatchesModal.querySelectorAll('.modal__tab').forEach((t) => t.classList.toggle('is-active', t.dataset.amtab === 'matches'));
-    adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}% · ИИ-генерация: ${adminMatchesPct.ai}%`;
+    */
+    adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}%`;
+    // adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}% · ИИ-генерация: ${adminMatchesPct.ai}%`;
     adminMatchesList.innerHTML = '<li class="uc-empty">Загрузка заимствований…</li>';
     adminMatchesModal.hidden = false;
+
+    if (ApApi.loadCategoryLabels) await ApApi.loadCategoryLabels();
 
     if (!documentId) {
       renderAdminMatches();
@@ -2848,9 +2923,9 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
     if (ok && data?.success) {
       const mapped = mapAdminMatchesApi(data);
       adminBorrowMatches = mapped.borrows;
-      adminAiMatches = mapped.ai;
+      // adminAiMatches = mapped.ai;
       if (data.plagiarismPercent != null) adminMatchesPct.match = Math.round(data.plagiarismPercent);
-      if (data.aiPercent != null) adminMatchesPct.ai = Math.round(data.aiPercent);
+      // if (data.aiPercent != null) adminMatchesPct.ai = Math.round(data.aiPercent);
       const local = Math.round(data.localPlagiarismPercent ?? 0);
       const ml = Math.round(data.mlPlagiarismPercent ?? 0);
       const matches = Math.round(data.plagiarismPercent ?? Math.max(local, ml));
@@ -2861,7 +2936,8 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
           title: 'Семантический анализ (ML / Qdrant)',
           percent: matches,
           docId: '—',
-          quote: `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${matches}%) сформирован векторным поиском.`,
+          docType: '—',
+          // quote: `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${matches}%) сформирован векторным поиском.`,
         }];
       }
     } else {
@@ -2891,26 +2967,31 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
     }
 
     const id = item?.id ? String(item.id) : 'AP-' + (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).toUpperCase();
-    const { verifyUrl, docUrl } = reportDocumentId && ApApi.resolveReportQrUrls
+    const { verifyUrl, docUrl, verifyQrImage, originalQrImage } = reportDocumentId && ApApi.resolveReportQrUrls
       ? await ApApi.resolveReportQrUrls(reportDocumentId)
-      : { verifyUrl: '', docUrl: '' };
-    const qr = (url) => url
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=${encodeURIComponent(url)}`
-      : '';
-    const logoUrl = new URL('bsuir-logo.png', location.href).href;
+      : { verifyUrl: '', docUrl: '', verifyQrImage: '', originalQrImage: '' };
+    const qrSrc = (dataUrl, url) => dataUrl || (url && ApApi.qrImageUrl ? ApApi.qrImageUrl(url) : '');
+    const qrVerify = qrSrc(verifyQrImage, verifyUrl);
+    const qrDoc = qrSrc(originalQrImage, docUrl);
+    const logoUrl = new URL('bsuir-logo.jpg', location.href).href;
     const C = 2 * Math.PI * 42;
-    const ringSvg = (p, color, w = 10) => `
-      <svg viewBox="0 0 100 100" width="100%" height="100%">
+    const ringSvg = (p, color, w = 10, size = 48) => `
+      <svg viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true">
         <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" stroke-width="${w}"/>
         <circle cx="50" cy="50" r="42" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - p / 100)}" transform="rotate(-90 50 50)"/>
       </svg>`;
+    /*
+    const pctCircleHtml = (p, color, size = 48) => `
+      <div class="src-table__pct-circle">
+        ${ringSvg(p, color, 8, size)}
+        <span class="src-table__pct-circle__val">${p ?? '—'}%</span>
+      </div>`;
+    */
     const sourcesHtml = sources.map((m, i) => `
       <tr>
         <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
-        <td class="src-table__quote">
-          <div style="font-style: normal; font-weight: 600; color: var(--ink);">${escapeHtml(m.title || '—')}</div>
-          ${(m.quote && m.quote !== m.title) ? `<div style="margin-top:4px; color: var(--muted); font-size: 11px;">«${escapeHtml(m.quote)}»</div>` : ''}
-        </td>
+        <td class="src-table__title">${escapeHtml(m.title || '—')}</td>
+        <td>${escapeHtml(m.docType || '—')}</td>
         <td><code>${escapeHtml(m.docId)}</code></td>
         <td class="src-table__pct"><span>${ApApi.formatReportPercentCell ? ApApi.formatReportPercentCell(m) : (m.percent != null ? m.percent + '%' : '—')}</span></td>
       </tr>
@@ -2957,6 +3038,14 @@ h2 { font-size: 16px; margin: 0 0 14px; color: var(--ink); }
 .src-table code { background: var(--bg-2); padding: 2px 8px; border-radius: 6px; font-family: ui-monospace, "SF Mono", monospace; font-size: 11px; color: var(--ink-2); }
 .src-table__pct { text-align: right; white-space: nowrap; }
 .src-table__pct span { background: #fee2e2; color: #b91c1c; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; display: inline-block; }
+/*
+.src-table__pct-circle { position: relative; width: 48px; height: 48px; margin-left: auto; }
+.src-table__pct-circle svg { display: block; width: 48px; height: 48px; }
+.src-table__pct-circle__val {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; color: var(--ink); line-height: 1;
+}
+*/
 .qrs { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 18px 0; }
 .qr { background: #fff; border: 1px solid var(--border); border-radius: 18px; padding: 16px; text-align: center; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 10px; line-height: 1.4; }
 .qr img { width: 160px; height: 160px; }
@@ -2973,15 +3062,15 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
 <div class="card">
   <div class="metrics">
     <div class="metric">
-      <div class="metric__circle">${ringSvg(ai, '#8b5cf6')}<span class="metric__val"><span>${ai}</span><span>%</span></span></div>
+      <div class="metric__circle">${ringSvg(ai, '#8b5cf6', 10, 110)}<span class="metric__val"><span>${ai}</span><span>%</span></span></div>
       <div class="metric__label">ИИ-генерация</div>
     </div>
     <div class="metric metric--main">
-      <div class="metric__circle">${ringSvg(orig, '#2563eb', 12)}<span class="metric__val"><span>${orig}</span><span>%</span></span></div>
+      <div class="metric__circle">${ringSvg(orig, '#2563eb', 12, 110)}<span class="metric__val"><span>${orig}</span><span>%</span></span></div>
       <div class="metric__label">Оригинальность</div>
     </div>
     <div class="metric">
-      <div class="metric__circle">${ringSvg(matches, '#dc2626')}<span class="metric__val"><span>${matches}</span><span>%</span></span></div>
+      <div class="metric__circle">${ringSvg(matches, '#dc2626', 10, 110)}<span class="metric__val"><span>${matches}</span><span>%</span></span></div>
       <div class="metric__label">Совпадения</div>
     </div>
   </div>
@@ -3003,13 +3092,13 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
 <div class="card">
   <h2>Найденные заимствования</h2>
   <table class="src-table">
-    <thead><tr><th>№</th><th>Название работы</th><th>ID документа</th><th style="text-align:right;">Схожесть</th></tr></thead>
+    <thead><tr><th>№</th><th>Название работы</th><th>Тип работы</th><th>ID документа</th><th style="text-align:right;">Схожесть</th></tr></thead>
     <tbody>${sourcesHtml}</tbody>
   </table>
 </div>
 <div class="qrs">
-  <div class="qr"><img src="${qr(verifyUrl)}" alt="QR-код верификации"/>Для подтверждения подлинности и актуальности данной справки отсканируйте QR-код</div>
-  <div class="qr"><img src="${qr(docUrl)}" alt="QR-код оригинальной версии"/>Для просмотра оригинальной электронной версии документа отсканируйте QR-код</div>
+  <div class="qr"${qrVerify ? '' : ' hidden'}>${qrVerify ? `<img src="${qrVerify}" alt=""/>` : ''}Для подтверждения подлинности и актуальности данной справки отсканируйте QR-код</div>
+  <div class="qr"${qrDoc ? '' : ' hidden'}>${qrDoc ? `<img src="${qrDoc}" alt=""/>` : ''}Для просмотра оригинальной электронной версии документа отсканируйте QR-код</div>
 </div>
 <footer><span>antiplagiat.bsuir.by</span><span>${verifyUrl}</span></footer>
 <script>const __t=document.title;window.addEventListener('beforeprint',()=>{document.title=' ';});window.addEventListener('afterprint',()=>{document.title=__t;});window.addEventListener('load',()=>setTimeout(()=>window.print(),500));<\/script>
@@ -3034,23 +3123,24 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     document.getElementById('userCardList').innerHTML = `
       <dt>Логин</dt><dd><code>${escapeHtml(u.login)}</code></dd>
       <dt>Пароль</dt><dd>
+        ${u.passwordEditable === false ? '-' : `
         <code class="uc-password" data-pwd="${escapeHtml(u.password || '')}" data-revealed="0">••••••••</code>
         <button class="uc-icon-btn uc-pwd-toggle" type="button" aria-label="Показать пароль" title="Показать пароль">
           <i data-lucide="eye" class="icon-16"></i>
-        </button>
+        </button>`}
       </dd>
       <dt>Роль</dt><dd><span class="role-pill role-pill--${u.role}">${roleLabel[u.role]}</span></dd>
-      <dt>УО</dt><dd>${escapeHtml(u.uo || 'БГУИР')}</dd>
+      ${__isUniAdmin ? '' : `<dt>УО</dt><dd>${escapeHtml(u.uo || 'БГУИР')}</dd>`}
       <dt>Факультет</dt><dd>${escapeHtml(u.faculty)}</dd>
       <dt>Номер группы</dt><dd>${escapeHtml(u.group)}</dd>
       <dt>Количество проверок</dt><dd><b>${u.checks}</b></dd>
       <dt>Последний вход</dt><dd>${fmtDate(u.registered)}</dd>
     `;
-    // Wire password toggle
-    const pwdToggle = document.querySelector('.uc-pwd-toggle');
-    const pwdEl = document.querySelector('.uc-password');
+    const pwdToggle = userCardModal.querySelector('.uc-pwd-toggle');
+    const pwdEl = userCardModal.querySelector('.uc-password');
     if (pwdToggle && pwdEl) {
-      pwdToggle.addEventListener('click', () => {
+      pwdToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
         const revealed = pwdEl.dataset.revealed === '1';
         if (revealed) {
           pwdEl.textContent = '••••••••';
@@ -3063,7 +3153,6 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
           pwdToggle.setAttribute('aria-label', 'Скрыть пароль');
           pwdToggle.title = 'Скрыть пароль';
         }
-        // Swap icon
         const old = pwdToggle.querySelector('svg, i');
         if (old) {
           const next = document.createElement('i');
@@ -3074,6 +3163,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
         }
       });
     }
+    if (window.lucide) window.lucide.createIcons();
     // Filter user's submissions by surname match
     const surname = u.name.split(/\s+/)[0];
     const userSubs = submissions.filter((s) => s.author.includes(surname));
@@ -3190,6 +3280,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     pwdInput.disabled = false;
     if (readOnly) {
       pwdInput.type = 'text';
+      pwdInput.value = '-';
       if (pwdToggle) pwdToggle.style.display = 'none';
       if (hint) hint.hidden = false;
     } else {
@@ -3204,7 +3295,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     document.getElementById('userEditTitle').textContent = 'Редактировать пользователя';
     document.getElementById('ue-name').value = u.name;
     document.getElementById('ue-login').value = u.login;
-    document.getElementById('ue-password').value = u.password || '';
+    document.getElementById('ue-password').value = u.passwordEditable === false ? '-' : (u.password || '');
     setRoleSelect(u.role);
     setUeUO(u.uo || appConfig.uos[0] || 'БГУИР');
     setUeFaculty(u.faculty || '');
@@ -3602,17 +3693,6 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       });
     });
   }
-  function passwordCellHtml(password) {
-    const pwd = password || '';
-    return `
-      <div class="adm-table__pwd">
-        <code class="adm-table__pwd-val" data-pwd="${escapeHtml(pwd)}" data-revealed="0">${pwd ? '••••••••' : '—'}</code>
-        ${pwd ? `<button class="uc-icon-btn adm-table__pwd-toggle" type="button" aria-label="Показать пароль" title="Показать пароль">
-          <i data-lucide="eye" class="icon-16"></i>
-        </button>` : ''}
-      </div>
-    `;
-  }
   function renderUsers() {
     const q = usersQuery.toLowerCase().trim();
     const groupTerms = usersFilterGroupVal.toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
@@ -3626,7 +3706,8 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     const { slice, page } = paginate(filtered, usersPage);
     usersPage = page;
     if (!filtered.length) {
-      usersTbody.innerHTML = `<tr><td colspan="8" class="empty">Пользователи не найдены</td></tr>`;
+      const colSpan = __isUniAdmin ? 5 : 7;
+      usersTbody.innerHTML = `<tr><td colspan="${colSpan}" class="empty">Пользователи не найдены</td></tr>`;
     } else {
       usersTbody.innerHTML = slice.map((u) => {
         const isStaff = u.role === 'admin' || u.role === 'superadmin';
@@ -3637,7 +3718,6 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
             <div class="adm-table__sub">логин <code>${escapeHtml(u.login)}</code></div>
           </td>
           <td><span class="role-pill role-pill--${u.role}">${roleLabel[u.role] || u.role}</span></td>
-          <td>${passwordCellHtml(u.password)}</td>
           <td class="admin-col-uo">${isStaff ? '—' : escapeHtml(u.uo || 'БГУИР')}</td>
           <td>${isStaff ? '—' : escapeHtml(u.faculty || '—')}</td>
           <td>${isStaff ? '—' : escapeHtml(u.group || '—')}</td>
@@ -3656,33 +3736,6 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     }
     renderPagination(usersPagi, filtered.length, usersPage, (p) => { usersPage = p; renderUsers(); });
   }
-  usersTbody.addEventListener('click', (e) => {
-    const btn = e.target.closest('.adm-table__pwd-toggle');
-    if (!btn) return;
-    e.stopPropagation();
-    const pwdEl = btn.closest('.adm-table__pwd')?.querySelector('.adm-table__pwd-val');
-    if (!pwdEl || !pwdEl.dataset.pwd) return;
-    const revealed = pwdEl.dataset.revealed === '1';
-    if (revealed) {
-      pwdEl.textContent = '••••••••';
-      pwdEl.dataset.revealed = '0';
-      btn.setAttribute('aria-label', 'Показать пароль');
-      btn.title = 'Показать пароль';
-    } else {
-      pwdEl.textContent = pwdEl.dataset.pwd;
-      pwdEl.dataset.revealed = '1';
-      btn.setAttribute('aria-label', 'Скрыть пароль');
-      btn.title = 'Скрыть пароль';
-    }
-    const old = btn.querySelector('svg, i');
-    if (old) {
-      const next = document.createElement('i');
-      next.setAttribute('data-lucide', revealed ? 'eye' : 'eye-off');
-      next.className = 'icon-16';
-      old.replaceWith(next);
-      if (window.lucide) window.lucide.createIcons();
-    }
-  });
   document.getElementById('usersSearch').addEventListener('input', (e) => { usersQuery = e.target.value; usersPage = 1; renderUsers(); });
   renderUsers();
 
@@ -4237,19 +4290,23 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       // Avoid jitter: only update when diff > 8px (small reflows ignored)
       if (Math.abs(newH - curH) > 8) iframe.style.height = newH + 'px';
     } else if (e.data.type === 'ap-show-matches') {
-      openAdminMatches(e.data.documentId, e.data.matchPct ?? 0, e.data.aiPct ?? 0);
+      openAdminMatches(e.data.documentId, e.data.matchPct ?? 0);
+      // openAdminMatches(e.data.documentId, e.data.matchPct ?? 0, e.data.aiPct ?? 0);
     }
   });
 
   const renderAdminMatches = () => {
-    const isAi = adminMatchesTab === 'ai';
-    const dataset = isAi ? adminAiMatches : adminBorrowMatches;
+    // const isAi = adminMatchesTab === 'ai';
+    const isAi = false;
+    const dataset = adminBorrowMatches;
     const total = dataset.length;
-    adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}% · ИИ-генерация: ${adminMatchesPct.ai}%`;
+    adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}%`;
+    // adminMatchesSub.textContent = `Совпадения: ${adminMatchesPct.match}% · ИИ-генерация: ${adminMatchesPct.ai}%`;
     if (!total) {
-      const emptyMsg = (!isAi && adminMatchStats.matches > 0 && adminMatchStats.ml >= adminMatchStats.local)
+      const emptyMsg = adminMatchStats.matches > 0 && adminMatchStats.ml >= adminMatchStats.local
         ? `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${adminMatchStats.matches}%) сформирован семантическим анализом ML/Qdrant.`
-        : (isAi ? 'ИИ-фрагменты не обнаружены.' : 'Заимствования не обнаружены.');
+        : 'Заимствования не обнаружены.';
+        // : (isAi ? 'ИИ-фрагменты не обнаружены.' : 'Заимствования не обнаружены.');
       adminMatchesList.innerHTML = `<li class="uc-empty">${emptyMsg}</li>`;
       adminMatchesPagi.hidden = true;
       adminMatchesPagi.innerHTML = '';
@@ -4260,6 +4317,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     const start = (adminMatchesPage - 1) * ADMIN_MATCHES_PER_PAGE;
     const slice = dataset.slice(start, start + ADMIN_MATCHES_PER_PAGE);
     adminMatchesList.innerHTML = slice.map((m) => {
+      /*
       const cls = isAi ? 'matches-list__item matches-list__item--ai' : 'matches-list__item';
       if (isAi) {
         return `
@@ -4278,6 +4336,29 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
           <p class="matches-list__quote">«${escapeHtml(m.quote)}»</p>
           <div class="matches-list__meta"><span>ID документа <code>${escapeHtml(m.docId)}</code></span></div>
         </li>`;
+      */
+      return `
+        <li class="matches-list__item">
+          <div class="matches-list__head">
+            <span class="matches-list__source">${escapeHtml(m.docType || '—')}</span>
+            <span class="matches-list__percent">${m.percent}%</span>
+          </div>
+          <p class="matches-list__quote matches-list__quote--name">${escapeHtml(m.title || m.source || '—')}</p>
+          <div class="matches-list__meta"><span>ID документа <code>${escapeHtml(m.docId || '—')}</code></span></div>
+        </li>`;
+      /*
+      return `
+        <li class="matches-list__item">
+          ${adminBorrowCircleHtml(m.percent)}
+          <div class="matches-list__body">
+            <div class="matches-list__source">${escapeHtml(m.title || m.source || '—')}</div>
+            <div class="matches-list__meta">
+              <span>Тип: <b>${escapeHtml(m.docType || '—')}</b></span>
+              <span>ID: <code>${escapeHtml(m.docId || '—')}</code></span>
+            </div>
+          </div>
+        </li>`;
+      */
     }).join('');
     if (total <= ADMIN_MATCHES_PER_PAGE) {
       adminMatchesPagi.hidden = true; adminMatchesPagi.innerHTML = '';
@@ -4310,6 +4391,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
     if (e.key === 'Escape' && !adminMatchesModal.hidden) adminMatchesModal.hidden = true;
   });
   // Tab switch in admin matches modal
+  /*
   adminMatchesModal.querySelectorAll('.modal__tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       adminMatchesTab = tab.dataset.amtab;
@@ -4318,6 +4400,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       renderAdminMatches();
     });
   });
+  */
 
   function filterSubmissionsList() {
     const q = subQuery.toLowerCase().trim();

@@ -9,6 +9,37 @@ import type { GuardSessionPayload } from "./guard-session.types"
 
 export { GUARD_SESSION_COOKIE }
 
+type HeaderReader = { headers: { get(name: string): string | null } }
+
+/** Secure flag for session cookie: env override, then X-Forwarded-Proto, else non-production only. */
+export function resolveSessionCookieSecure(request?: HeaderReader): boolean {
+  const override = process.env.SESSION_COOKIE_SECURE?.trim().toLowerCase()
+  if (override === "false" || override === "0" || override === "no") return false
+  if (override === "true" || override === "1" || override === "yes") return true
+  const proto = request?.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase()
+  if (proto) return proto === "https"
+  return process.env.NODE_ENV !== "production"
+}
+
+export function sessionCookieOptions(
+  request: HeaderReader | undefined,
+  maxAge: number,
+): {
+  httpOnly: true
+  secure: boolean
+  sameSite: "lax"
+  path: "/"
+  maxAge: number
+} {
+  return {
+    httpOnly: true,
+    secure: resolveSessionCookieSecure(request),
+    sameSite: "lax",
+    path: "/",
+    maxAge,
+  }
+}
+
 function getSecret(): string {
   const s =
     process.env.SESSION_SECRET?.trim() ||

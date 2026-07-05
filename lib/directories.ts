@@ -28,6 +28,14 @@ const DEFAULT_INSTITUTIONS: Array<{ id: string; name: string; faculties: Array<{
       { id: "fkaf",  name: "Факультет компьютерного проектирования" },
     ],
   },
+  {
+    id: "bsu",
+    name: "БГУ",
+    faculties: [
+      { id: "bsu_mf", name: "Механико-математический факультет" },
+      { id: "bsu_ff", name: "Физический факультет" },
+    ],
+  },
 ]
 
 async function ensureSeeded(): Promise<void> {

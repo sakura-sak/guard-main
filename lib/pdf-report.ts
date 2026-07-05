@@ -11,6 +11,7 @@ import QRCode from "qrcode"
 import fs from "fs"
 import path from "path"
 import { buildReportQrLinks } from "@/lib/report-qr-links"
+import { getAllDocumentTypes } from "@/lib/document-types"
 
 const FONT = "DejaVu"
 
@@ -59,6 +60,7 @@ export interface CheckResultForReport {
   baseUrl?: string
 }
 
+/*
 const CATEGORY_LABELS: Record<string, string> = {
   diploma: "Дипломная работа",
   coursework: "Курсовая работа / Проект",
@@ -66,10 +68,20 @@ const CATEGORY_LABELS: Record<string, string> = {
   practice: "Практическое задание",
   uncategorized: "Не указано",
 }
+*/
 
-function categoryLabel(cat?: string): string {
+let categoryLabelMapCache: Map<string, string> | null = null
+
+async function getCategoryLabelMap(): Promise<Map<string, string>> {
+  if (categoryLabelMapCache) return categoryLabelMapCache
+  const types = await getAllDocumentTypes(false)
+  categoryLabelMapCache = new Map(types.map((t) => [t.name, t.displayName]))
+  return categoryLabelMapCache
+}
+
+function resolveCategoryLabel(map: Map<string, string>, cat?: string): string {
   if (!cat) return "Не указано"
-  return CATEGORY_LABELS[cat] ?? cat
+  return map.get(cat) ?? cat
 }
 
 function formatDate(s?: string): string {
@@ -91,7 +103,7 @@ function drawHeaderBlock(doc: jsPDF, margin: number, pageWidth: number): number 
   // Пытаемся загрузить логотип BSUIR (приоритет PNG, так как jsPDF лучше поддерживает PNG)
   let logoLoaded = false
   const possibleLogoPaths = [
-    "bsuir-logo.png",
+    "bsuir-logo.jpg",
     "bsuir.png",
     "logo-bsuir.png",
     "bsuir-logo.svg",
@@ -158,7 +170,7 @@ function drawFooterBlock(doc: jsPDF, pageWidth: number, pageHeight: number, marg
   // Пытаемся загрузить логотип BSUIR (приоритет PNG, так как jsPDF лучше поддерживает PNG)
   let logoLoaded = false
   const possibleLogoPaths = [
-    "bsuir-logo.png",
+    "bsuir-logo.jpg",
     "bsuir.png",
     "logo-bsuir.png",
     "bsuir-logo.svg",
@@ -216,6 +228,9 @@ function drawFooterBlock(doc: jsPDF, pageWidth: number, pageHeight: number, marg
  * Для черновика выдаётся упрощённый отчёт без QR‑кодов и верификации.
  */
 export async function generatePDFReport(result: CheckResultForReport): Promise<Uint8Array> {
+  const categoryLabels = await getCategoryLabelMap()
+  const categoryLabel = (cat?: string) => resolveCategoryLabel(categoryLabels, cat)
+
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
   doc.setProperties({
     title: "Справка о результатах проверки на заимствования",
@@ -346,15 +361,17 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
       ? Math.round(Math.max(...sourcesSorted.map((s) => s.similarity)) * 100) / 100
       : null
 
-  const fromStoredUniqueness = Math.round(result.uniquenessPercent * 100) / 100
-  const impliedMatchFromStored = Math.round((100 - result.uniquenessPercent) * 100) / 100
+  const localPlag = topLocalShare ?? 0
+  const mlPlag = Math.round((result.plagiarismPercentMl ?? 0) * 100) / 100
+  const storedUniq =
+    typeof result.uniquenessPercent === "number" && Number.isFinite(result.uniquenessPercent)
+      ? Math.round(result.uniquenessPercent * 100) / 100
+      : null
 
-  // Полосы «Совпадения / Оригинальность»: если есть перечень работ — совпадают с максимальной долей в таблице;
-  // иначе берём сохранённые uniqueness/originality (в т.ч. отчёт без списка, восстановленный из БД).
-  const matchesPercent =
-    topLocalShare != null ? topLocalShare : impliedMatchFromStored
+  // Те же метрики, что в UI и /api/check: оригинальность из БД, заимствования = max(local, ML).
   const origPercent =
-    topLocalShare != null ? Math.round((100 - topLocalShare) * 100) / 100 : fromStoredUniqueness
+    storedUniq != null ? storedUniq : Math.round((100 - Math.max(localPlag, mlPlag)) * 100) / 100
+  const matchesPercent = Math.round((100 - origPercent) * 100) / 100
 
   const aiPercent = Math.round((result.aiPercentMl ?? 0) * 100) / 100
 
@@ -568,16 +585,16 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
   doc.text("Источники", margin, y)
   y += 8
 
-  const colNo = 12
-  const colAuthors = 28
-  const colShare = 20
-  const colSource = pageWidth - margin - colNo - colAuthors - colShare - 6
+  const colNo = 10
+  const colType = 38
+  const colId = 22
+  const colShare = 22
+  const colTitle = pageWidth - margin - colNo - colType - colId - colShare - 8
   const rowH = 7
   const headY = y
 
   doc.setFontSize(9)
   doc.setFont(FONT, "bold")
-  // Линии над и под строкой заголовка таблицы в общем стиле (слегка голубые)
   const headerTopY = headY - 3.5
   const headerBottomY = headY + 3.5
   doc.setDrawColor(230, 235, 246)
@@ -585,12 +602,12 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
   doc.line(margin, headerTopY, pageWidth - margin, headerTopY)
   doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY)
 
-  // Текст заголовка, выровненный по центру между линиями
   const headerTextY = headY + 0.1
   doc.text("№", margin + colNo / 2, headerTextY, { align: "center" })
-  doc.text("Авторы", margin + colNo + colAuthors / 2, headerTextY, { align: "center" })
-  doc.text("Доля", margin + colNo + colAuthors + colShare / 2, headerTextY, { align: "center" })
-  doc.text("Источник", margin + colNo + colAuthors + colShare + colSource / 2, headerTextY, {
+  doc.text("Название", margin + colNo + colTitle / 2, headerTextY, { align: "center" })
+  doc.text("Тип", margin + colNo + colTitle + colType / 2, headerTextY, { align: "center" })
+  doc.text("ID", margin + colNo + colTitle + colType + colId / 2, headerTextY, { align: "center" })
+  doc.text("Схожесть", margin + colNo + colTitle + colType + colId + colShare / 2, headerTextY, {
     align: "center",
   })
   y += rowH + 2
@@ -604,17 +621,22 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
         doc.addPage()
         y = margin
       }
-      const authorMark = (s.userId || s.author || "—").toString().slice(0, 14)
       doc.text(String(idx + 1), margin + colNo / 2, y + 0.5, { align: "center" })
-      doc.text(authorMark, margin + colNo + 2, y + 0.5)
-      doc.text(formatPercent(s.similarity), margin + colNo + colAuthors + colShare / 2, y + 0.5, {
-        align: "center",
+      const title = (s.title || "—").slice(0, 48)
+      doc.text(title, margin + colNo + 2, y + 0.5, { maxWidth: colTitle - 4 })
+      doc.text(categoryLabel(s.category).slice(0, 22), margin + colNo + colTitle + 2, y + 0.5, {
+        maxWidth: colType - 4,
       })
-      const title = (s.title || "—").slice(0, 55)
-      doc.text(title, margin + colNo + colAuthors + colShare + 2, y + 0.5)
+      doc.text(String(s.id), margin + colNo + colTitle + colType + 2, y + 0.5)
+      doc.text(
+        `${formatPercent(s.similarity)}%`,
+        margin + colNo + colTitle + colType + colId + colShare / 2,
+        y + 0.5,
+        { align: "center" },
+      )
       y += rowH + 2
     })
-  } else if (impliedMatchFromStored > 0.5 || (result.plagiarismPercentMl ?? 0) > 0.5) {
+  } else if (matchesPercent > 0.5 || (result.plagiarismPercentMl ?? 0) > 0.5) {
     // Нельзя утверждать «совпадений нет», если в блоке результатов ненулевые метрики, а список просто не передан (напр. PDF из профиля).
     doc.setFontSize(8)
     const ml = result.plagiarismPercentMl
@@ -629,9 +651,10 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
     doc.setFontSize(9)
   } else {
     doc.text("1", margin + colNo / 2, y + 0.5, { align: "center" })
-    doc.text("—", margin + colNo + 2, y + 0.5)
-    doc.text("—", margin + colNo + colAuthors + colShare / 2, y + 0.5, { align: "center" })
-    doc.text("Совпадений не найдено", margin + colNo + colAuthors + colShare + 2, y + 0.5)
+    doc.text("Совпадений не найдено", margin + colNo + 2, y + 0.5)
+    doc.text("—", margin + colNo + colTitle + colType / 2, y + 0.5, { align: "center" })
+    doc.text("—", margin + colNo + colTitle + colType + 2, y + 0.5)
+    doc.text("—", margin + colNo + colTitle + colType + colId + colShare / 2, y + 0.5, { align: "center" })
     y += rowH + 2
   }
   y += 6

@@ -1,7 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDocumentByIdFromDb } from "@/lib/local-storage"
 import { buildReportQrLinks, resolvePublicBaseUrl } from "@/lib/report-qr-links"
+import { qrPngDataUrl } from "@/lib/report-qr-images"
 import { requireSessionApi } from "@/lib/require-session-api"
+
+function resolveBaseUrlForLinks(request: NextRequest): string {
+  const fromHelper = resolvePublicBaseUrl(request)
+  if (fromHelper) return fromHelper
+  const host = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
+    ?? request.headers.get("host")?.trim()
+  if (!host) return ""
+  const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() === "https" ? "https" : "http"
+  return `${proto}://${host}`.replace(/\/$/, "")
+}
 
 /**
  * GET /api/report/:documentId/links
@@ -32,16 +43,25 @@ export async function GET(
       return NextResponse.json({ success: false, error: "Нет доступа" }, { status: 403 })
     }
 
-    const baseUrl = resolvePublicBaseUrl(request)
+    const baseUrl = resolveBaseUrlForLinks(request)
     if (!baseUrl) {
       return NextResponse.json(
-        { success: false, error: "Не задан публичный URL (NEXT_PUBLIC_APP_URL или REPORT_PUBLIC_BASE_URL)" },
+        { success: false, error: "Не задан публичный URL (Host / NEXT_PUBLIC_APP_URL / REPORT_PUBLIC_BASE_URL)" },
         { status: 500 },
       )
     }
 
     const links = buildReportQrLinks(id, baseUrl)
-    return NextResponse.json({ success: true, ...links })
+    const [verifyQrImage, originalQrImage] = await Promise.all([
+      qrPngDataUrl(links.verifyUrl),
+      qrPngDataUrl(links.originalUrl),
+    ])
+    return NextResponse.json({
+      success: true,
+      ...links,
+      verifyQrImage,
+      originalQrImage,
+    })
   } catch (error) {
     console.error("Report links error:", error)
     return NextResponse.json({ success: false, error: "Не удалось сформировать ссылки" }, { status: 500 })

@@ -1,16 +1,56 @@
 import type { NextRequest } from "next/server"
 import { signDocumentAccess } from "@/lib/report-access"
 
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/$/, "")
+}
+
+function isLoopback(urlOrHostish: string): boolean {
+  const s = urlOrHostish.toLowerCase()
+  return s.includes("localhost") || s.includes("127.0.0.1")
+}
+
 /** Публичный базовый URL для QR (без завершающего /). */
 export function resolvePublicBaseUrl(request?: NextRequest): string {
-  const fromEnv =
-    process.env.REPORT_PUBLIC_BASE_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim()
-  if (fromEnv) return fromEnv.replace(/\/$/, "")
-  if (request) {
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host")
-    const proto = request.headers.get("x-forwarded-proto") ?? "http"
-    if (host) return `${proto === "https" ? "https" : "http"}://${host}`.replace(/\/$/, "")
+  const reportPublic = process.env.REPORT_PUBLIC_BASE_URL?.trim()
+  if (reportPublic && !isLoopback(reportPublic)) {
+    return stripTrailingSlash(reportPublic)
   }
+
+  if (request) {
+    const hostRaw = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
+      ?? request.headers.get("host")?.trim()
+    const protoRaw = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ?? "http"
+    const proto = protoRaw === "https" ? "https" : "http"
+    if (hostRaw) {
+      const withoutDefaultPort =
+        proto === "http" && hostRaw.endsWith(":80")
+          ? hostRaw.slice(0, -3)
+          : proto === "https" && hostRaw.endsWith(":443")
+            ? hostRaw.slice(0, -4)
+            : hostRaw
+      if (!isLoopback(withoutDefaultPort)) {
+        return stripTrailingSlash(`${proto}://${withoutDefaultPort}`)
+      }
+    }
+  }
+
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (fromEnv && !isLoopback(fromEnv)) {
+    return stripTrailingSlash(fromEnv)
+  }
+
+  // Локальная разработка: QR ведут на тот же host, с которого открыт сайт
+  if (request) {
+    const hostRaw = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
+      ?? request.headers.get("host")?.trim()
+    const protoRaw = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ?? "http"
+    const proto = protoRaw === "https" ? "https" : "http"
+    if (hostRaw) {
+      return stripTrailingSlash(`${proto}://${hostRaw}`)
+    }
+  }
+
   return ""
 }
 

@@ -1,11 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserByUsername, updateLastLogin, registerUser } from "@/lib/user-storage"
+import { getUserByUsername, updateLastLogin, registerUser, updateUserProfile } from "@/lib/user-storage"
 import { logInfo, logError } from "@/lib/logger"
 import { authenticateLDAP, mapLDAPUserToUser, getLDAPConfig } from "@/lib/ldap"
 import type { UserRole } from "@/lib/auth"
-import { GUARD_SESSION_COOKIE, signGuardSessionCookie } from "@/lib/guard-session.node"
+import {
+  GUARD_SESSION_COOKIE,
+  sessionCookieOptions,
+  signGuardSessionCookie,
+} from "@/lib/guard-session.node"
 
 function jsonWithSessionCookie(
+  request: NextRequest,
   body: object,
   session: { username: string; role: string; additionalRoles?: UserRole[] },
 ): NextResponse {
@@ -15,13 +20,7 @@ function jsonWithSessionCookie(
     session.role as UserRole,
     session.additionalRoles,
   )
-  res.cookies.set(GUARD_SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  })
+  res.cookies.set(GUARD_SESSION_COOKIE, token, sessionCookieOptions(request, 60 * 60 * 24 * 7))
   return res
 }
 
@@ -44,21 +43,27 @@ export async function POST(request: NextRequest) {
       try {
         const ldapResult = await authenticateLDAP(normalizedUsername, normalizedPassword)
         
-        if (ldapResult.success && ldapResult.user) {
-          // LDAP аутентификация успешна
-          // Роль определяется автоматически на основе логина (только цифры = студент, есть буквы = преподаватель)
+          if (ldapResult.success && ldapResult.user) {
           const ldapUser = mapLDAPUserToUser(ldapResult.user)
           
-          // Проверяем, есть ли пользователь в локальной базе (для получения роли)
           const storedUser = await getUserByUsername(normalizedUsername)
           if (storedUser) {
-            // Если пользователь есть в локальной базе, используем его роль
             ldapUser.role = storedUser.role
             await updateLastLogin(normalizedUsername)
+            const profilePatch: { fullName?: string; email?: string; institution?: string } = {}
+            if (ldapUser.fullName?.trim() && ldapUser.fullName !== storedUser.fullName) {
+              profilePatch.fullName = ldapUser.fullName
+            }
+            if (ldapUser.email?.trim() && ldapUser.email !== storedUser.email) {
+              profilePatch.email = ldapUser.email
+            }
+            if (ldapUser.institution?.trim() && ldapUser.institution !== storedUser.institution) {
+              profilePatch.institution = ldapUser.institution
+            }
+            if (Object.keys(profilePatch).length > 0) {
+              await updateUserProfile(normalizedUsername, profilePatch)
+            }
           } else {
-            // Если пользователя нет в локальной базе, создаем запись с ролью по умолчанию
-            // Можно настроить определение роли на основе групп LDAP
-            // Для LDAP пользователей используем специальный маркер пароля, который не будет использоваться для локальной аутентификации
             const registerResult = await registerUser(
               normalizedUsername,
               "LDAP_AUTH_ONLY_USER_MARKER", // Специальный маркер для LDAP пользователей (достаточно длинный для валидации)
@@ -75,6 +80,7 @@ export async function POST(request: NextRequest) {
           logInfo("LDAP пользователь авторизован", normalizedUsername, ldapUser.role, "login")
 
           return jsonWithSessionCookie(
+            request,
             {
               success: true,
               user: {
@@ -110,6 +116,7 @@ export async function POST(request: NextRequest) {
       logInfo("Пользователь авторизован", normalizedUsername, storedUser.role, "login")
 
       return jsonWithSessionCookie(
+        request,
         {
           success: true,
           user: {

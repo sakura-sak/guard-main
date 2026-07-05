@@ -102,17 +102,14 @@ export async function POST(request: NextRequest) {
 
     if (!ml) {
       const url = process.env.ANALYSIS_SERVICE_URL?.trim() || "(not set)"
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            `ML analysis service is unavailable at ${url}. ` +
-            "Start: docker compose up -d analysis qdrant. " +
-            "Wait until http://localhost:8765/health shows ready:true (first start loads models for several minutes on CPU). " +
-            "If you use a local API key, set the same value in ANALYSIS_API_KEY (.env) and ANALYSIS_SERVICE_API_KEY (guard-main/.env.local).",
-        },
-        { status: 503 },
+      logError(
+        "ML analysis service unavailable",
+        `ANALYSIS_SERVICE_URL=${url}`,
+        gate.user.username,
+        undefined,
+        "check",
       )
+      return NextResponse.json({ success: false, error: "Произошла ошибка" }, { status: 503 })
     }
 
     const localPlagiarismPercent = roundPercent(
