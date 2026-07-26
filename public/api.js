@@ -78,7 +78,13 @@
    * Get catalog of academic document types.
    * @returns {{ ok, data: { success, types: [{ id, name, displayName }] } }}
    */
-  const getDocumentTypes = () => GET('/api/document-types');
+  const getDocumentTypes = (institutionId, institution) => {
+    const qs = new URLSearchParams();
+    if (institutionId) qs.set('institutionId', institutionId);
+    else if (institution) qs.set('institution', institution);
+    const q = qs.toString();
+    return GET(q ? `/api/document-types?${q}` : '/api/document-types');
+  };
 
   // ─── Check ────────────────────────────────────────────────────────────────
 
@@ -274,7 +280,7 @@
     if (matches > 0) {
       const viaMl = ml >= local && ml > 0;
       return [{
-        title: viaMl ? 'Семантический анализ (ML / Qdrant)' : 'Итоговая оценка',
+        title: viaMl ? 'Семантический анализ' : 'Итоговая оценка',
         // quote: viaMl
         //   ? `Конкретные работы в базе сравнения не найдены. Показатель «Совпадения» (${matches}%) сформирован векторным поиском.`
         //   : `Конкретные источники в таблице не найдены. Показатель «Совпадения»: ${matches}%.`,
@@ -377,7 +383,10 @@
   // ─── Admin: document types ────────────────────────────────────────────────
 
   /** Get all document types (admin). */
-  const getAdminDocumentTypes = () => GET('/api/admin/document-types');
+  const getAdminDocumentTypes = (institutionId) => {
+    const q = institutionId ? `?institutionId=${encodeURIComponent(institutionId)}` : '';
+    return GET(`/api/admin/document-types${q}`);
+  };
 
   /** Create a new document type (admin). */
   const createAdminDocumentType = (data) => POST('/api/admin/document-types', data);

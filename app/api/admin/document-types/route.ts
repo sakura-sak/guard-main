@@ -1,13 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createDocumentType, getAllDocumentTypes } from "@/lib/document-types"
 import { logError, logInfo } from "@/lib/logger"
-import { requireAdminApi, requireSuperAdminApi } from "@/lib/require-admin-api"
+import { assertInstitutionAccess, requireAdminApi, requireSuperAdminApi } from "@/lib/require-admin-api"
 
 export async function GET(request: NextRequest) {
   const gate = await requireAdminApi(request)
   if (!gate.ok) return gate.response
   try {
-    const types = await getAllDocumentTypes(gate.isSuperAdmin)
+    const institutionId = request.nextUrl.searchParams.get("institutionId")?.trim() || null
+    if (gate.isSuperAdmin) {
+      const types = await getAllDocumentTypes(true, institutionId)
+      return NextResponse.json({ success: true, types })
+    }
+    const types = await getAllDocumentTypes(false, gate.institutionId)
     return NextResponse.json({ success: true, types })
   } catch (error) {
     console.error("Error fetching document types:", error)
@@ -20,8 +25,17 @@ export async function POST(request: NextRequest) {
   if (!gate.ok) return gate.response
   try {
     const body = await request.json()
-    const { displayName, name, description, isActive } = body
-    const result = await createDocumentType({ displayName, name, description, isActive }, gate.username)
+    const { displayName, name, description, isActive, institutionId } = body
+    if (!institutionId) {
+      return NextResponse.json({ success: false, error: "Укажите учебное заведение" }, { status: 400 })
+    }
+    const denied = assertInstitutionAccess(gate, String(institutionId))
+    if (denied) return denied
+
+    const result = await createDocumentType(
+      { institutionId: String(institutionId), displayName, name, description, isActive },
+      gate.username,
+    )
 
     if (!result.success) {
       return NextResponse.json({ success: false, error: result.error }, { status: 400 })
@@ -30,6 +44,7 @@ export async function POST(request: NextRequest) {
     logInfo("Тип работы добавлен", gate.username, "admin", "add_document_type", {
       typeId: result.type?.id,
       displayName: result.type?.displayName,
+      institutionId: result.type?.institutionId,
     })
 
     return NextResponse.json({ success: true, type: result.type })

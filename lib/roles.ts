@@ -62,6 +62,9 @@ export function profileEditPolicy(
   if (!isStudentOrTeacher(role)) {
     return { institution: false, faculty: false, group: false, fullName: true, email: true }
   }
+  if (!institutionId && !institutionName?.trim()) {
+    return { institution: true, faculty: true, group: true, fullName: false, email: false }
+  }
   if (isBsuirInstitution(institutionId, institutionName)) {
     return { institution: false, faculty: true, group: true, fullName: false, email: false }
   }
@@ -76,8 +79,15 @@ export function needsProfileCompletion(
   group?: string | null,
 ): boolean {
   if (!isStudentOrTeacher(role)) return false
-  if (!isBsuirInstitution(institutionId, institutionName)) {
-    return !faculty?.trim() || !group?.trim()
-  }
+  if (!institutionId && !institutionName?.trim()) return true
   return !faculty?.trim() || !group?.trim()
+}
+
+export function canSelfCompleteProfile(
+  role: UserRole | string,
+  institutionId?: string | null,
+  institutionName?: string | null,
+): boolean {
+  if (!isStudentOrTeacher(role)) return false
+  return isBsuirInstitution(institutionId, institutionName) || !institutionId
 }

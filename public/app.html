@@ -290,6 +290,7 @@ a { color: inherit; text-decoration: none; }
 }
 .stage-card__head h3 { margin: 0; font-size: 22px; color: var(--ink); }
 .stage-card__sub { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.stage-card__sub .text-highlight-blue { color: #2563eb; font-weight: 700; }
 
 .stage-form { display: flex; flex-direction: column; gap: 18px; }
 .dropzone {
@@ -953,7 +954,7 @@ a { color: inherit; text-decoration: none; }
       <div class="stage-card">
         <div class="stage-card__head">
           <h3>История</h3>
-          <p class="stage-card__sub">История финальных и черновых версий работ.</p>
+          <p class="stage-card__sub">История финальных и черновых версий работ. Формирование и просмотр <strong class="text-highlight-blue">отчёта</strong> доступны исключительно для <strong class="text-highlight-blue">финальной версии</strong>.</p>
         </div>
         <ul class="history-list" id="historyList">
           <li class="history-list__empty">Пока нет сохранённых финальных версий.</li>
@@ -1236,10 +1237,13 @@ a { color: inherit; text-decoration: none; }
     document.querySelectorAll('[data-edit="group"]').forEach((el) => { el.hidden = !pe.group; });
     const uoField = document.getElementById('uoSelectField');
     const uoReadonly = document.getElementById('uoReadonly');
-    if (__currentUser.isBsuirUser && uoField && uoReadonly) {
-      uoField.hidden = true;
-      uoReadonly.hidden = false;
-      uoReadonly.textContent = __currentUser.institution || 'БГУИР';
+    const showUoReadonly = Boolean(__currentUser.institution) && !pe.institution;
+    if (uoField && uoReadonly) {
+      uoField.hidden = showUoReadonly;
+      uoReadonly.hidden = !showUoReadonly;
+      if (showUoReadonly) {
+        uoReadonly.querySelector('.field__static').textContent = __currentUser.institution || '—';
+      }
     }
   };
 
@@ -1304,33 +1308,45 @@ a { color: inherit; text-decoration: none; }
 
   const maybeOpenCompleteProfile = () => {
     if (__isAdmin || !__directoriesLoaded) return;
-    if (__currentUser.needsProfileCompletion) openCompleteProfile();
-    else if (__currentUser.profileBlocked) {
+    if (__currentUser.profileBlocked) {
       console.warn('Profile incomplete — contact your university administrator.');
+      return;
+    }
+    if (__currentUser.needsProfileCompletion && __currentUser.canSelfCompleteProfile) {
+      openCompleteProfile('init');
     }
   };
 
-  // Load real config asynchronously; UI will refresh when ready
-  Promise.all([ApApi.getDirectories(), ApApi.getDocumentTypes()]).then(([dirRes, typesRes]) => {
-    if (dirRes.ok && dirRes.data.institutions) {
-      __institutions = dirRes.data.institutions;
-      appConfig.uos = __institutions.map((i) => i.name);
-      appConfig.facultiesByUo = {};
-      __institutions.forEach((i) => {
-        appConfig.facultiesByUo[i.name] = (i.faculties || []).map((f) => f.name);
-      });
+  const loadDirectoriesAndTypes = async () => {
+    try {
+      const [dirRes, typesRes] = await Promise.all([
+        ApApi.getDirectories(),
+        ApApi.getDocumentTypes(__currentUser?.institutionId, __currentUser?.institution),
+      ]);
+      if (dirRes.ok && dirRes.data.institutions) {
+        __institutions = dirRes.data.institutions;
+        appConfig.uos = __institutions.map((i) => i.name);
+        appConfig.facultiesByUo = {};
+        __institutions.forEach((i) => {
+          appConfig.facultiesByUo[i.name] = (i.faculties || []).map((f) => f.name);
+        });
+      }
+      if (typesRes.ok && typesRes.data.types && typesRes.data.types.length) {
+        appConfig.types = typesRes.data.types.map((t) => t.displayName || t.name);
+        populateWorkTypeOptions(typesRes.data.types);
+        if (ApApi.setCategoryLabelsFromTypes) ApApi.setCategoryLabelsFromTypes(typesRes.data.types);
+      }
+    } catch (err) {
+      console.warn('Failed to load directories:', err);
+    } finally {
+      __directoriesLoaded = true;
+      populateUoSelect();
+      refreshProfileUi();
+      applyProfilePolicyUi();
+      maybeOpenCompleteProfile();
     }
-    __directoriesLoaded = true;
-    populateUoSelect();
-    if (typesRes.ok && typesRes.data.types && typesRes.data.types.length) {
-      appConfig.types = typesRes.data.types.map((t) => t.displayName || t.name);
-      populateWorkTypeOptions(typesRes.data.types);
-      if (ApApi.setCategoryLabelsFromTypes) ApApi.setCategoryLabelsFromTypes(typesRes.data.types);
-    }
-    refreshProfileUi();
-    applyProfilePolicyUi();
-    maybeOpenCompleteProfile();
-  });
+  };
+
   const refreshProfileUi = () => {
     const p = loadProfile();
     const profileList = document.querySelector('#profileModal .profile-list');
@@ -1390,7 +1406,7 @@ a { color: inherit; text-decoration: none; }
   };
   const populateFacultySelect = (uo) => {
     const inst = findInstitutionByName(uo);
-    const faculties = inst?.faculties || [];
+    const faculties = (inst?.faculties || []).filter((f) => f.isActive !== false);
     if (!faculties.length) {
       facultySelectMenu.innerHTML = '<li class="custom-select__option" role="option" data-value="" disabled>Загрузка справочника…</li>';
       return;
@@ -1410,8 +1426,11 @@ a { color: inherit; text-decoration: none; }
     if (window.lucide) window.lucide.createIcons();
   };
   const populateUoSelect = () => {
-    uoSelectMenu.innerHTML = appConfig.uos.map((v) => `
-      <li class="custom-select__option" role="option" data-value="${v}">${v}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>
+    const uos = __institutions.length
+      ? __institutions.map((i) => i.name)
+      : appConfig.uos;
+    uoSelectMenu.innerHTML = uos.map((v) => `
+      <li class="custom-select__option" role="option" data-value="${escAttr(v)}">${v}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>
     `).join('');
     uoSelectMenu.querySelectorAll('.custom-select__option').forEach((opt) => {
       opt.addEventListener('click', () => {
@@ -1451,16 +1470,31 @@ a { color: inherit; text-decoration: none; }
   const completeProfileSub = document.getElementById('completeProfileSub');
   const completeProfileClose = document.getElementById('completeProfileClose');
   const completeProfileTitle = document.getElementById('completeProfileTitle');
+  const groupInput = document.getElementById('groupInput');
+  const groupError = document.getElementById('groupError');
   refreshProfileUi();
   applyProfilePolicyUi();
 
   const openCompleteProfile = (mode = 'init') => {
-    if (!__currentUser.canSelfCompleteProfile) return;
+    if (__isAdmin) return;
+    if (mode === 'init') {
+      if (__currentUser.profileBlocked || !__currentUser.needsProfileCompletion) return;
+      if (!__currentUser.canSelfCompleteProfile) return;
+    } else if (!__currentUser.canSelfCompleteProfile && !__currentUser.profileEditable?.faculty) {
+      return;
+    }
+    applyProfilePolicyUi();
     const p = loadProfile();
-    const uoVal = __currentUser.institution || p.uo || appConfig.uos[0] || 'БГУИР';
-    setSelectValue(uoSelect, uoVal, 'Выберите УО');
-    populateFacultySelect(uoVal);
-    const inst = findInstitutionByName(uoVal);
+    const pe = __currentUser.profileEditable || {};
+    const uoVal = pe.institution
+      ? (uoSelect.dataset.value || appConfig.uos[0] || '')
+      : (__currentUser.institution || p.uo || '');
+    if (pe.institution) {
+      setSelectValue(uoSelect, uoVal || appConfig.uos[0] || '', 'Выберите УО');
+    }
+    const uoForFac = (pe.institution ? (uoVal || appConfig.uos[0]) : __currentUser.institution) || p.uo || appConfig.uos[0] || '';
+    populateFacultySelect(uoForFac);
+    const inst = findInstitutionByName(uoForFac);
     const facsForUo = inst?.faculties || [];
     const currentFac = p.faculty?.trim();
     const matchedFac = currentFac
@@ -1485,10 +1519,14 @@ a { color: inherit; text-decoration: none; }
     completeProfileModal.querySelector('.modal__backdrop').dataset.close = canClose ? '' : 'disabled';
     if (mode === 'edit') {
       completeProfileTitle.textContent = 'Редактировать профиль';
-      completeProfileSub.textContent = 'Обновите факультет или номер группы.';
+      completeProfileSub.textContent = pe.institution
+        ? 'Обновите учебное заведение, факультет или номер группы.'
+        : 'Обновите факультет или номер группы.';
     } else {
       completeProfileTitle.textContent = 'Дозаполните профиль';
-      completeProfileSub.textContent = 'Перед первой проверкой укажите факультет и номер группы.';
+      completeProfileSub.textContent = pe.institution
+        ? 'Перед первой проверкой укажите ваше УО, факультет и номер группы.'
+        : 'Перед первой проверкой укажите факультет и номер группы.';
     }
     completeProfileModal.hidden = false;
     document.body.style.overflow = 'hidden';
@@ -1497,6 +1535,7 @@ a { color: inherit; text-decoration: none; }
     completeProfileModal.hidden = true;
     document.body.style.overflow = '';
   };
+  loadDirectoriesAndTypes();
   // Close handlers (only fire when modal is in edit mode → close button shown)
   completeProfileClose.addEventListener('click', closeCompleteProfile);
   completeProfileModal.querySelector('.modal__backdrop').addEventListener('click', () => {
@@ -1514,19 +1553,18 @@ a { color: inherit; text-decoration: none; }
       openCompleteProfile('edit');
     });
   });
-  const groupInput = document.getElementById('groupInput');
-  const groupError = document.getElementById('groupError');
   groupInput.addEventListener('input', () => {
     groupInput.classList.remove('has-error');
     groupError.hidden = true;
   });
   completeProfileForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const uoVal = __currentUser.institution || uoSelect.dataset.value;
+    const pe = __currentUser.profileEditable || {};
+    const uoVal = pe.institution ? uoSelect.dataset.value : (__currentUser.institution || uoSelect.dataset.value);
     const facultyVal = facultySelect.dataset.value;
     const groupVal = groupInput.value.trim();
     let ok = true;
-    if (!__currentUser.isBsuirUser && !uoVal) {
+    if (pe.institution && !uoVal) {
       document.getElementById('uoError').hidden = false;
       uoSelect.classList.add('has-error');
       ok = false;
@@ -1551,17 +1589,21 @@ a { color: inherit; text-decoration: none; }
     try {
       const facultyId = facultySelect.dataset.value;
       const facultyName = facultySelect.dataset.label || '';
-      await saveProfile({ uo: uoVal, facultyId, faculty: facultyName, group: groupVal });
+      const patch = { group: groupVal };
+      if (__currentUser.profileEditable?.institution && uoVal) patch.uo = uoVal;
+      if (facultyId) {
+        patch.facultyId = facultyId;
+        patch.faculty = facultyName;
+      }
+      await saveProfile(patch);
       refreshProfileUi();
+      applyProfilePolicyUi();
       closeCompleteProfile();
     } catch (err) {
       completeProfileError.textContent = err?.message || 'Не удалось сохранить профиль';
       completeProfileError.hidden = false;
     }
   });
-  if (!__isAdmin) {
-    maybeOpenCompleteProfile();
-  }
 
   // Logout
   const doLogout = async (e) => {
@@ -2161,8 +2203,8 @@ a { color: inherit; text-decoration: none; }
     }));
     if (!borrowMatchesData.length && matches > 0 && ml >= local) {
       borrowMatchesData = [{
-        source: 'Семантический анализ (ML / Qdrant)',
-        title: 'Семантический анализ (ML / Qdrant)',
+        source: 'Семантический анализ',
+        title: 'Семантический анализ',
         percent: matches,
         docId: '—',
         docType: '—',

@@ -1,4 +1,4 @@
-import { getAllDocumentTypes } from "@/lib/document-types"
+import { getAllDocumentTypes, getDocumentTypesForInstitution } from "@/lib/document-types"
 import type { DocumentMatchesPayload } from "@/lib/document-matches-data"
 
 export type ReportPrintSourceRow = {
@@ -9,8 +9,10 @@ export type ReportPrintSourceRow = {
   percentLabel: string
 }
 
-async function categoryLabelMap(): Promise<Map<string, string>> {
-  const types = await getAllDocumentTypes()
+async function categoryLabelMap(institutionId?: string | null): Promise<Map<string, string>> {
+  const types = institutionId
+    ? await getDocumentTypesForInstitution(institutionId, true)
+    : await getAllDocumentTypes(true)
   const map = new Map<string, string>()
   for (const t of types) {
     if (t.name) map.set(t.name, t.displayName || t.name)
@@ -51,7 +53,7 @@ export function buildReportTableRows(
   if (matches > 0) {
     const viaMl = ml >= local && ml > 0
     return [{
-      title: viaMl ? "Семантический анализ (ML / Qdrant)" : "Итоговая оценка",
+      title: viaMl ? "Семантический анализ" : "Итоговая оценка",
       docType: "—",
       docId: "—",
       percent: matches,
@@ -77,8 +79,11 @@ export async function buildReportPrintSources(data: DocumentMatchesPayload): Pro
   })
 }
 
-export async function resolveDocumentTypeLabel(category?: string | null): Promise<string> {
+export async function resolveDocumentTypeLabel(
+  category?: string | null,
+  institutionId?: string | null,
+): Promise<string> {
   if (!category) return "—"
-  const labels = await categoryLabelMap()
+  const labels = await categoryLabelMap(institutionId)
   return labels.get(category) || category
 }

@@ -108,13 +108,20 @@ async function seedInstitutions() {
   return institutionIds
 }
 
-async function seedDocumentTypes() {
-  for (const t of DOCUMENT_TYPES) {
-    await prisma.documentType.upsert({
-      where: { name: t.name },
-      update: { displayName: t.displayName, isActive: true },
-      create: { name: t.name, displayName: t.displayName, isActive: true },
-    })
+async function seedDocumentTypes(institutionIds) {
+  for (const institutionId of Object.values(institutionIds)) {
+    for (const t of DOCUMENT_TYPES) {
+      await prisma.documentType.upsert({
+        where: { institutionId_name: { institutionId, name: t.name } },
+        update: { displayName: t.displayName, isActive: true },
+        create: {
+          institutionId,
+          name: t.name,
+          displayName: t.displayName,
+          isActive: true,
+        },
+      })
+    }
   }
 }
 
@@ -144,7 +151,7 @@ async function seedUsers(institutionIds) {
 
 async function main() {
   const institutionIds = await seedInstitutions()
-  await seedDocumentTypes()
+  await seedDocumentTypes(institutionIds)
   await seedUsers(institutionIds)
   console.log("Seed completed: institutions, document types, default users.")
 }

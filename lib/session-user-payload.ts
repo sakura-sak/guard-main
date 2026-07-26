@@ -1,6 +1,8 @@
 import type { StoredUser } from "./user-storage"
 import {
+  canSelfCompleteProfile as checkCanSelfCompleteProfile,
   isBsuirInstitution,
+  needsProfileCompletion as checkNeedsProfileCompletion,
   profileEditPolicy,
   type ProfileEditPolicy,
 } from "./roles"
@@ -27,8 +29,15 @@ export type SessionUserPayload = {
 export function buildSessionUserPayload(user: StoredUser): SessionUserPayload {
   const policy = profileEditPolicy(user.role, user.institutionId, user.institution)
   const bsuir = isBsuirInstitution(user.institutionId, user.institution)
-  const incomplete = !user.faculty?.trim() || !user.group?.trim()
   const studentOrTeacher = user.role === "student" || user.role === "teacher"
+  const incomplete = checkNeedsProfileCompletion(
+    user.role,
+    user.institutionId,
+    user.institution,
+    user.faculty,
+    user.group,
+  )
+  const selfComplete = checkCanSelfCompleteProfile(user.role, user.institutionId, user.institution)
   return {
     username: user.username,
     role: user.role,
@@ -41,8 +50,8 @@ export function buildSessionUserPayload(user: StoredUser): SessionUserPayload {
     group: user.group,
     isBsuirUser: bsuir,
     profileEditable: policy,
-    needsProfileCompletion: studentOrTeacher && bsuir && incomplete,
-    profileBlocked: studentOrTeacher && !bsuir && incomplete,
-    canSelfCompleteProfile: studentOrTeacher && bsuir,
+    needsProfileCompletion: incomplete,
+    profileBlocked: studentOrTeacher && incomplete && !selfComplete,
+    canSelfCompleteProfile: selfComplete,
   }
 }

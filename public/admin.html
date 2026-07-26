@@ -773,6 +773,20 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
 }
 .modal__dialog--md { width: min(720px, 94%); }
 .modal__dialog--lg { width: min(960px, 94%); }
+#userEditModal .modal__dialog {
+  width: min(720px, 94%);
+  min-height: 480px;
+  overflow: visible;
+}
+#userEditModal .user-edit-form { overflow: visible; }
+#userEditModal .custom-select.is-open { z-index: 5; }
+#userEditModal .custom-select__menu {
+  z-index: 300;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+#userEditModal .ue-field.is-hidden { display: none !important; }
 #settingsModal .modal__dialog {
   width: min(1180px, 96%);
   max-height: 92vh;
@@ -1950,7 +1964,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   <div class="modal__dialog modal__dialog--lg">
     <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
     <h2 class="modal__title" id="settingsTitle">Настройки справочников</h2>
-    <p class="user-card__sub" style="margin-bottom: 18px;">Управление списками УО, факультетов и типов работ. Деактивация возможна только если запись не используется. Изменения применяются после обновления страницы.</p>
+    <p class="user-card__sub" id="settingsIntro" style="margin-bottom: 18px;">Управление справочниками учебных заведений.</p>
     <div class="settings-modal__body">
     <div class="settings-grid">
       <div class="settings-section" id="settingsUoSection">
@@ -1980,7 +1994,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       </div>
       <div class="settings-section" id="settingsTypesSection">
         <div class="settings-section__head">
-          <h3 class="settings-section__title">Типы работ</h3>
+          <h3 class="settings-section__title">Типы работ <span class="settings-section__sub" id="settingsTypesScope"></span></h3>
           <button class="action-btn" type="button" data-export="type"><i data-lucide="download" class="icon-16"></i> Экспорт</button>
           <button class="action-btn" type="button" data-import="type"><i data-lucide="upload" class="icon-16"></i> Импорт</button>
         </div>
@@ -2104,7 +2118,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           </ul>
         </div>
       </div>
-      <div class="ue-field">
+      <div class="ue-field" id="ue-uo-field">
         <span class="ue-label">УО</span>
         <div class="custom-select" id="ue-uo" data-value="">
           <button class="custom-select__trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
@@ -2114,7 +2128,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           <ul class="custom-select__menu" id="ue-uo-menu" role="listbox" hidden></ul>
         </div>
       </div>
-      <div class="ue-field">
+      <div class="ue-field" id="ue-faculty-field">
         <span class="ue-label">Факультет</span>
         <div class="custom-select" id="ue-faculty" data-value="">
           <button class="custom-select__trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
@@ -2124,7 +2138,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           <ul class="custom-select__menu" id="ue-faculty-menu" role="listbox" hidden></ul>
         </div>
       </div>
-      <label class="ue-field"><span class="ue-label">Номер группы</span><input type="text" id="ue-group" placeholder="— для преподавателей"/></label>
+      <label class="ue-field" id="ue-group-field"><span class="ue-label">Номер группы</span><input type="text" id="ue-group" placeholder="— для преподавателей"/></label>
       <div class="ue-actions">
         <button type="submit" class="btn btn--primary">
           <i data-lucide="check" class="icon-18"></i> Сохранить
@@ -2274,11 +2288,16 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   // Raw API data (for settings CRUD)
   let __institutions = [];
   let __docTypes = [];
+  let populateUeSelectorsFromDb = () => {};
   const multiSelectRegistry = {};
 
   async function loadAppConfigFromApi() {
     const requests = [ApApi.getAdminDirectories()];
-    requests.push(__isSuperAdmin ? ApApi.getAdminDocumentTypes() : ApApi.getDocumentTypes());
+    requests.push(
+      __isSuperAdmin
+        ? ApApi.getAdminDocumentTypes()
+        : ApApi.getDocumentTypes(__currentAdminUser?.institutionId, __currentAdminUser?.institution),
+    );
     const [dirRes, typesRes] = await Promise.all(requests);
 
     if (dirRes.ok && dirRes.data.institutions) {
@@ -2296,6 +2315,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       __docTypes = typesRes.data.types;
       appConfig.types = __docTypes.filter((t) => t.isActive !== false).map((t) => t.displayName || t.name);
     }
+    populateUeSelectorsFromDb();
     // Re-populate filter selects
     refreshOrgFilterOptions();
     setOpts(['hmFilterType','docFilterType','subsFilterType','repoFilterType'], appConfig.types);
@@ -2443,6 +2463,12 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     if (reloadBtn) reloadBtn.disabled = false;
   };
   const renderSettingsList = () => {
+    const intro = document.getElementById('settingsIntro');
+    if (intro) {
+      intro.textContent = __isSuperAdmin
+        ? 'Управление справочниками. Выберите УО слева — факультеты и типы работ настраиваются для каждого вуза отдельно.'
+        : 'Управление списками факультетов вашего учебного заведения.';
+    }
     const uoEl = document.getElementById('settingsUosList');
     if (!__institutions.length) {
       uoEl.innerHTML = '<div class="settings-list__empty">Список пуст</div>';
@@ -2487,13 +2513,21 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         </div>`;
       }).join('');
     }
+    const typesScope = document.getElementById('settingsTypesScope');
+    if (typesScope) typesScope.textContent = settingsState.selectedUo ? '· ' + settingsState.selectedUo : '';
     const typesEl = document.getElementById('settingsTypesList');
+    const instForTypes = findInstitutionByName(settingsState.selectedUo);
+    const typesForInst = instForTypes
+      ? __docTypes.filter((dt) => dt.institutionId === instForTypes.id)
+      : [];
     if (!__isSuperAdmin) {
-      typesEl.innerHTML = '<div class="settings-list__empty">Типы работ управляет главный администратор</div>';
-    } else if (!__docTypes.length) {
+      typesEl.innerHTML = '<div class="settings-list__empty">Типы работ настраивает главный администратор</div>';
+    } else if (!settingsState.selectedUo || !instForTypes) {
+      typesEl.innerHTML = '<div class="settings-list__empty">Сначала выберите УО слева</div>';
+    } else if (!typesForInst.length) {
       typesEl.innerHTML = '<div class="settings-list__empty">Список пуст</div>';
     } else {
-      typesEl.innerHTML = __docTypes.map((dt, i) => {
+      typesEl.innerHTML = typesForInst.map((dt, i) => {
         const v = dt.displayName || dt.name;
         const inactive = dt.isActive === false;
         const c = (appConfig.typeColors && appConfig.typeColors[v]) || typeColorBase[v] || fallbackPalette[i % fallbackPalette.length];
@@ -2575,8 +2609,12 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         }
         await loadAppConfigFromApi();
       } else {
-        if (__docTypes.some((t) => (t.displayName || t.name) === v && t.isActive !== false)) { input.value = ''; return; }
-        const { ok, data } = await ApApi.createAdminDocumentType({ displayName: v });
+        if (!settingsState.selectedUo) { alert('Сначала выберите УО'); return; }
+        const inst = findInstitutionByName(settingsState.selectedUo);
+        if (!inst) { alert('УО не найдено'); return; }
+        const typesForInst = __docTypes.filter((dt) => dt.institutionId === inst.id);
+        if (typesForInst.some((t) => (t.displayName || t.name) === v && t.isActive !== false)) { input.value = ''; return; }
+        const { ok, data } = await ApApi.createAdminDocumentType({ displayName: v, institutionId: inst.id });
         if (!ok || !data.success) {
           alert(data.error || 'Не удалось добавить тип работы');
           return;
@@ -2661,7 +2699,16 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         });
         exportXlsx(`faculties_${stamp}.xlsx`, 'Факультеты', rows, [{ wch: 24 }, { wch: 44 }]);
       } else if (kind === 'type') {
-        exportXlsx(`work_types_${stamp}.xlsx`, 'Типы работ', appConfig.types.map((name) => ({ 'Тип работы': name })), [{ wch: 44 }]);
+        const inst = findInstitutionByName(settingsState.selectedUo);
+        const typesForInst = inst
+          ? __docTypes.filter((dt) => dt.institutionId === inst.id && dt.isActive !== false)
+          : [];
+        exportXlsx(
+          `work_types_${stamp}.xlsx`,
+          'Типы работ',
+          typesForInst.map((dt) => ({ 'УО': settingsState.selectedUo || '—', 'Тип работы': dt.displayName || dt.name })),
+          [{ wch: 24 }, { wch: 44 }],
+        );
       }
     } else if (impBtn) {
       settingsState.importKind = impBtn.dataset.import;
@@ -2724,11 +2771,15 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         await loadAppConfigFromApi();
       } else if (kind === 'type') {
         if (!__isSuperAdmin) return;
+        if (!settingsState.selectedUo) { alert('Сначала выберите УО'); e.target.value = ''; return; }
+        const inst = findInstitutionByName(settingsState.selectedUo);
+        if (!inst) { alert('УО не найдено'); e.target.value = ''; return; }
+        const typesForInst = __docTypes.filter((dt) => dt.institutionId === inst.id);
         for (const r of rows) {
           const v = String(r[0] || '').trim();
           if (!v || /^тип/i.test(v)) continue;
-          if (appConfig.types.includes(v)) continue;
-          const { ok, data } = await ApApi.createAdminDocumentType({ displayName: v });
+          if (typesForInst.some((t) => (t.displayName || t.name) === v && t.isActive !== false)) continue;
+          const { ok, data } = await ApApi.createAdminDocumentType({ displayName: v, institutionId: inst.id });
           if (ok && data.success) added++;
         }
         await loadAppConfigFromApi();
@@ -3011,8 +3062,8 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       adminMatchStats = { matches, local, ml };
       if (!adminBorrowMatches.length && matches > 0 && ml >= local) {
         adminBorrowMatches = [{
-          source: 'Семантический анализ (ML / Qdrant)',
-          title: 'Семантический анализ (ML / Qdrant)',
+          source: 'Семантический анализ',
+          title: 'Семантический анализ',
           percent: matches,
           docId: '—',
           docType: '—',
@@ -3181,16 +3232,20 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     const lbl = sel.querySelector(`.custom-select__option[data-value="${val}"]`)?.firstChild?.textContent?.trim()
       || sel.querySelector(`.custom-select__option[data-value="${val}"]`)?.childNodes[0]?.textContent?.trim();
     sel.querySelector('.custom-select__value').textContent = lbl || 'Студент';
-    // Staff roles: hide faculty/group in form
-    const isStaff = val === 'admin' || val === 'superadmin';
-    ['ue-uo', 'ue-faculty', 'ue-group'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const field = el.closest('.ue-field');
-      if (field) field.style.display = isStaff ? 'none' : '';
-    });
-    const uoField = document.getElementById('ue-uo')?.closest('.ue-field');
-    if (uoField && __isUniAdmin) uoField.style.display = 'none';
+
+    const isSuperadminRole = val === 'superadmin';
+    const isUniAdminRole = val === 'admin';
+    const showFacultyGroup = !isSuperadminRole && !isUniAdminRole;
+
+    const uoField = document.getElementById('ue-uo-field');
+    const facField = document.getElementById('ue-faculty-field');
+    const groupField = document.getElementById('ue-group-field');
+
+    if (uoField) {
+      uoField.classList.toggle('is-hidden', __isUniAdmin || isSuperadminRole);
+    }
+    if (facField) facField.classList.toggle('is-hidden', !showFacultyGroup);
+    if (groupField) groupField.classList.toggle('is-hidden', !showFacultyGroup);
   };
   let userEditMode = 'edit'; // 'edit' | 'create'
   function applyUePasswordPolicy(mode, user) {
@@ -3212,7 +3267,9 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       if (hint) hint.hidden = true;
     }
   }
-  const openUserEdit = (u) => {
+  const openUserEdit = async (u) => {
+    if (!__institutions.length) await loadAppConfigFromApi();
+    populateUeSelectorsFromDb();
     userEditMode = 'edit';
     editingUserLogin = u.login;
     document.getElementById('userEditTitle').textContent = 'Редактировать пользователя';
@@ -3220,13 +3277,22 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     document.getElementById('ue-login').value = u.login;
     document.getElementById('ue-password').value = u.passwordEditable === false ? '-' : (u.password || '');
     setRoleSelect(u.role);
-    setUeUO(u.uo || appConfig.uos[0] || 'БГУИР');
-    setUeFaculty(u.faculty || '');
+    const uoName = u.uo || appConfig.uos[0] || 'БГУИР';
+    setUeUO(uoName);
+    const inst = findInstitutionByName(uoName);
+    const facs = inst?.faculties || [];
+    const facMatch = u.faculty
+      ? facs.find((f) => f.id === u.faculty || f.name === u.faculty)
+      : null;
+    setUeFaculty(facMatch?.id || '', facMatch?.name || '');
     document.getElementById('ue-group').value = u.group || '';
     applyUePasswordPolicy('edit', u);
     userEditModal.hidden = false;
+    lockBodyScroll();
   };
-  const openUserCreate = () => {
+  const openUserCreate = async () => {
+    if (!__institutions.length) await loadAppConfigFromApi();
+    populateUeSelectorsFromDb();
     userEditMode = 'create';
     editingUserLogin = null;
     document.getElementById('userEditTitle').textContent = 'Добавить пользователя';
@@ -3235,12 +3301,13 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     document.getElementById('ue-password').value = '';
     setRoleSelect('student');
     setUeUO(__isUniAdmin ? (__currentAdminUser.institution || appConfig.uos[0] || 'БГУИР') : (appConfig.uos[0] || 'БГУИР'));
-    setUeFaculty('');
+    setUeFaculty('', '');
     document.getElementById('ue-group').value = '';
     applyUePasswordPolicy('create', null);
     userEditModal.hidden = false;
+    lockBodyScroll();
   };
-  document.getElementById('usersAddBtn').addEventListener('click', openUserCreate);
+  document.getElementById('usersAddBtn').addEventListener('click', () => { openUserCreate(); });
 
   // ===== Cascading UO + Faculty selects (in user edit form) =====
   const ueUoSel = document.getElementById('ue-uo');
@@ -3269,21 +3336,33 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     sel.querySelector('.custom-select__menu').hidden = true;
     sel.querySelector('.custom-select__trigger').setAttribute('aria-expanded', 'false');
   };
-  const setUeFaculty = (val) => {
+  const setUeFaculty = (val, label) => {
     ueFacSel.dataset.value = val || '';
-    ueFacValEl.textContent = val || 'Выберите факультет';
+    if (label) ueFacSel.dataset.label = label;
+    else delete ueFacSel.dataset.label;
+    ueFacValEl.textContent = label || val || 'Выберите факультет';
     ueFacMenu.querySelectorAll('.custom-select__option').forEach((o) => o.classList.toggle('is-selected', o.dataset.value === val));
   };
-  const populateUeFaculty = (uo) => {
-    const faculties = appConfig.facultiesByUo[uo] || [];
-    ueFacMenu.innerHTML = faculties.map((v) => `
-      <li class="custom-select__option" role="option" data-value="${escapeHtml(v)}">
-        ${escapeHtml(v)}
+  const populateUeFaculty = (uoName) => {
+    const inst = findInstitutionByName(uoName);
+    const faculties = inst?.faculties || [];
+    if (!faculties.length) {
+      ueFacMenu.innerHTML = '<li class="custom-select__option" role="option" data-value="" disabled>Нет факультетов в справочнике</li>';
+      setUeFaculty('', '');
+      return;
+    }
+    ueFacMenu.innerHTML = faculties.map((f) => `
+      <li class="custom-select__option" role="option" data-value="${escapeHtml(f.id)}" data-label="${escapeHtml(f.name)}">
+        ${escapeHtml(f.name)}
         <i data-lucide="check" class="icon-16 custom-select__option-check"></i>
       </li>
     `).join('');
     ueFacMenu.querySelectorAll('.custom-select__option').forEach((opt) => {
-      opt.addEventListener('click', () => { setUeFaculty(opt.dataset.value); closeCs(ueFacSel); });
+      if (!opt.dataset.value) return;
+      opt.addEventListener('click', () => {
+        setUeFaculty(opt.dataset.value, opt.dataset.label || opt.textContent.trim());
+        closeCs(ueFacSel);
+      });
     });
     if (window.lucide) window.lucide.createIcons();
   };
@@ -3291,22 +3370,36 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     ueUoSel.dataset.value = val || '';
     ueUoValEl.textContent = val || 'Выберите УО';
     ueUoMenu.querySelectorAll('.custom-select__option').forEach((o) => o.classList.toggle('is-selected', o.dataset.value === val));
-    // Repopulate faculty menu for this UO
     populateUeFaculty(val);
-    const facs = appConfig.facultiesByUo[val] || [];
-    if (!facs.includes(ueFacSel.dataset.value)) setUeFaculty('');
+    const inst = findInstitutionByName(val);
+    const facs = inst?.faculties || [];
+    const currentFacId = ueFacSel.dataset.value;
+    if (!facs.some((f) => f.id === currentFacId)) setUeFaculty('', '');
   };
   const populateUeUO = () => {
-    ueUoMenu.innerHTML = appConfig.uos.map((v) => `
+    const uos = __institutions.length
+      ? __institutions.filter((i) => i.isActive !== false).map((i) => i.name)
+      : appConfig.uos;
+    if (!uos.length) {
+      ueUoMenu.innerHTML = '<li class="custom-select__option" role="option" data-value="" disabled>Справочник загружается…</li>';
+      return;
+    }
+    ueUoMenu.innerHTML = uos.map((v) => `
       <li class="custom-select__option" role="option" data-value="${escapeHtml(v)}">
         ${escapeHtml(v)}
         <i data-lucide="check" class="icon-16 custom-select__option-check"></i>
       </li>
     `).join('');
     ueUoMenu.querySelectorAll('.custom-select__option').forEach((opt) => {
+      if (!opt.dataset.value) return;
       opt.addEventListener('click', () => { setUeUO(opt.dataset.value); closeCs(ueUoSel); });
     });
     if (window.lucide) window.lucide.createIcons();
+  };
+  populateUeSelectorsFromDb = () => {
+    populateUeUO();
+    const currentUo = ueUoSel.dataset.value || appConfig.uos[0] || '';
+    if (currentUo) populateUeFaculty(currentUo);
   };
   ueUoSel.querySelector('.custom-select__trigger').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -3320,7 +3413,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     if (!ueUoSel.contains(e.target)) closeCs(ueUoSel);
     if (!ueFacSel.contains(e.target)) closeCs(ueFacSel);
   });
-  populateUeUO();
+  populateUeSelectorsFromDb();
 
   // Init custom role select
   (function initRoleSelect() {
@@ -3360,6 +3453,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   const closeUserEdit = () => {
     userEditModal.hidden = true;
     editingUserLogin = null;
+    unlockBodyScroll();
   };
   userEditModal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', closeUserEdit));
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !userEditModal.hidden) closeUserEdit(); });
@@ -3405,17 +3499,28 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   userEditForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const role = document.getElementById('ue-role').dataset.value;
-    const isStaff = role === 'admin' || role === 'superadmin';
-    const defaultUo = __isUniAdmin
+    const isSuperadminRole = role === 'superadmin';
+    const isUniAdminRole = role === 'admin';
+    const isStaff = isSuperadminRole || isUniAdminRole;
+    const selectedUo = (document.getElementById('ue-uo').dataset.value || '').trim();
+    let institutionName = __isUniAdmin
       ? (__currentAdminUser.institution || 'БГУИР')
-      : ((document.getElementById('ue-uo').dataset.value || '').trim() || (appConfig.uos[0] || 'БГУИР'));
+      : (selectedUo || (appConfig.uos[0] || 'БГУИР'));
+    if (isUniAdminRole && __isSuperAdmin && !selectedUo) {
+      alert('Выберите УО для администратора учебного заведения.');
+      return;
+    }
+    if (isUniAdminRole && __isSuperAdmin) institutionName = selectedUo;
+    if (isSuperadminRole) {
+      institutionName = __currentAdminUser?.institution || appConfig.uos[0] || 'БГУИР';
+    }
     const payload = {
       name: document.getElementById('ue-name').value.trim(),
       login: document.getElementById('ue-login').value.trim(),
       password: document.getElementById('ue-password').value,
       role,
-      uo: isStaff ? defaultUo : defaultUo,
-      faculty: isStaff ? undefined : ((document.getElementById('ue-faculty').dataset.value || '').trim()),
+      uo: institutionName,
+      faculty: isStaff ? undefined : (ueFacSel.dataset.label || ueFacSel.dataset.value || '').trim(),
       group: isStaff ? undefined : (document.getElementById('ue-group').value.trim() || '—'),
     };
     if (userEditMode === 'create') {
@@ -3432,7 +3537,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         password: payload.password,
         role: payload.role,
         fullName: payload.name,
-        institution: isStaff ? defaultUo : payload.uo,
+        institution: institutionName,
         faculty: isStaff ? undefined : payload.faculty,
         group: isStaff ? undefined : payload.group,
       });
@@ -3456,7 +3561,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     const updateData = {
       fullName: payload.name,
       role: payload.role,
-      institution: isStaff ? defaultUo : payload.uo,
+      institution: institutionName,
       faculty: isStaff ? undefined : payload.faculty,
       group: isStaff ? undefined : payload.group,
     };
@@ -3634,6 +3739,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     } else {
       usersTbody.innerHTML = slice.map((u) => {
         const isStaff = u.role === 'admin' || u.role === 'superadmin';
+        const isSuperadmin = u.role === 'superadmin';
         return `
         <tr class="adm-table__row" data-open-user="${escapeHtml(u.login)}">
           <td>
@@ -3641,7 +3747,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
             <div class="adm-table__sub">логин <code>${escapeHtml(u.login)}</code></div>
           </td>
           <td><span class="role-pill role-pill--${u.role}">${roleLabel[u.role] || u.role}</span></td>
-          <td class="admin-col-uo">${isStaff ? '—' : escapeHtml(u.uo || 'БГУИР')}</td>
+          <td class="admin-col-uo">${isSuperadmin ? '—' : escapeHtml(u.uo || '—')}</td>
           <td>${isStaff ? '—' : escapeHtml(u.faculty || '—')}</td>
           <td>${isStaff ? '—' : escapeHtml(u.group || '—')}</td>
           <td><b>${u.checks}</b></td>

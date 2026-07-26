@@ -15,9 +15,10 @@ model Institution {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
 
-  faculties Faculty[]
-  users     User[]
-  documents Document[]
+  faculties     Faculty[]
+  users         User[]
+  documents     Document[]
+  documentTypes DocumentType[]
 
   @@map("institutions")
 }
@@ -42,15 +43,19 @@ model Faculty {
 // ─── 3. DocumentType ─────────────────────────────────────────────────────────
 // Catalog of academic document types (coursework, thesis, essay, …)
 model DocumentType {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique // slug: "coursework", "thesis"
-  displayName String   @map("display_name") // "Курсовая работа"
-  description String?
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id            Int      @id @default(autoincrement())
+  institutionId String   @map("institution_id")
+  name          String // slug: "coursework", "thesis" (unique per institution)
+  displayName   String   @map("display_name") // "Курсовая работа"
+  description   String?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
 
-  documents Document[]
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  documents   Document[]
 
+  @@unique([institutionId, name])
+  @@index([institutionId], map: "idx_document_types_institution_id")
   @@map("document_types")
 }
 
