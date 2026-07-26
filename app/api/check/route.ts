@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createShingles, MinHash, compareMinHashSignatures, normalizeContentForCheck } from "@/lib/plagiarism/algorithms"
 import { analyzeWithMlService } from "@/lib/analysis-client"
+import { resolveCheckInstitutionScope } from "@/lib/check-institution-scope"
 import { getDocumentsForComparison, type StoredDocument } from "@/lib/local-storage"
-import { resolveInstitutionId } from "@/lib/directories"
 import { logInfo, logError } from "@/lib/logger"
 import { requireSessionApi } from "@/lib/require-session-api"
+import { getUserByUsername } from "@/lib/user-storage"
 
 function clampPercent(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -31,13 +32,18 @@ const LOCAL_SIMILARITY_THRESHOLD = 10
  * Выбирает базу для локального сравнения:
  * - черновики и финальные документы;
  * - оставляет документы только того же модуля (category);
- * - фильтрует по institution (вуз).
+ * - фильтрует по institution (вуз);
+ * - исключает другие работы того же пользователя.
  */
-async function getComparisonPoolForModule(category: string | undefined, institutionId?: string | null): Promise<StoredDocument[]> {
+async function getComparisonPoolForModule(
+  category: string | undefined,
+  institutionId?: string | null,
+  excludeUserId?: string | null,
+): Promise<StoredDocument[]> {
   if (!category) return []
   const safeCategory = String(category).replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_").trim()
   if (!safeCategory) return []
-  return getDocumentsForComparison(safeCategory, institutionId)
+  return getDocumentsForComparison(safeCategory, institutionId, undefined, excludeUserId)
 }
 
 function buildLocalSimilarDocuments(
@@ -76,7 +82,6 @@ export async function POST(request: NextRequest) {
     const { content, filename: checkFilename } = body
     const category = typeof body?.category === "string" && body.category.trim() ? body.category.trim() : "uncategorized"
     const status = body?.status === "final" ? "final" : "draft"
-    const institution = typeof body?.institution === "string" ? body.institution : gate.user.institution || "БГУИР"
 
     if (!content) {
       return NextResponse.json({ success: false, error: "Content is required" }, { status: 400 })
@@ -86,16 +91,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Content must be at least 50 characters" }, { status: 400 })
     }
 
+    const dbUser = await getUserByUsername(gate.user.username)
+    const scope = await resolveCheckInstitutionScope(gate.user, dbUser, {
+      institution: typeof body?.institution === "string" ? body.institution : null,
+      institutionId: typeof body?.institutionId === "string" ? body.institutionId : null,
+    })
+    if (!scope.ok) {
+      return NextResponse.json({ success: false, error: scope.error }, { status: scope.status })
+    }
+    const institutionId = scope.institutionId
+
     const startTime = Date.now()
 
     // Убираем титульный лист, содержание и приложения перед расчётом оригинальности
     const normalizedContent = normalizeContentForCheck(content)
-    const institutionId = await resolveInstitutionId(institution)
-    const comparisonPool = await getComparisonPoolForModule(category, institutionId)
+    const comparisonPool = await getComparisonPoolForModule(category, institutionId, gate.user.username)
     const similarDocuments = buildLocalSimilarDocuments(normalizedContent, comparisonPool, 5)
 
     const ml = await analyzeWithMlService(normalizedContent, {
       filename: typeof checkFilename === "string" ? checkFilename : undefined,
+      institutionId,
     })
 
     const processingTime = Date.now() - startTime
@@ -127,10 +142,13 @@ export async function POST(request: NextRequest) {
       processingTimeMs: processingTime,
       category,
       status,
+      institutionId,
       mlAnalysisUsed: Boolean(ml),
       localCandidatesChecked: comparisonPool.length,
       originalContentChars: content.length,
       normalizedContentChars: normalizedContent.length,
+      semanticMatchCount: ml.semanticMatches.length,
+      byType: ml.byType,
       topLocalCandidates: similarDocuments.map((doc) => ({
         id: doc.id,
         title: doc.title,
@@ -149,6 +167,8 @@ export async function POST(request: NextRequest) {
       localPlagiarismPercent,
       mlPlagiarismPercent,
       mlAiPercent: roundPercent(ml.aiPercent),
+      semanticMatches: ml.semanticMatches,
+      byType: ml.byType,
     })
   } catch (error) {
     logError("Ошибка при проверке документа", error instanceof Error ? error : String(error), undefined, undefined, "check")

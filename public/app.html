@@ -24,19 +24,27 @@ html, body { margin: 0; padding: 0; }
 [hidden] { display: none !important; }
 
 /* Embed mode (when shown inside admin iframe) — no inner scroll; iframe scrolls once */
-html.embed-admin { overflow: visible; height: auto; }
+html.embed-admin { overflow: hidden; height: auto; }
 html.embed-admin body {
   background: #eaf1fb;
   min-height: auto;
   height: auto;
-  overflow: visible;
+  overflow: hidden;
   background-image: none;
 }
 html.embed-admin .page { padding: 12px 12px 16px; width: 100%; max-width: none; box-sizing: border-box; overflow: visible; }
 html.embed-admin .header { display: none; }
 html.embed-admin .app { margin: 0; gap: 12px; overflow: visible; }
-html.embed-admin .stage-card { border-radius: 20px; }
+html.embed-admin .stage-card { border-radius: 20px; overflow: visible; }
 html.embed-admin .app__panel { overflow: visible; }
+html.embed-admin .stage-form,
+html.embed-admin .form-grid,
+html.embed-admin .form-grid .field { overflow: visible; }
+html.embed-admin #checkInstitutionField { grid-column: 1 / -1; }
+html.embed-admin #checkInstitutionField .field__hint { display: none; }
+html.embed-admin.is-uni-admin-check #checkInstitutionReadonly { display: none !important; }
+html.embed-admin .stage-card { padding: 22px; }
+html.embed-admin .dropzone { padding: 28px 16px; }
 html.embed-admin .modal__backdrop,
 html.embed-admin .modal__dialog { animation: none !important; }
 
@@ -128,6 +136,11 @@ a { color: inherit; text-decoration: none; }
   bottom: auto; top: calc(100% + 8px);
   box-shadow: 0 12px 30px rgba(15, 41, 92, 0.12);
   max-height: 200px; overflow-y: auto;
+}
+#checkInstitutionSelect .custom-select__menu,
+#workType .custom-select__menu {
+  max-height: 280px;
+  overflow-y: auto;
 }
 .field__input {
   width: 100%; box-sizing: border-box;
@@ -811,6 +824,23 @@ a { color: inherit; text-decoration: none; }
               </div>
               <p class="field__error" id="typeError" hidden></p>
             </div>
+            <div class="field" id="checkInstitutionField" hidden>
+              <label class="field__label" id="checkInstitutionLabel">Учебное заведение<span class="field__required" aria-hidden="true">*</span></label>
+              <div class="custom-select is-placeholder" id="checkInstitutionSelect" data-value="">
+                <button class="custom-select__trigger" type="button"
+                        aria-haspopup="listbox" aria-expanded="false" aria-labelledby="checkInstitutionLabel" aria-required="true">
+                  <span class="custom-select__value">Выберите учебное заведение</span>
+                  <i data-lucide="chevron-down" class="icon-16 custom-select__chevron"></i>
+                </button>
+                <ul class="custom-select__menu" id="checkInstitutionMenu" role="listbox" hidden></ul>
+              </div>
+              <p class="field__error" id="checkInstitutionError" hidden></p>
+            </div>
+            <div class="field" id="checkInstitutionReadonly" hidden>
+              <label class="field__label">Учебное заведение</label>
+              <p class="field__static" id="checkInstitutionStatic">—</p>
+              <p class="field__hint">Сравнение выполняется только с работами этого учебного заведения.</p>
+            </div>
           </div>
           <button class="submit-btn" type="submit">
             <i data-lucide="search-check" class="icon-18"></i>
@@ -1100,6 +1130,8 @@ a { color: inherit; text-decoration: none; }
   const __embedAdmin = new URLSearchParams(location.search).get('embed') === 'admin' && window.parent !== window;
   let __currentUser = null;
   let __isAdmin = false;
+  let __isSuperAdmin = false;
+  let __isUniAdmin = false;
 
   const ROLE_LABELS = {
     student: 'Студент',
@@ -1140,6 +1172,8 @@ a { color: inherit; text-decoration: none; }
     __currentUser = data.user;
     const role = __currentUser.role;
     __isAdmin = role === 'admin' || role === 'superadmin';
+    __isSuperAdmin = role === 'superadmin';
+    __isUniAdmin = role === 'admin';
     runApp();
   }
 
@@ -1148,11 +1182,53 @@ a { color: inherit; text-decoration: none; }
   function runApp() {
   if (__embedAdmin) {
     document.documentElement.classList.add('embed-admin');
+    if (__isSuperAdmin) document.documentElement.classList.add('is-superadmin-check');
+    if (__isUniAdmin) document.documentElement.classList.add('is-uni-admin-check');
+
+    window.__embedDropdownOpen = false;
+
+    const postEmbedHeight = () => {
+      if (window.__embedDropdownOpen) return;
+      const height = Math.ceil(document.documentElement.scrollHeight);
+      try { parent.postMessage({ type: 'ap-embed-height', height }, '*'); } catch (_) {}
+    };
+
+    window.syncEmbedDropdownHeight = (selectEl, open) => {
+      if (!selectEl) return;
+      window.__embedDropdownOpen = Boolean(open);
+      if (!open) {
+        requestAnimationFrame(postEmbedHeight);
+        return;
+      }
+      requestAnimationFrame(() => {
+        const trigger = selectEl.querySelector('.custom-select__trigger');
+        const menu = selectEl.querySelector('.custom-select__menu');
+        if (!trigger || !menu) return;
+        const tr = trigger.getBoundingClientRect();
+        const menuMax = 280;
+        const menuH = Math.min(menu.scrollHeight, menuMax);
+        const need = Math.ceil(tr.bottom + 8 + menuH + 24);
+        const base = Math.ceil(document.documentElement.scrollHeight);
+        try { parent.postMessage({ type: 'ap-embed-height', height: Math.max(base, need) }, '*'); } catch (_) {}
+      });
+    };
+
     window.addEventListener('message', (e) => {
       if (e?.data?.type === 'ap-embed-recalc') {
         window.dispatchEvent(new Event('resize'));
+        requestAnimationFrame(postEmbedHeight);
       }
     });
+
+    window.addEventListener('load', () => {
+      postEmbedHeight();
+      if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(() => requestAnimationFrame(postEmbedHeight));
+        ro.observe(document.documentElement);
+      }
+    });
+    window.__apPostEmbedHeight = postEmbedHeight;
+
     // Notify parent about modal state (matches open in admin shell)
     const reportModalState = () => {
       const anyOpen = Array.from(document.querySelectorAll('.modal')).some((m) => !m.hidden);
@@ -1290,9 +1366,27 @@ a { color: inherit; text-decoration: none; }
     return ruEntry ? ruEntry[0] : slug;
   };
 
+  const WORK_TYPE_PLACEHOLDER = 'Выберите тип работы';
+  const WORK_TYPE_NEED_UNI_PLACEHOLDER = 'Выберите университет';
+
+  const superadminNeedsUniversity = () => {
+    if (!__isSuperAdmin) return false;
+    const instSel = document.getElementById('checkInstitutionSelect');
+    return !instSel?.dataset.value;
+  };
+
+  const getWorkTypePlaceholder = () =>
+    superadminNeedsUniversity() ? WORK_TYPE_NEED_UNI_PLACEHOLDER : WORK_TYPE_PLACEHOLDER;
+
   const populateWorkTypeOptions = (types) => {
     const menu = document.getElementById('workTypeMenu');
-    if (!menu || !types || !types.length) return;
+    if (!menu) return;
+    if (!types || !types.length) {
+      __docTypeOptions = [];
+      menu.innerHTML = '';
+      if (__isSuperAdmin) resetWorkTypeSelect();
+      return;
+    }
     __docTypeOptions = types.map(normalizeTypeOption);
     menu.innerHTML = __docTypeOptions.map((t) => {
       const slug = String(t.name || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -1305,6 +1399,119 @@ a { color: inherit; text-decoration: none; }
   const escAttr = (s) => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
   const findInstitutionByName = (name) => __institutions.find((i) => i.name === name);
+  const findInstitutionById = (id) => __institutions.find((i) => i.id === id);
+
+  const checkInstitutionSelect = document.getElementById('checkInstitutionSelect');
+  const checkInstitutionMenu = document.getElementById('checkInstitutionMenu');
+  const checkInstitutionField = document.getElementById('checkInstitutionField');
+  const checkInstitutionReadonly = document.getElementById('checkInstitutionReadonly');
+  const checkInstitutionError = document.getElementById('checkInstitutionError');
+
+  const setCheckInstitutionSelect = (inst) => {
+    if (!checkInstitutionSelect || !inst) return;
+    const valueEl = checkInstitutionSelect.querySelector('.custom-select__value');
+    checkInstitutionSelect.dataset.value = inst.id;
+    checkInstitutionSelect.dataset.label = inst.name;
+    if (valueEl) valueEl.textContent = inst.name;
+    checkInstitutionSelect.classList.remove('is-placeholder', 'has-error');
+    checkInstitutionMenu?.querySelectorAll('.custom-select__option').forEach((o) => {
+      o.classList.toggle('is-selected', o.dataset.value === inst.id);
+    });
+    if (checkInstitutionError) checkInstitutionError.hidden = true;
+  };
+
+  const clearCheckInstitutionSelect = () => {
+    if (!checkInstitutionSelect) return;
+    const valueEl = checkInstitutionSelect.querySelector('.custom-select__value');
+    checkInstitutionSelect.dataset.value = '';
+    delete checkInstitutionSelect.dataset.label;
+    if (valueEl) valueEl.textContent = 'Выберите учебное заведение';
+    checkInstitutionSelect.classList.add('is-placeholder');
+    checkInstitutionSelect.classList.remove('has-error');
+    checkInstitutionMenu?.querySelectorAll('.custom-select__option').forEach((o) => o.classList.remove('is-selected'));
+    resetWorkTypeSelect();
+  };
+
+  const populateCheckInstitutionSelect = () => {
+    if (!checkInstitutionMenu) return;
+    const active = __institutions.filter((i) => i.isActive !== false);
+    checkInstitutionMenu.innerHTML = active.map((inst) => {
+      const id = escAttr(inst.id);
+      const name = escAttr(inst.name);
+      return `<li class="custom-select__option" role="option" data-value="${id}" data-label="${name}">${inst.name}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>`;
+    }).join('');
+    if (window.lucide) window.lucide.createIcons();
+    if (active.length === 1) {
+      setCheckInstitutionSelect(active[0]);
+      void loadDocumentTypesForInstitution(active[0].id, active[0].name);
+    } else {
+      clearCheckInstitutionSelect();
+      populateWorkTypeOptions([]);
+    }
+  };
+
+  const resetWorkTypeSelect = () => {
+    const wt = document.getElementById('workType');
+    if (!wt) return;
+    wt.dataset.value = '';
+    delete wt.dataset.label;
+    const valueEl = wt.querySelector('.custom-select__value');
+    if (valueEl) valueEl.textContent = getWorkTypePlaceholder();
+    wt.classList.add('is-placeholder');
+    wt.classList.remove('has-error');
+    wt.querySelectorAll('.custom-select__option').forEach((o) => o.classList.remove('is-selected'));
+  };
+
+  const loadDocumentTypesForInstitution = async (institutionId, institutionName) => {
+    resetWorkTypeSelect();
+    if (!institutionId) {
+      populateWorkTypeOptions([]);
+      return;
+    }
+    try {
+      const typesRes = await ApApi.getDocumentTypes(institutionId, institutionName);
+      if (typesRes.ok && typesRes.data.types && typesRes.data.types.length) {
+        appConfig.types = typesRes.data.types.map((t) => t.displayName || t.name);
+        populateWorkTypeOptions(typesRes.data.types);
+        if (ApApi.setCategoryLabelsFromTypes) ApApi.setCategoryLabelsFromTypes(typesRes.data.types);
+      } else {
+        populateWorkTypeOptions([]);
+      }
+    } catch (err) {
+      console.warn('Failed to load document types:', err);
+      populateWorkTypeOptions([]);
+    }
+    if (window.__apPostEmbedHeight) requestAnimationFrame(window.__apPostEmbedHeight);
+  };
+
+  const setupCheckInstitutionUi = () => {
+    if (__isSuperAdmin) {
+      if (checkInstitutionField) checkInstitutionField.hidden = false;
+      if (checkInstitutionReadonly) checkInstitutionReadonly.hidden = true;
+      populateCheckInstitutionSelect();
+    } else if (__isUniAdmin) {
+      if (checkInstitutionField) checkInstitutionField.hidden = true;
+      if (checkInstitutionReadonly) checkInstitutionReadonly.hidden = true;
+    }
+    if (window.__apPostEmbedHeight) requestAnimationFrame(window.__apPostEmbedHeight);
+  };
+
+  const getCheckInstitutionParams = () => {
+    if (__isSuperAdmin && checkInstitutionSelect?.dataset.value) {
+      const inst = findInstitutionById(checkInstitutionSelect.dataset.value);
+      return {
+        institutionId: checkInstitutionSelect.dataset.value,
+        institution: inst?.name || checkInstitutionSelect.dataset.label || '',
+      };
+    }
+    if (__isUniAdmin) {
+      return {
+        institutionId: __currentUser.institutionId || '',
+        institution: __currentUser.institution || '',
+      };
+    }
+    return { institution: __currentUser.institution || '' };
+  };
 
   const maybeOpenCompleteProfile = () => {
     if (__isAdmin || !__directoriesLoaded) return;
@@ -1319,10 +1526,7 @@ a { color: inherit; text-decoration: none; }
 
   const loadDirectoriesAndTypes = async () => {
     try {
-      const [dirRes, typesRes] = await Promise.all([
-        ApApi.getDirectories(),
-        ApApi.getDocumentTypes(__currentUser?.institutionId, __currentUser?.institution),
-      ]);
+      const dirRes = await ApApi.getDirectories();
       if (dirRes.ok && dirRes.data.institutions) {
         __institutions = dirRes.data.institutions;
         appConfig.uos = __institutions.map((i) => i.name);
@@ -1331,10 +1535,16 @@ a { color: inherit; text-decoration: none; }
           appConfig.facultiesByUo[i.name] = (i.faculties || []).map((f) => f.name);
         });
       }
-      if (typesRes.ok && typesRes.data.types && typesRes.data.types.length) {
-        appConfig.types = typesRes.data.types.map((t) => t.displayName || t.name);
-        populateWorkTypeOptions(typesRes.data.types);
-        if (ApApi.setCategoryLabelsFromTypes) ApApi.setCategoryLabelsFromTypes(typesRes.data.types);
+      if (__isSuperAdmin) {
+        setupCheckInstitutionUi();
+      } else {
+        const typesRes = await ApApi.getDocumentTypes(__currentUser?.institutionId, __currentUser?.institution);
+        if (typesRes.ok && typesRes.data.types && typesRes.data.types.length) {
+          appConfig.types = typesRes.data.types.map((t) => t.displayName || t.name);
+          populateWorkTypeOptions(typesRes.data.types);
+          if (ApApi.setCategoryLabelsFromTypes) ApApi.setCategoryLabelsFromTypes(typesRes.data.types);
+        }
+        setupCheckInstitutionUi();
       }
     } catch (err) {
       console.warn('Failed to load directories:', err);
@@ -1699,21 +1909,36 @@ a { color: inherit; text-decoration: none; }
     const types = (configRaw && Array.isArray(configRaw.types) && configRaw.types.length)
       ? configRaw.types
       : defaultWorkTypes;
-    populateWorkTypeOptions(types);
+    if (!__isSuperAdmin) {
+      populateWorkTypeOptions(types);
+    } else {
+      populateWorkTypeOptions([]);
+      resetWorkTypeSelect();
+    }
 
     const open = () => {
       workType.classList.add('is-open');
       menu.hidden = false;
       trigger.setAttribute('aria-expanded', 'true');
+      if (window.syncEmbedDropdownHeight) window.syncEmbedDropdownHeight(workType, true);
     };
     const close = () => {
       workType.classList.remove('is-open');
       menu.hidden = true;
       trigger.setAttribute('aria-expanded', 'false');
+      if (window.syncEmbedDropdownHeight) window.syncEmbedDropdownHeight(workType, false);
     };
+
+    if (__embedAdmin && menu) {
+      menu.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+    }
 
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (__isSuperAdmin && !checkInstitutionSelect?.dataset.value) {
+        resetWorkTypeSelect();
+        return;
+      }
       workType.classList.contains('is-open') ? close() : open();
     });
     menu.addEventListener('click', (e) => {
@@ -1738,6 +1963,47 @@ a { color: inherit; text-decoration: none; }
     });
   })();
 
+  (function initCheckInstitutionSelect() {
+    if (!checkInstitutionSelect || !checkInstitutionMenu) return;
+    const trigger = checkInstitutionSelect.querySelector('.custom-select__trigger');
+    const valueEl = checkInstitutionSelect.querySelector('.custom-select__value');
+
+    const open = () => {
+      checkInstitutionSelect.classList.add('is-open');
+      checkInstitutionMenu.hidden = false;
+      trigger?.setAttribute('aria-expanded', 'true');
+      if (window.syncEmbedDropdownHeight) window.syncEmbedDropdownHeight(checkInstitutionSelect, true);
+    };
+    const close = () => {
+      checkInstitutionSelect.classList.remove('is-open');
+      checkInstitutionMenu.hidden = true;
+      trigger?.setAttribute('aria-expanded', 'false');
+      if (window.syncEmbedDropdownHeight) window.syncEmbedDropdownHeight(checkInstitutionSelect, false);
+    };
+
+    checkInstitutionMenu.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+
+    trigger?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      checkInstitutionSelect.classList.contains('is-open') ? close() : open();
+    });
+    checkInstitutionMenu.addEventListener('click', (e) => {
+      const opt = e.target.closest('.custom-select__option');
+      if (!opt) return;
+      const inst = findInstitutionById(opt.dataset.value);
+      if (!inst) return;
+      setCheckInstitutionSelect(inst);
+      void loadDocumentTypesForInstitution(inst.id, inst.name);
+      close();
+    });
+    document.addEventListener('click', (e) => {
+      if (!checkInstitutionSelect.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && checkInstitutionSelect.classList.contains('is-open')) close();
+    });
+  })();
+
   const stageCards = {
     1: document.querySelector('[data-stage-card="1"]'),
     2: document.querySelector('[data-stage-card="2"]'),
@@ -1759,6 +2025,7 @@ a { color: inherit; text-decoration: none; }
     });
     appSection.classList.toggle('is-in-workflow', n > 1);
     document.documentElement.classList.toggle('is-workflow-ui', n >= 2 && n <= 4);
+    if (window.__apPostEmbedHeight) requestAnimationFrame(window.__apPostEmbedHeight);
   };
 
   const saveAsDraft = () => {
@@ -1865,10 +2132,28 @@ a { color: inherit; text-decoration: none; }
     }
 
     if (!workType.dataset.value) {
-      setError(typeError, workType, 'Выберите тип работы.');
+      const typeMsg = superadminNeedsUniversity() ? WORK_TYPE_NEED_UNI_PLACEHOLDER : WORK_TYPE_PLACEHOLDER;
+      setError(typeError, workType, typeMsg === WORK_TYPE_NEED_UNI_PLACEHOLDER ? typeMsg : 'Выберите тип работы.');
       ok = false;
     } else {
       setError(typeError, workType, '');
+    }
+
+    if (__isSuperAdmin) {
+      if (!checkInstitutionSelect?.dataset.value) {
+        if (checkInstitutionError) {
+          checkInstitutionError.textContent = 'Выберите учебное заведение.';
+          checkInstitutionError.hidden = false;
+        }
+        checkInstitutionSelect?.classList.add('has-error');
+        ok = false;
+      } else {
+        if (checkInstitutionError) checkInstitutionError.hidden = true;
+        checkInstitutionSelect?.classList.remove('has-error');
+      }
+    } else if (__isUniAdmin && !__currentUser.institutionId && !__currentUser.institution) {
+      alert('У администратора не указано учебное заведение. Обратитесь к главному администратору.');
+      ok = false;
     }
 
     if (ok) {
@@ -1981,16 +2266,19 @@ a { color: inherit; text-decoration: none; }
 
       // 2. Check for plagiarism
       const category = workType.dataset.value || 'uncategorized';
+      const instParams = getCheckInstitutionParams();
 
       const checkRes = await ApApi.checkDocument({
         content:     parsed.text,
         filename:    file.name,
         category,
-        institution: __currentUser.institution || 'БГУИР',
+        institution: instParams.institution || '',
+        institutionId: instParams.institutionId || undefined,
       });
 
       if (!checkRes.ok || !checkRes.data.success) {
-        throw Object.assign(new Error('Произошла ошибка'), { retryable: true });
+        const msg = checkRes.data?.error || 'Произошла ошибка';
+        throw Object.assign(new Error(msg), { retryable: !checkRes.ok || checkRes.status >= 500 });
       }
 
       const checkData = checkRes.data;
@@ -2002,16 +2290,21 @@ a { color: inherit; text-decoration: none; }
       fd.append('content', parsed.text);
       fd.append('category', category);
       fd.append('status', 'draft');
-      fd.append('institution', __currentUser.institution || 'БГУИР');
+      fd.append('institution', instParams.institution || '');
+      if (instParams.institutionId) fd.append('institutionId', instParams.institutionId);
       fd.append('originality_percent', String(checkData.uniquenessPercent));
       fd.append('plagiarism_percent_ml', String(checkData.mlPlagiarismPercent ?? 0));
       fd.append('ai_percent_ml', String(checkData.mlAiPercent ?? 0));
       fd.append('processing_time_ms', String(checkData.processingTimeMs || 0));
       fd.append('document_type', parsed.fileType);
+      if (Array.isArray(checkData.semanticMatches) && checkData.semanticMatches.length) {
+        fd.append('semantic_matches_json', JSON.stringify(checkData.semanticMatches));
+      }
 
       const uploadRes = await ApApi.uploadDocument(fd);
       if (!uploadRes.ok || !uploadRes.data.success) {
-        throw Object.assign(new Error('Произошла ошибка'), { retryable: true });
+        const msg = uploadRes.data?.error || 'Произошла ошибка';
+        throw Object.assign(new Error(msg), { retryable: !uploadRes.ok || uploadRes.status >= 500 });
       }
       const docId = uploadRes.data.document.id;
       checkData.savedDocument = uploadRes.data.document;
@@ -2047,6 +2340,7 @@ a { color: inherit; text-decoration: none; }
     const percent = Math.round(apiData ? apiData.uniquenessPercent : 0);
     const matches = Math.round(apiData ? apiData.plagiarismPercent : 0);
     const ai      = Math.round(apiData ? apiData.mlAiPercent       : 0);
+    const inst = getCheckInstitutionParams();
     currentResult = {
       id: docId,
       percent, matches, ai,
@@ -2057,7 +2351,7 @@ a { color: inherit; text-decoration: none; }
       fileSize: file.size,
       wordCount: apiData?.savedDocument?.wordCount || null,
       author: __currentUser?.fullName || __currentUser?.username || '—',
-      institution: __currentUser?.institution || 'БГУИР',
+      institution: inst.institution || __currentUser?.institution || '—',
       savedAt: new Date().toISOString(),
       similarDocuments: apiData ? apiData.similarDocuments : [],
     };
@@ -2128,6 +2422,9 @@ a { color: inherit; text-decoration: none; }
       const title = m.title || m.source || '—';
       const docType = m.docType || '—';
       const docId = m.docId || '—';
+      const typeMeta = m.matchTypeLabel
+        ? `<span>Тип: <b>${escapeHtml(m.matchTypeLabel)}</b></span>`
+        : '';
       return `
         <li class="matches-list__item">
           <div class="matches-list__head">
@@ -2135,7 +2432,10 @@ a { color: inherit; text-decoration: none; }
             <span class="matches-list__percent">${m.percent}%</span>
           </div>
           <p class="matches-list__quote matches-list__quote--name">${escapeHtml(title)}</p>
-          <div class="matches-list__meta"><span>ID документа <code>${escapeHtml(docId)}</code></span></div>
+          <div class="matches-list__meta">
+            <span>ID документа <code>${escapeHtml(docId)}</code></span>
+            ${typeMeta}
+          </div>
         </li>
       `;
       /*
@@ -2198,7 +2498,9 @@ a { color: inherit; text-decoration: none; }
       title: m.sourceTitle || '—',
       percent: Math.round((m.similarity ?? 0) * 10) / 10,
       docId: m.sourceId ? String(m.sourceId) : '—',
-      docType: categoryLabel(simById.get(m.sourceId)?.category),
+      docType: categoryLabel(m.category || simById.get(m.sourceId)?.category),
+      matchType: m.matchType || null,
+      matchTypeLabel: m.matchTypeLabel || null,
       // quote: m.quote || '—',
     }));
     if (!borrowMatchesData.length && matches > 0 && ml >= local) {

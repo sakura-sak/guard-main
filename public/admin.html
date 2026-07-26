@@ -672,16 +672,16 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
 .empty { color: var(--muted); text-align: center; padding: 30px; font-size: 14px; }
 .check-embed-wrap.card {
   padding: 0;
-  overflow: hidden;
-  min-height: calc(100vh - 200px);
+  overflow: visible;
+  min-height: 0;
   background: transparent;
   border: none;
   box-shadow: none;
 }
 .check-iframe {
   width: 100%;
-  height: calc(100vh - 200px);
-  min-height: 640px;
+  height: 520px;
+  min-height: 480px;
   border: none;
   background: #eaf1fb;
   display: block;
@@ -1087,7 +1087,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   .settings-section { height: 360px; min-height: 360px; max-height: 360px; }
   .filter-popover__panel { min-width: 280px; max-width: calc(100vw - 40px); }
   .chart-canvas-wrap { height: 240px; }
-  .check-iframe { min-height: 520px; height: calc(100vh - 160px); }
+  .check-iframe { min-height: 480px; height: 520px; }
 }
 
 /* ≤ 768px — tablet portrait */
@@ -3013,7 +3013,9 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       title: m.sourceTitle || '—',
       percent: Math.round((m.similarity ?? 0) * 10) / 10,
       docId: m.sourceId ? String(m.sourceId) : '—',
-      docType: adminCategoryLabel(simById.get(m.sourceId)?.category),
+      docType: adminCategoryLabel(m.category || simById.get(m.sourceId)?.category),
+      matchType: m.matchType || null,
+      matchTypeLabel: m.matchTypeLabel || null,
       // quote: m.quote || '—',
     }));
     /*
@@ -4315,6 +4317,11 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
 
   window.addEventListener('message', (e) => {
     if (!e || !e.data) return;
+    if (e.data.type === 'ap-embed-height' && typeof e.data.height === 'number') {
+      const iframe = document.getElementById('checkIframe');
+      if (iframe) iframe.style.height = Math.max(480, e.data.height + 4) + 'px';
+      return;
+    }
     if (e.data.type === 'ap-show-matches') {
       openAdminMatches(e.data.documentId, e.data.matchPct ?? 0);
       // openAdminMatches(e.data.documentId, e.data.matchPct ?? 0, e.data.aiPct ?? 0);
@@ -4370,7 +4377,10 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
             <span class="matches-list__percent">${m.percent}%</span>
           </div>
           <p class="matches-list__quote matches-list__quote--name">${escapeHtml(m.title || m.source || '—')}</p>
-          <div class="matches-list__meta"><span>ID документа <code>${escapeHtml(m.docId || '—')}</code></span></div>
+          <div class="matches-list__meta">
+            <span>ID документа <code>${escapeHtml(m.docId || '—')}</code></span>
+            ${m.matchTypeLabel ? `<span>Тип: <b>${escapeHtml(m.matchTypeLabel)}</b></span>` : ''}
+          </div>
         </li>`;
       /*
       return `

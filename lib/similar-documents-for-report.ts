@@ -28,7 +28,7 @@ export async function getSimilarDocumentsForReport(
   if (!doc) return []
 
   const normCat = normalizeCategory(doc.category)
-  const pool = await getDocumentsForComparison(normCat, doc.institutionId, documentId)
+  const pool = await getDocumentsForComparison(normCat, doc.institutionId, documentId, doc.userId)
 
   const normalizedContent = normalizeContentForCheck(doc.content)
   const queryShingles = createShingles(normalizedContent, 5)

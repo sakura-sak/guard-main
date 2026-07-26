@@ -90,10 +90,10 @@
 
   /**
    * Check document text for plagiarism (does NOT save to DB).
-   * @param {{ content: string, filename: string, category: string, institution?: string }} params
+   * @param {{ content: string, filename: string, category: string, institution?: string, institutionId?: string }} params
    * @returns {{ ok, data: { success, uniquenessPercent, plagiarismPercent,
    *   mlPlagiarismPercent, mlAiPercent, processingTimeMs,
-   *   totalDocumentsChecked, similarDocuments } }}
+   *   totalDocumentsChecked, similarDocuments, semanticMatches, byType } }}
    */
   const checkDocument = (params) => POST('/api/check', params);
 
@@ -104,7 +104,7 @@
    * Send as FormData with fields:
    *   file (File), title, content, category, status ("draft"|"final"),
    *   author?, institution?, originality_percent?, plagiarism_percent_ml?,
-   *   ai_percent_ml?, processing_time_ms?, document_type?
+   *   ai_percent_ml?, processing_time_ms?, document_type?, semantic_matches_json?
    * @param {FormData} formData
    * @returns {{ ok, data: { success, document: { id, title, filename, wordCount } } }}
    */
@@ -145,7 +145,7 @@
 
   /**
    * Borrowings / AI fragments for a document.
-   * @returns {{ ok, data: { success, borrowMatches, aiMatches, similarDocuments, plagiarismPercent, aiPercent } }}
+   * @returns {{ ok, data: { success, borrowMatches, aiMatches, similarDocuments, plagiarismPercent, aiPercent, byType } }}
    */
   const getDocumentMatches = (documentId) =>
     GET(`/api/documents/${documentId}/matches`);
@@ -255,14 +255,19 @@
     (data.borrowMatches || []).forEach((m) => {
       if (!m.sourceId || m.sourceId <= 0) return;
       const sim = simById.get(m.sourceId);
+      const pct = Math.round(m.similarity ?? 0);
+      const typeLabel = m.matchTypeLabel || '';
+      const cat = categoryLabel(m.category || sim?.category);
       rows.push({
         title: m.sourceTitle || '—',
         // quote: m.quote || m.sourceTitle || '—',
         docId: String(m.sourceId),
-        docType: categoryLabel(sim?.category),
-        percent: Math.round(m.similarity ?? 0),
-        percentLabel: `${Math.round(m.similarity ?? 0)}%`,
-        kind: 'local',
+        docType: typeLabel && typeLabel !== 'Локальное' ? `${cat} · ${typeLabel}` : cat,
+        percent: pct,
+        percentLabel: typeLabel ? `${pct}% · ${typeLabel}` : `${pct}%`,
+        matchType: m.matchType || null,
+        matchTypeLabel: typeLabel || null,
+        kind: m.matchType && m.matchType !== 'local' ? 'ml' : 'local',
       });
     });
     return rows.slice(0, 5);

@@ -7,6 +7,8 @@ export type ReportPrintSourceRow = {
   docId: string
   percent: number
   percentLabel: string
+  matchType?: string
+  matchTypeLabel?: string
 }
 
 async function categoryLabelMap(institutionId?: string | null): Promise<Map<string, string>> {
@@ -30,12 +32,16 @@ function mapBorrowRows(
     if (!m.sourceId || m.sourceId <= 0) continue
     const sim = simById.get(m.sourceId)
     const pct = Math.round(m.similarity ?? 0)
+    const typeLabel = m.matchTypeLabel || ""
+    const cat = (sim?.category && labels.get(sim.category)) || sim?.category || m.category || "—"
     rows.push({
       title: m.sourceTitle || "—",
       docId: String(m.sourceId),
-      docType: (sim?.category && labels.get(sim.category)) || sim?.category || "—",
+      docType: typeLabel && typeLabel !== "Локальное" ? `${cat} · ${typeLabel}` : cat,
       percent: pct,
-      percentLabel: `${pct}%`,
+      percentLabel: typeLabel ? `${pct}% · ${typeLabel}` : `${pct}%`,
+      matchType: m.matchType,
+      matchTypeLabel: typeLabel || undefined,
     })
   }
   return rows.slice(0, 5)

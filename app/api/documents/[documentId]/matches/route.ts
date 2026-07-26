@@ -56,5 +56,6 @@ export async function GET(
     mlPlagiarismPercent: payload.mlPlagiarismPercent,
     plagiarismPercent: payload.plagiarismPercent,
     originalityPercent: payload.originalityPercent,
+    byType: payload.byType,
   })
 }

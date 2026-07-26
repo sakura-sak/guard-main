@@ -2,10 +2,16 @@ import { type NextRequest, NextResponse } from "next/server"
 import { saveFileToDisk, addDocumentToDb, updateDocumentMlScores } from "@/lib/local-storage"
 import { createShingles, MinHash, normalizeContentForCheck } from "@/lib/plagiarism/algorithms"
 import { analyzeWithMlService } from "@/lib/analysis-client"
-import { resolveFacultyId, resolveInstitutionId } from "@/lib/directories"
+import { resolveCheckInstitutionScope } from "@/lib/check-institution-scope"
+import { resolveFacultyId } from "@/lib/directories"
 import { logInfo, logError } from "@/lib/logger"
+import {
+  normalizeMlSemanticMatches,
+  replaceMlMatchesForDocument,
+} from "@/lib/ml-matches-storage"
 import { formatApiUploadError } from "@/lib/prisma-error-message"
 import { requireSessionApi } from "@/lib/require-session-api"
+import { getUserByUsername } from "@/lib/user-storage"
 
 const NUM_HASHES = 128
 
@@ -22,8 +28,15 @@ export async function POST(request: NextRequest) {
     const content = formData.get("content") as string
     const status = (formData.get("status") as "draft" | "final") || "draft"
     const userId = gate.user.username
-    const institutionName = (formData.get("institution") as string | null) || gate.user.institution || "БГУИР"
-    const institutionId = await resolveInstitutionId(institutionName)
+    const dbUser = await getUserByUsername(userId)
+    const scope = await resolveCheckInstitutionScope(gate.user, dbUser, {
+      institution: (formData.get("institution") as string | null) || gate.user.institution || "",
+      institutionId: formData.get("institutionId") as string | null,
+    })
+    if (!scope.ok) {
+      return NextResponse.json({ success: false, error: scope.error }, { status: scope.status })
+    }
+    const institutionId = scope.institutionId
     const facultyId = institutionId
       ? await resolveFacultyId(institutionId, gate.user.faculty)
       : null
@@ -32,6 +45,7 @@ export async function POST(request: NextRequest) {
     const originalityRaw = formData.get("originality_percent") as string | null
     const processingTimeMsRaw = formData.get("processing_time_ms") as string | null
     const documentTypeRaw = formData.get("document_type") as string | null
+    const semanticMatchesRaw = formData.get("semantic_matches_json") as string | null
 
     if (!file || !title || !content) {
       return NextResponse.json({ success: false, error: "Файл, название и содержимое обязательны" }, { status: 400 })
@@ -117,13 +131,28 @@ export async function POST(request: NextRequest) {
       facultyId ?? undefined,
     )
 
+    let semanticMatches = normalizeMlSemanticMatches(
+      (() => {
+        if (!semanticMatchesRaw || !String(semanticMatchesRaw).trim()) return []
+        try {
+          return JSON.parse(String(semanticMatchesRaw))
+        } catch {
+          return []
+        }
+      })(),
+    )
+
     // Дозапрос к ML не должен отменять успешно созданную запись в БД
     if (
       (typeof plagiarismPercentMl !== "number" || typeof aiPercentMl !== "number") &&
       normalizedContent.length >= 50
     ) {
       try {
-        const ml = await analyzeWithMlService(normalizedContent, { filename: file.name, documentId: doc.id })
+        const ml = await analyzeWithMlService(normalizedContent, {
+          filename: file.name,
+          documentId: doc.id,
+          institutionId,
+        })
         if (ml) {
           await updateDocumentMlScores(doc.id, ml.plagiarismPercent, ml.aiPercent)
           doc = {
@@ -131,6 +160,7 @@ export async function POST(request: NextRequest) {
             plagiarismPercentMl: ml.plagiarismPercent,
             aiPercentMl: ml.aiPercent,
           }
+          semanticMatches = ml.semanticMatches
         }
       } catch (mlErr) {
         logError(
@@ -143,11 +173,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let mlMatchesSaved = 0
+    try {
+      mlMatchesSaved = await replaceMlMatchesForDocument(doc.id, semanticMatches)
+    } catch (matchErr) {
+      logError(
+        "Сохранение ML-совпадений после загрузки не выполнено",
+        matchErr instanceof Error ? matchErr : String(matchErr),
+        userId || undefined,
+        doc.id,
+        "upload",
+      )
+    }
+
     logInfo("Документ загружен", userId || undefined, undefined, "upload", {
       documentId: doc.id,
       title: doc.title,
       category: category,
       status: status,
+      mlMatchesSaved,
+      semanticMatchCount: semanticMatches.length,
     })
 
     return NextResponse.json({

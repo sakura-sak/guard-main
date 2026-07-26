@@ -5,6 +5,7 @@ import { verifyGuardSessionCookie } from "./guard-session.node"
 import { getUserByUsername } from "./user-storage"
 
 export type SessionUser = User & {
+  institutionId?: string
   faculty?: string
   group?: string
 }
@@ -49,6 +50,7 @@ export async function requireSessionApi(
         email: dbUser.email,
         fullName: dbUser.fullName,
         institution: dbUser.institution,
+        institutionId: dbUser.institutionId,
         faculty: dbUser.faculty,
         group: dbUser.group,
       }

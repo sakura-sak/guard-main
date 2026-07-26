@@ -345,27 +345,38 @@ export async function getAllDocumentsFromDb(
 }
 
 /**
- * Пул для сравнения: черновики и финальные работы той же категории (включая работы автора).
+ * Пул для сравнения: черновики и финальные работы той же категории и того же УО.
+ * Без institutionId сравнение не выполняется (изоляция вузов).
+ * excludeUserId — не сравнивать с другими работами того же автора (только чужие).
  */
 export async function getDocumentsForComparison(
   category: string,
   institutionId?: string | null,
   excludeDocumentId?: number,
+  excludeUserId?: string | null,
 ): Promise<StoredDocument[]> {
+  const instId = institutionId?.trim()
+  if (!instId) return []
+
   const safeCategory = category.replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_").trim() || "uncategorized"
   const db = await initDb()
 
+  const excludeUser = excludeUserId?.trim()
   const where: {
     category: string
     status: { in: DocumentStatus[] }
-    institutionId?: string
+    institutionId: string
     id?: { not: number }
+    OR?: Array<{ userId: null } | { userId: { not: string } }>
   } = {
     category: safeCategory,
     status: { in: ["draft", "final"] },
+    institutionId: instId,
   }
-  if (institutionId) where.institutionId = institutionId
   if (typeof excludeDocumentId === "number") where.id = { not: excludeDocumentId }
+  if (excludeUser) {
+    where.OR = [{ userId: null }, { userId: { not: excludeUser } }]
+  }
 
   const rows = await db.document.findMany({
     where,
