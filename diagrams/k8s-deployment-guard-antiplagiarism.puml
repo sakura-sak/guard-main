@@ -65,7 +65,7 @@ SvcAnalysis --> PodAnalysis
 PodAnalysis --> SvcQdrant : query/upsert vectors
 SvcQdrant --> PodQdrant
 
-PodGuard --> PvcGuard : documents + sqlite data
+PodGuard --> PvcGuard : uploads, reports, logs
 PodQdrant --> PvcQdrant : vector storage
 
 Cfg ..> PodGuard

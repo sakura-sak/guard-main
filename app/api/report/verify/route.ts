@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getQrSignature, reportVerifyResponse } from "@/lib/report-verify-get"
+import { getQrSignature } from "@/lib/report-verify-get"
+import { verifyDocumentAccess } from "@/lib/report-access"
 
 /**
  * GET /api/report/verify?documentId=123&sig=...
- * Для QR-кода «подтверждение подлинности и актуальности справки».
- * Поддерживается битая разметка ?documentId=…&amp;sig=… (имя параметра amp;sig).
+ * Legacy QR links redirect to unified HTML report; JSON still supported with ?raw=1.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +18,20 @@ export async function GET(request: NextRequest) {
     }
 
     const id = parseInt(documentId, 10)
-    return reportVerifyResponse(id, sig, raw)
+    if (Number.isNaN(id) || !sig || !verifyDocumentAccess("report", id, sig)) {
+      return NextResponse.json(
+        { success: false, error: "Доступ запрещён. Используйте ссылку из QR-кода на справке." },
+        { status: 403 },
+      )
+    }
+
+    if (raw) {
+      const { reportVerifyResponse } = await import("@/lib/report-verify-get")
+      return reportVerifyResponse(id, sig, true)
+    }
+
+    const url = new URL(`/report.html?documentId=${id}&sig=${encodeURIComponent(sig)}`, request.url)
+    return NextResponse.redirect(url)
   } catch (e) {
     console.error("Report verify error:", e)
     return NextResponse.json({ success: false, error: "Ошибка верификации" }, { status: 500 })

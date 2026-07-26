@@ -12,6 +12,7 @@ datasource db {
 model Institution {
   id        String   @id // slug, e.g. "bsuir"
   name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
 
   faculties Faculty[]
@@ -26,6 +27,7 @@ model Faculty {
   id            String   @id // slug, e.g. "fitu"
   name          String
   institutionId String   @map("institution_id")
+  isActive      Boolean  @default(true) @map("is_active")
   createdAt     DateTime @default(now()) @map("created_at")
 
   institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
@@ -77,34 +79,33 @@ model User {
   @@map("users")
 }
 
-// ─── 5. Document ──────────────────────────────────────────────────────────────
+// ─── 5. Document (metadata only) ───────────────────────────────────────────────
 model Document {
-  id                   Int       @id @default(autoincrement())
-  title                String
-  filename             String?
-  fileFormat           String?   @map("file_format") // "word" | "pdf"
-  filePath             String?   @map("file_path")
-  content              String
-  wordCount            Int       @map("word_count")
-  uploadDate           DateTime  @map("upload_date")
-  category             String // slug used for file-storage paths
-  status               String // "draft" | "final" | "archived"
-  userId               String?   @map("user_id")
-  institutionId        String?   @map("institution_id")
-  facultyId            String?   @map("faculty_id")
-  documentTypeId       Int?      @map("document_type_id")
-  minhashSignatureJson String    @map("minhash_signature_json")
-  shingleCount         Int       @map("shingle_count")
-  originalityPercent   Float?    @map("originality_percent")
-  plagiarismPercentMl  Float?    @map("plagiarism_percent_ml")
-  aiPercentMl          Float?    @map("ai_percent_ml")
-  processingTimeMs     Int?      @map("processing_time_ms")
-  expiresAt            DateTime? @map("expires_at")
+  id                  Int       @id @default(autoincrement())
+  title               String
+  filename            String?
+  fileFormat          String?   @map("file_format") // "word" | "pdf"
+  filePath            String?   @map("file_path")
+  wordCount           Int       @map("word_count")
+  uploadDate          DateTime  @map("upload_date")
+  category            String // slug used for file-storage paths
+  status              String // "draft" | "final" | "archived"
+  userId              String?   @map("user_id")
+  institutionId       String?   @map("institution_id")
+  facultyId           String?   @map("faculty_id")
+  documentTypeId      Int?      @map("document_type_id")
+  originalityPercent  Float?    @map("originality_percent")
+  plagiarismPercentMl Float?    @map("plagiarism_percent_ml")
+  aiPercentMl         Float?    @map("ai_percent_ml")
+  processingTimeMs    Int?      @map("processing_time_ms")
+  expiresAt           DateTime? @map("expires_at")
 
-  user         User?         @relation(fields: [userId], references: [username], onDelete: SetNull)
-  institution  Institution?  @relation(fields: [institutionId], references: [id], onDelete: SetNull)
-  faculty      Faculty?      @relation(fields: [facultyId], references: [id], onDelete: SetNull)
-  documentType DocumentType? @relation(fields: [documentTypeId], references: [id], onDelete: SetNull)
+  user             User?              @relation(fields: [userId], references: [username], onDelete: SetNull)
+  institution      Institution?       @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  faculty          Faculty?           @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  documentType     DocumentType?      @relation(fields: [documentTypeId], references: [id], onDelete: SetNull)
+  contentPayload   DocumentContent?
+  signaturePayload DocumentSignature?
 
   matchesAsSource PlagiarismMatch[] @relation("SourceDocument")
   matchesAsTarget PlagiarismMatch[] @relation("TargetDocument")
@@ -117,6 +118,29 @@ model Document {
   @@index([institutionId], map: "idx_documents_institution_id")
   @@index([documentTypeId], map: "idx_documents_document_type_id")
   @@map("documents")
+}
+
+// ─── 5a. Document text (heavy payload) ────────────────────────────────────────
+model DocumentContent {
+  documentId  Int      @id @map("document_id")
+  text        String   @default("")
+  extractedAt DateTime @default(now()) @map("extracted_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_contents")
+}
+
+// ─── 5b. MinHash signature for comparison ─────────────────────────────────────
+model DocumentSignature {
+  documentId   Int      @id @map("document_id")
+  minhash      Int[]    @default([])
+  shingleCount Int      @default(0) @map("shingle_count")
+  computedAt   DateTime @default(now()) @map("computed_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_signatures")
 }
 
 // ─── 6. PlagiarismMatch ───────────────────────────────────────────────────────

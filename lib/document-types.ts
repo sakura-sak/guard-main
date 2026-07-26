@@ -1,8 +1,10 @@
 /**
  * Справочник типов работ (DocumentType) — PostgreSQL (Prisma).
+ * Управление только superadmin; «удаление» = деактивация.
  */
 
 import { prisma } from "./prisma"
+import { writeAuditLog } from "./audit-log"
 
 export interface DocumentTypeEntry {
   id: number
@@ -67,6 +69,10 @@ async function uniqueSlug(base: string): Promise<string> {
   return slug
 }
 
+async function documentTypeUsage(id: number): Promise<number> {
+  return prisma.document.count({ where: { documentTypeId: id } })
+}
+
 export async function getAllDocumentTypes(includeInactive = false): Promise<DocumentTypeEntry[]> {
   await ensureSeeded()
   const rows = await prisma.documentType.findMany({
@@ -82,22 +88,43 @@ export async function getDocumentTypeById(id: number): Promise<DocumentTypeEntry
   return row ? mapRow(row) : null
 }
 
-export async function createDocumentType(data: {
-  displayName: string
-  name?: string
-  description?: string
-  isActive?: boolean
-}): Promise<{ success: boolean; error?: string; type?: DocumentTypeEntry }> {
+export async function createDocumentType(
+  data: {
+    displayName: string
+    name?: string
+    description?: string
+    isActive?: boolean
+  },
+  actorUsername?: string,
+): Promise<{ success: boolean; error?: string; type?: DocumentTypeEntry }> {
   await ensureSeeded()
   const displayName = String(data.displayName || "").trim()
   if (!displayName) return { success: false, error: "Название типа обязательно" }
 
-  const name = data.name?.trim()
-    ? slugifyDocumentTypeName(data.name)
-    : await uniqueSlug(displayName)
+  const name = data.name?.trim() ? slugifyDocumentTypeName(data.name) : await uniqueSlug(displayName)
 
   const existing = await prisma.documentType.findUnique({ where: { name } })
-  if (existing) return { success: false, error: "Тип с таким идентификатором уже существует" }
+  if (existing) {
+    if (!existing.isActive) {
+      const row = await prisma.documentType.update({
+        where: { id: existing.id },
+        data: {
+          displayName,
+          description: data.description?.trim() || null,
+          isActive: true,
+        },
+      })
+      await writeAuditLog({
+        userId: actorUsername,
+        action: "admin_activate_document_type",
+        message: `Тип работы активирован: ${displayName}`,
+        entityType: "document_type",
+        entityId: row.id,
+      })
+      return { success: true, type: mapRow(row) }
+    }
+    return { success: false, error: "Тип с таким идентификатором уже существует" }
+  }
 
   const row = await prisma.documentType.create({
     data: {
@@ -107,12 +134,20 @@ export async function createDocumentType(data: {
       isActive: data.isActive ?? true,
     },
   })
+  await writeAuditLog({
+    userId: actorUsername,
+    action: "admin_add_document_type",
+    message: `Тип работы добавлен: ${displayName}`,
+    entityType: "document_type",
+    entityId: row.id,
+  })
   return { success: true, type: mapRow(row) }
 }
 
 export async function updateDocumentType(
   id: number,
   data: { displayName?: string; name?: string; description?: string; isActive?: boolean },
+  actorUsername?: string,
 ): Promise<{ success: boolean; error?: string; type?: DocumentTypeEntry }> {
   const existing = await prisma.documentType.findUnique({ where: { id } })
   if (!existing) return { success: false, error: "Тип работы не найден" }
@@ -130,7 +165,18 @@ export async function updateDocumentType(
     patch.displayName = displayName
   }
   if (data.description !== undefined) patch.description = data.description?.trim() || null
-  if (data.isActive !== undefined) patch.isActive = Boolean(data.isActive)
+  if (data.isActive !== undefined) {
+    if (data.isActive === false && existing.isActive) {
+      const docs = await documentTypeUsage(id)
+      if (docs > 0) {
+        return {
+          success: false,
+          error: `Нельзя деактивировать «${existing.displayName}»: используется в ${docs} докум.`,
+        }
+      }
+    }
+    patch.isActive = Boolean(data.isActive)
+  }
 
   if (data.name !== undefined) {
     const name = slugifyDocumentTypeName(data.name)
@@ -141,13 +187,44 @@ export async function updateDocumentType(
   }
 
   const row = await prisma.documentType.update({ where: { id }, data: patch })
+  await writeAuditLog({
+    userId: actorUsername,
+    action: "admin_update_document_type",
+    message: `Тип работы обновлён: ${row.displayName}`,
+    entityType: "document_type",
+    entityId: id,
+  })
   return { success: true, type: mapRow(row) }
 }
 
-export async function deleteDocumentType(id: number): Promise<{ success: boolean; error?: string }> {
+export async function deactivateDocumentType(
+  id: number,
+  actorUsername?: string,
+): Promise<{ success: boolean; error?: string }> {
   const existing = await prisma.documentType.findUnique({ where: { id } })
   if (!existing) return { success: false, error: "Тип работы не найден" }
+  if (!existing.isActive) return { success: true }
 
-  await prisma.documentType.delete({ where: { id } })
+  const docs = await documentTypeUsage(id)
+  if (docs > 0) {
+    return {
+      success: false,
+      error: `Нельзя деактивировать «${existing.displayName}»: используется в ${docs} докум.`,
+    }
+  }
+
+  await prisma.documentType.update({ where: { id }, data: { isActive: false } })
+  await writeAuditLog({
+    userId: actorUsername,
+    action: "admin_deactivate_document_type",
+    message: `Тип работы деактивирован: ${existing.displayName}`,
+    entityType: "document_type",
+    entityId: id,
+  })
   return { success: true }
+}
+
+/** @deprecated Use deactivateDocumentType */
+export async function deleteDocumentType(id: number, actorUsername?: string) {
+  return deactivateDocumentType(id, actorUsername)
 }

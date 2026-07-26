@@ -1,13 +1,12 @@
 /**
  * Локальное файловое хранилище для системы антиплагиата.
- * Файлы uploads и PDF отчёты хранятся на диске как раньше,
- * а метаданные/контент документов теперь лежат в SQLite.
+ * Файлы uploads и PDF отчёты хранятся на диске в data/,
+ * метаданные и контент документов — в PostgreSQL (Prisma).
  */
 
 import fs from "fs"
 import path from "path"
 import { prisma } from "./prisma"
-import { ensureSqliteSeededFromLocalJson } from "./sqlite-seed"
 
 // Типы
 export type DocumentStatus = "draft" | "final" | "archived"
@@ -88,7 +87,6 @@ function ensureCategoryDirs(category: string) {
 }
 
 async function initDb() {
-  await ensureSqliteSeededFromLocalJson()
   return prisma
 }
 
@@ -104,11 +102,40 @@ const DOC_ORG_INCLUDE = {
   },
 } as const
 
+const DOC_PAYLOAD_INCLUDE = {
+  contentPayload: true,
+  signaturePayload: true,
+} as const
+
+const DOC_FULL_INCLUDE = {
+  ...DOC_ORG_INCLUDE,
+  ...DOC_PAYLOAD_INCLUDE,
+} as const
+
+function parseLegacyMinhashJson(raw: unknown): number[] {
+  if (typeof raw !== "string" || !raw.trim()) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.map((n) => Number(n)).filter((n) => Number.isFinite(n)) : []
+  } catch {
+    return []
+  }
+}
+
 function mapRowToStoredDocument(row: any): StoredDocument {
   const docType = row.fileFormat === "pdf" || row.fileFormat === "word" ? row.fileFormat : undefined
   const institutionName =
     row.institution?.name ?? row.user?.institution?.name ?? undefined
   const facultyName = row.faculty?.name ?? row.user?.faculty?.name ?? undefined
+  const content =
+    row.contentPayload?.text ??
+    (typeof row.content === "string" ? row.content : "")
+  const minhashSignature =
+    row.signaturePayload?.minhash ??
+    (row.minhashSignatureJson ? parseLegacyMinhashJson(row.minhashSignatureJson) : [])
+  const shingleCount =
+    row.signaturePayload?.shingleCount ??
+    (typeof row.shingleCount === "number" ? row.shingleCount : 0)
   return {
     id: row.id,
     title: row.title,
@@ -116,7 +143,7 @@ function mapRowToStoredDocument(row: any): StoredDocument {
     filename: row.filename ?? null,
     documentType: docType,
     filePath: row.filePath ?? null,
-    content: row.content,
+    content,
     wordCount: row.wordCount,
     uploadDate: row.uploadDate instanceof Date ? row.uploadDate.toISOString() : row.uploadDate,
     category: row.category,
@@ -127,8 +154,8 @@ function mapRowToStoredDocument(row: any): StoredDocument {
     facultyId: row.facultyId ?? undefined,
     faculty: facultyName,
     documentTypeId: row.documentTypeId ?? undefined,
-    minhashSignature: row.minhashSignatureJson ? JSON.parse(row.minhashSignatureJson) : [],
-    shingleCount: row.shingleCount ?? 0,
+    minhashSignature,
+    shingleCount,
     originalityPercent: typeof row.originalityPercent === "number" ? row.originalityPercent : undefined,
     plagiarismPercentMl:
       typeof row.plagiarismPercentMl === "number" ? row.plagiarismPercentMl : undefined,
@@ -136,6 +163,20 @@ function mapRowToStoredDocument(row: any): StoredDocument {
     processingTimeMs: typeof row.processingTimeMs === "number" ? row.processingTimeMs : undefined,
     expiresAt: row.expiresAt instanceof Date ? row.expiresAt.toISOString() : row.expiresAt ?? undefined,
   }
+}
+
+async function clearDocumentPayload(documentId: number): Promise<void> {
+  const db = await initDb()
+  await db.documentContent.upsert({
+    where: { documentId },
+    create: { documentId, text: "" },
+    update: { text: "" },
+  })
+  await db.documentSignature.upsert({
+    where: { documentId },
+    create: { documentId, minhash: [], shingleCount: 0 },
+    update: { minhash: [], shingleCount: 0 },
+  })
 }
 
 /** Список категорий, для которых есть папка в data/ */
@@ -168,7 +209,7 @@ export function saveFileToDisk(
   return newFilename
 }
 
-// Добавление документа в базу (SQLite). ID — автоинкремент SQLite.
+// Добавление документа в PostgreSQL (Prisma). ID — автоинкремент.
 export async function addDocumentToDb(
   title: string,
   content: string,
@@ -202,7 +243,6 @@ export async function addDocumentToDb(
       filename: filename || null,
       fileFormat: documentType ?? null,
       filePath: relativeFilePath,
-      content,
       wordCount,
       uploadDate,
       category: normCategory,
@@ -211,18 +251,23 @@ export async function addDocumentToDb(
       institutionId: institutionId ?? null,
       facultyId: facultyId ?? null,
       documentTypeId: documentTypeId ?? null,
-      minhashSignatureJson: JSON.stringify(minhashSignature ?? []),
-      shingleCount: shingleCount ?? 0,
       originalityPercent: typeof originalityPercent === "number" ? Math.round(originalityPercent * 100) / 100 : null,
       plagiarismPercentMl: typeof plagiarismPercentMl === "number" ? plagiarismPercentMl : null,
       aiPercentMl: typeof aiPercentMl === "number" ? aiPercentMl : null,
       processingTimeMs: typeof processingTimeMs === "number" ? Math.max(0, Math.round(processingTimeMs)) : null,
       expiresAt,
+      contentPayload: { create: { text: content } },
+      signaturePayload: {
+        create: {
+          minhash: minhashSignature ?? [],
+          shingleCount: shingleCount ?? 0,
+        },
+      },
     },
   })
   const row = await db.document.findUnique({
     where: { id: created.id },
-    include: DOC_ORG_INCLUDE,
+    include: DOC_FULL_INCLUDE,
   })
   return row ? mapRowToStoredDocument(row) : mapRowToStoredDocument(created)
 }
@@ -245,11 +290,9 @@ async function archiveExpiredDraft(doc: StoredDocument): Promise<void> {
       status: "archived",
       filePath: null,
       filename: doc.filename,
-      content: "",
-      minhashSignatureJson: "[]",
-      shingleCount: 0,
     },
   })
+  await clearDocumentPayload(doc.id)
 }
 
 async function filterDraftTtlAndCleanup(documents: StoredDocument[]): Promise<StoredDocument[]> {
@@ -293,8 +336,6 @@ export async function getAllDocumentsFromDb(
     include: DOC_ORG_INCLUDE,
   })
   let docs: StoredDocument[] = rows.map(mapRowToStoredDocument)
-
-  // Only final documents participate in comparison pool when categories filter is used
   if (categories && categories.length > 0) {
     docs = docs.filter((d) => d.status === "final")
   }
@@ -329,7 +370,7 @@ export async function getDocumentsForComparison(
   const rows = await db.document.findMany({
     where,
     orderBy: { uploadDate: "desc" },
-    include: DOC_ORG_INCLUDE,
+    include: DOC_FULL_INCLUDE,
   })
   return filterDraftTtlAndCleanup(rows.map(mapRowToStoredDocument))
 }
@@ -339,6 +380,7 @@ export async function getUserFinalDocuments(userId: string): Promise<StoredDocum
   const rows = await db.document.findMany({
     where: { userId, status: "final" },
     orderBy: { uploadDate: "desc" },
+    include: DOC_FULL_INCLUDE,
   })
   return rows.map(mapRowToStoredDocument)
 }
@@ -348,6 +390,7 @@ export async function getUserDocuments(userId: string): Promise<StoredDocument[]
   const rows = await db.document.findMany({
     where: { userId },
     orderBy: { uploadDate: "desc" },
+    include: DOC_FULL_INCLUDE,
   })
   const docs: StoredDocument[] = rows.map(mapRowToStoredDocument)
   return filterDraftTtlAndCleanup(docs)
@@ -366,7 +409,7 @@ export function getDocumentAuthorLabel(doc: {
 
 export async function getDocumentByIdFromDb(id: number): Promise<StoredDocument | null> {
   const db = await initDb()
-  const row = await db.document.findUnique({ where: { id }, include: DOC_ORG_INCLUDE })
+  const row = await db.document.findUnique({ where: { id }, include: DOC_FULL_INCLUDE })
   return row ? mapRowToStoredDocument(row) : null
 }
 
@@ -472,7 +515,12 @@ export async function purgeArchivedDocumentStorage(): Promise<{
   const db = await initDb()
   const rows = await db.document.findMany({
     where: { status: "archived" },
-    select: { id: true, filePath: true, content: true, minhashSignatureJson: true },
+    select: {
+      id: true,
+      filePath: true,
+      contentPayload: { select: { text: true } },
+      signaturePayload: { select: { minhash: true } },
+    },
   })
 
   let purged = 0
@@ -481,10 +529,8 @@ export async function purgeArchivedDocumentStorage(): Promise<{
 
   for (const row of rows) {
     const hasFile = Boolean(row.filePath)
-    const hasContent = Boolean(row.content && row.content.length > 0)
-    const hasMinhash = Boolean(
-      row.minhashSignatureJson && row.minhashSignatureJson !== "[]" && row.minhashSignatureJson !== "null",
-    )
+    const hasContent = Boolean(row.contentPayload?.text && row.contentPayload.text.length > 0)
+    const hasMinhash = Boolean(row.signaturePayload?.minhash && row.signaturePayload.minhash.length > 0)
     if (!hasFile && !hasContent && !hasMinhash) continue
 
     if (row.filePath) {
@@ -503,13 +549,9 @@ export async function purgeArchivedDocumentStorage(): Promise<{
 
     await db.document.update({
       where: { id: row.id },
-      data: {
-        filePath: null,
-        content: "",
-        minhashSignatureJson: "[]",
-        shingleCount: 0,
-      },
+      data: { filePath: null },
     })
+    await clearDocumentPayload(row.id)
     purged++
   }
 

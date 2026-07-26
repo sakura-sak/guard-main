@@ -62,7 +62,7 @@
 
   /**
    * Update current user's profile.
-   * @param {{ fullName?, email?, institution?, faculty?, group? }} data
+   * @param {{ fullName?, email?, institution?, faculty?, facultyId?, group? }} data
    */
   const updateProfile = (data) => PATCH('/api/users/me', data);
 
@@ -417,6 +417,50 @@
   /** Run archived storage purge (admin): removes files/text, keeps stats in DB. */
   const runAdminCleanup = () => POST('/api/admin/cleanup', {});
 
+  /** Open unified HTML report in a new tab (same view as QR scan). */
+  function openPrintableReportById(documentId) {
+    const id = documentId != null ? String(documentId).trim() : '';
+    if (!id) return false;
+    window.open('report.html?documentId=' + encodeURIComponent(id), '_blank', 'noopener,noreferrer');
+    return true;
+  }
+
+  const METRIC_RING_LENGTH = 2 * Math.PI * 42;
+
+  function readMetricCircleVars(containerEl) {
+    const cs = getComputedStyle(containerEl);
+    const color = cs.getPropertyValue('--color').trim() || '#2563eb';
+    const ringW = cs.getPropertyValue('--ring-w').trim() || '10';
+    return { color, ringW };
+  }
+
+  /** Firefox-safe metric ring — dash via inline style (CSS must not set dashoffset). */
+  function setMetricCircle(containerEl, percent) {
+    if (!containerEl) return;
+    const p = Math.max(0, Math.min(100, Number(percent) || 0));
+    const bg = containerEl.querySelector('.metric-circle__bg');
+    const fg = containerEl.querySelector('.metric-circle__fg');
+    if (!fg) return;
+    const { color, ringW } = readMetricCircleVars(containerEl);
+    if (bg) {
+      bg.setAttribute('stroke', '#e2e8f0');
+      bg.setAttribute('stroke-width', ringW);
+    }
+    fg.setAttribute('stroke', color);
+    fg.setAttribute('stroke-width', ringW);
+    fg.setAttribute('stroke-linecap', 'round');
+    fg.setAttribute('fill', 'none');
+    const dash = String(METRIC_RING_LENGTH);
+    const offset = String(METRIC_RING_LENGTH * (1 - p / 100));
+    fg.style.strokeDasharray = dash;
+    fg.style.strokeDashoffset = offset;
+  }
+
+  function initMetricCirclesIn(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('.metric-circle').forEach((el) => setMetricCircle(el, 0));
+  }
+
   /** Open printable report HTML in a new tab (avoids about:blank from document.write). */
   function openReportPrintWindow(html) {
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -447,6 +491,7 @@
     deleteUserDocument, getDocumentMatches, generateReport, getReportQrLinks, resolveReportQrUrls,
     fetchReportMatchRows, mapBorrowRowsFromMatchesApi, buildReportTableRows, formatReportPercentCell,
     loadCategoryLabels, setCategoryLabelsFromTypes, categoryLabel, qrImageUrl, applyQrToImg, openReportPrintWindow,
+    openPrintableReportById, setMetricCircle, initMetricCirclesIn, METRIC_RING_LENGTH,
     updateAdminDocument,
     // admin: users
     getAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser,

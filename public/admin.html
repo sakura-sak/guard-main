@@ -433,7 +433,20 @@ a { color: inherit; text-decoration: none; }
 body.is-uni-admin .admin-col-uo,
 body.is-uni-admin .admin-filter-uo,
 body.is-uni-admin #settingsUoSection,
+body.is-uni-admin #settingsTypesSection,
 body.is-uni-admin .dash-global-uo { display: none !important; }
+.settings-list__badge {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+  padding: 2px 7px; border-radius: 999px; margin-left: 8px;
+  background: #e2e8f0; color: #64748b; flex-shrink: 0;
+}
+.settings-list__item.is-inactive { opacity: 0.72; }
+.settings-list__item.is-inactive > span:first-of-type { text-decoration: line-through; text-decoration-color: rgba(100,116,139,0.5); }
+.settings-list__restore {
+  border: none; background: transparent; color: var(--primary); cursor: pointer;
+  font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 6px; font-family: inherit;
+}
+.settings-list__restore:hover { background: var(--primary-soft); }
 .status-pill--draft { background: #fef3c7; color: #92400e; }
 .status-pill--final { background: #dcfce7; color: #166534; }
 .status-pill--archived { background: #e2e8f0; color: #475569; }
@@ -657,9 +670,22 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
 .pagination__ellipsis { color: var(--muted); padding: 0 8px; font-size: 14px; user-select: none; }
 
 .empty { color: var(--muted); text-align: center; padding: 30px; font-size: 14px; }
+.check-embed-wrap.card {
+  padding: 0;
+  overflow: hidden;
+  min-height: calc(100vh - 200px);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
 .check-iframe {
-  width: 100%; min-height: 400px; border: none;
-  background: transparent; display: block;
+  width: 100%;
+  height: calc(100vh - 200px);
+  min-height: 640px;
+  border: none;
+  background: #eaf1fb;
+  display: block;
+  border-radius: 18px;
 }
 #adminMatchesModal .modal__dialog { animation: none; }
 #adminMatchesModal .modal__backdrop { animation: none; }
@@ -763,7 +789,7 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
   margin: 0;
   padding: 0 0 12px;
 }
-body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(0, 1fr); }
 
 /* Settings modal */
 .settings-grid {
@@ -1047,7 +1073,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   .settings-section { height: 360px; min-height: 360px; max-height: 360px; }
   .filter-popover__panel { min-width: 280px; max-width: calc(100vw - 40px); }
   .chart-canvas-wrap { height: 240px; }
-  .check-iframe { min-height: 600px; }
+  .check-iframe { min-height: 520px; height: calc(100vh - 160px); }
 }
 
 /* ≤ 768px — tablet portrait */
@@ -1799,7 +1825,9 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
 
     <!-- Tab: Проверить документ (embed app.html) -->
     <div class="app__panel" data-panel="check" hidden>
-      <iframe id="checkIframe" class="check-iframe" title="Проверка документа" loading="lazy"></iframe>
+      <div class="card check-embed-wrap">
+        <iframe id="checkIframe" class="check-iframe" title="Проверка документа"></iframe>
+      </div>
     </div>
 
     <!-- Tab: Хранилище -->
@@ -1922,7 +1950,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   <div class="modal__dialog modal__dialog--lg">
     <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
     <h2 class="modal__title" id="settingsTitle">Настройки справочников</h2>
-    <p class="user-card__sub" style="margin-bottom: 18px;">Управление списками УО, факультетов и типов работ. Изменения применяются после обновления страницы.</p>
+    <p class="user-card__sub" style="margin-bottom: 18px;">Управление списками УО, факультетов и типов работ. Деактивация возможна только если запись не используется. Изменения применяются после обновления страницы.</p>
     <div class="settings-modal__body">
     <div class="settings-grid">
       <div class="settings-section" id="settingsUoSection">
@@ -1950,7 +1978,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           <button class="btn btn--primary" type="button" data-add="faculty">Добавить</button>
         </div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" id="settingsTypesSection">
         <div class="settings-section__head">
           <h3 class="settings-section__title">Типы работ</h3>
           <button class="action-btn" type="button" data-export="type"><i data-lucide="download" class="icon-16"></i> Экспорт</button>
@@ -2249,21 +2277,24 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   const multiSelectRegistry = {};
 
   async function loadAppConfigFromApi() {
-    const [dirRes, typesRes] = await Promise.all([
-      ApApi.getAdminDirectories(),
-      ApApi.getAdminDocumentTypes(),
-    ]);
+    const requests = [ApApi.getAdminDirectories()];
+    requests.push(__isSuperAdmin ? ApApi.getAdminDocumentTypes() : ApApi.getDocumentTypes());
+    const [dirRes, typesRes] = await Promise.all(requests);
+
     if (dirRes.ok && dirRes.data.institutions) {
       __institutions = dirRes.data.institutions;
-      appConfig.uos = __institutions.map((i) => i.name);
+      appConfig.uos = __institutions.filter((i) => i.isActive !== false).map((i) => i.name);
       appConfig.facultiesByUo = {};
       __institutions.forEach((i) => {
-        appConfig.facultiesByUo[i.name] = (i.faculties || []).map((f) => f.name);
+        if (i.isActive === false) return;
+        appConfig.facultiesByUo[i.name] = (i.faculties || [])
+          .filter((f) => f.isActive !== false)
+          .map((f) => f.name);
       });
     }
     if (typesRes.ok && typesRes.data.types) {
       __docTypes = typesRes.data.types;
-      appConfig.types = __docTypes.map((t) => t.displayName || t.name);
+      appConfig.types = __docTypes.filter((t) => t.isActive !== false).map((t) => t.displayName || t.name);
     }
     // Re-populate filter selects
     refreshOrgFilterOptions();
@@ -2413,50 +2444,70 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   };
   const renderSettingsList = () => {
     const uoEl = document.getElementById('settingsUosList');
-    if (!appConfig.uos.length) {
+    if (!__institutions.length) {
       uoEl.innerHTML = '<div class="settings-list__empty">Список пуст</div>';
     } else {
-      uoEl.innerHTML = appConfig.uos.map((v) => `
-        <div class="settings-list__item settings-list__item--clickable ${v === settingsState.selectedUo ? 'is-active' : ''}" data-select-uo="${escapeHtml(v)}">
-          <span>${escapeHtml(v)}</span>
-          <button class="settings-list__remove" type="button" data-remove="uo" data-value="${escapeHtml(v)}" title="Удалить" aria-label="Удалить">
+      uoEl.innerHTML = __institutions.map((inst) => {
+        const v = inst.name;
+        const inactive = inst.isActive === false;
+        const actions = inactive && __isSuperAdmin
+          ? `<button class="settings-list__restore" type="button" data-activate="uo" data-value="${escapeHtml(v)}" title="Активировать">Включить</button>`
+          : (!inactive ? `<button class="settings-list__remove" type="button" data-remove="uo" data-value="${escapeHtml(v)}" title="Деактивировать" aria-label="Деактивировать">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
-          </button>
-        </div>
-      `).join('');
+          </button>` : '');
+        return `
+        <div class="settings-list__item settings-list__item--clickable ${v === settingsState.selectedUo ? 'is-active' : ''} ${inactive ? 'is-inactive' : ''}" data-select-uo="${escapeHtml(v)}">
+          <span>${escapeHtml(v)}${inactive ? '<span class="settings-list__badge">Неактивно</span>' : ''}</span>
+          ${actions}
+        </div>`;
+      }).join('');
     }
     const scope = document.getElementById('settingsFacScope');
     if (scope) scope.textContent = settingsState.selectedUo ? '· ' + settingsState.selectedUo : '';
     const facEl = document.getElementById('settingsFacultiesList');
-    const facs = (appConfig.facultiesByUo[settingsState.selectedUo] || []);
+    const inst = findInstitutionByName(settingsState.selectedUo);
+    const facs = inst ? (inst.faculties || []) : [];
     if (!settingsState.selectedUo) {
       facEl.innerHTML = '<div class="settings-list__empty">Сначала выберите УО слева</div>';
     } else if (!facs.length) {
       facEl.innerHTML = '<div class="settings-list__empty">У этого УО пока нет факультетов</div>';
     } else {
-      facEl.innerHTML = facs.map((v) => `
-        <div class="settings-list__item">
-          <span>${escapeHtml(v)}</span>
-          <button class="settings-list__remove" type="button" data-remove="faculty" data-value="${escapeHtml(v)}" title="Удалить" aria-label="Удалить">
+      facEl.innerHTML = facs.map((fac) => {
+        const v = fac.name;
+        const inactive = fac.isActive === false;
+        const actions = inactive
+          ? `<button class="settings-list__restore" type="button" data-activate="faculty" data-value="${escapeHtml(v)}" title="Активировать">Включить</button>`
+          : `<button class="settings-list__remove" type="button" data-remove="faculty" data-value="${escapeHtml(v)}" title="Деактивировать" aria-label="Деактивировать">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
-          </button>
-        </div>
-      `).join('');
+          </button>`;
+        return `
+        <div class="settings-list__item ${inactive ? 'is-inactive' : ''}">
+          <span>${escapeHtml(v)}${inactive ? '<span class="settings-list__badge">Неактивно</span>' : ''}</span>
+          ${actions}
+        </div>`;
+      }).join('');
     }
     const typesEl = document.getElementById('settingsTypesList');
-    if (!appConfig.types.length) {
+    if (!__isSuperAdmin) {
+      typesEl.innerHTML = '<div class="settings-list__empty">Типы работ управляет главный администратор</div>';
+    } else if (!__docTypes.length) {
       typesEl.innerHTML = '<div class="settings-list__empty">Список пуст</div>';
     } else {
-      typesEl.innerHTML = appConfig.types.map((v, i) => {
+      typesEl.innerHTML = __docTypes.map((dt, i) => {
+        const v = dt.displayName || dt.name;
+        const inactive = dt.isActive === false;
         const c = (appConfig.typeColors && appConfig.typeColors[v]) || typeColorBase[v] || fallbackPalette[i % fallbackPalette.length];
-        return `<div class="settings-list__item">
+        const actions = inactive
+          ? `<button class="settings-list__restore" type="button" data-activate="type" data-id="${dt.id}" data-value="${escapeHtml(v)}" title="Активировать">Включить</button>`
+          : `<button class="settings-list__remove" type="button" data-remove="type" data-id="${dt.id}" data-value="${escapeHtml(v)}" title="Деактивировать" aria-label="Деактивировать">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+          </button>`;
+        return `<div class="settings-list__item ${inactive ? 'is-inactive' : ''}">
           <span class="settings-color" style="background: ${c}" title="Изменить цвет">
             <input type="color" value="${c}" data-color-for="${escapeHtml(v)}" aria-label="Цвет"/>
           </span>
-          <span style="flex: 1; min-width: 0;">${escapeHtml(v)}</span>
-          <button class="settings-list__remove" type="button" data-remove="type" data-value="${escapeHtml(v)}" title="Удалить" aria-label="Удалить">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
-          </button>
+          <span style="flex: 1; min-width: 0;">${escapeHtml(v)}${inactive ? '<span class="settings-list__badge">Неактивно</span>' : ''}</span>
+          ${actions}
         </div>`;
       }).join('');
     }
@@ -2464,7 +2515,11 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   };
   document.getElementById('headerSettingsBtn').addEventListener('click', (e) => {
     e.preventDefault();
-    if (!settingsState.selectedUo && appConfig.uos.length) settingsState.selectedUo = appConfig.uos[0];
+    if (__isUniAdmin && __currentAdminUser?.institution) {
+      settingsState.selectedUo = __currentAdminUser.institution;
+    } else if (!settingsState.selectedUo && appConfig.uos.length) {
+      settingsState.selectedUo = appConfig.uos[0];
+    }
     renderSettingsList();
     settingsModal.hidden = false;
     lockBodyScroll();
@@ -2482,22 +2537,25 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   settingsModal.addEventListener('click', async (e) => {
     const addBtn = e.target.closest('[data-add]');
     const rmBtn = e.target.closest('[data-remove]');
+    const actBtn = e.target.closest('[data-activate]');
     const selBtn = e.target.closest('[data-select-uo]');
     const impBtn = e.target.closest('[data-import]');
     const expBtn = e.target.closest('[data-export]');
-    if (selBtn && !rmBtn) {
+    if (selBtn && !rmBtn && !actBtn) {
       settingsState.selectedUo = selBtn.dataset.selectUo;
       renderSettingsList();
       return;
     }
     if (addBtn) {
       const kind = addBtn.dataset.add;
+      if (kind === 'type' && !__isSuperAdmin) return;
+      if (kind === 'uo' && !__isSuperAdmin) return;
       const inputId = { uo: 'settingsUoInput', faculty: 'settingsFacultyInput', type: 'settingsTypeInput' }[kind];
       const input = document.getElementById(inputId);
       const v = (input.value || '').trim();
       if (!v) return;
       if (kind === 'uo') {
-        if (appConfig.uos.includes(v)) { input.value = ''; return; }
+        if (__institutions.some((i) => i.name === v && i.isActive !== false)) { input.value = ''; return; }
         const { ok, data } = await ApApi.saveAdminDirectories({ action: 'addInstitution', name: v });
         if (!ok || !data.success) {
           alert(data.error || 'Не удалось добавить УО');
@@ -2509,8 +2567,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         if (!settingsState.selectedUo) { alert('Сначала выберите УО'); return; }
         const inst = findInstitutionByName(settingsState.selectedUo);
         if (!inst) { alert('УО не найдено'); return; }
-        const facs = appConfig.facultiesByUo[settingsState.selectedUo] || [];
-        if (facs.includes(v)) { input.value = ''; return; }
+        if ((inst.faculties || []).some((f) => f.name === v && f.isActive !== false)) { input.value = ''; return; }
         const { ok, data } = await ApApi.saveAdminDirectories({ action: 'addFaculty', institutionId: inst.id, name: v });
         if (!ok || !data.success) {
           alert(data.error || 'Не удалось добавить факультет');
@@ -2518,7 +2575,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         }
         await loadAppConfigFromApi();
       } else {
-        if (appConfig.types.includes(v)) { input.value = ''; return; }
+        if (__docTypes.some((t) => (t.displayName || t.name) === v && t.isActive !== false)) { input.value = ''; return; }
         const { ok, data } = await ApApi.createAdminDocumentType({ displayName: v });
         if (!ok || !data.success) {
           alert(data.error || 'Не удалось добавить тип работы');
@@ -2530,47 +2587,64 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       input.value = '';
       renderSettingsList();
       markDirty();
+    } else if (actBtn) {
+      const kind = actBtn.dataset.activate;
+      const v = actBtn.dataset.value;
+      if (kind === 'uo' && __isSuperAdmin) {
+        const inst = findInstitutionByName(v);
+        if (!inst) return;
+        const { ok, data } = await ApApi.saveAdminDirectories({ action: 'activateInstitution', institutionId: inst.id });
+        if (!ok || !data.success) { alert(data.error || 'Не удалось активировать УО'); return; }
+        await loadAppConfigFromApi();
+      } else if (kind === 'faculty') {
+        const entry = findFacultyEntry(settingsState.selectedUo, v);
+        if (!entry) return;
+        const { ok, data } = await ApApi.saveAdminDirectories({ action: 'activateFaculty', institutionId: entry.institutionId, facultyId: entry.facultyId });
+        if (!ok || !data.success) { alert(data.error || 'Не удалось активировать факультет'); return; }
+        await loadAppConfigFromApi();
+      } else if (kind === 'type' && __isSuperAdmin) {
+        const id = Number(actBtn.dataset.id);
+        if (!Number.isFinite(id)) return;
+        const { ok, data } = await ApApi.updateAdminDocumentType(id, { isActive: true });
+        if (!ok || !data.success) { alert(data.error || 'Не удалось активировать тип'); return; }
+        await loadAppConfigFromApi();
+      }
+      saveAppConfig();
+      renderSettingsList();
+      markDirty();
     } else if (rmBtn) {
       const kind = rmBtn.dataset.remove;
       const v = rmBtn.dataset.value;
       if (kind === 'uo') {
         const inst = findInstitutionByName(v);
-        if (!inst) {
-          appConfig.uos = appConfig.uos.filter((x) => x !== v);
-        } else {
-          const { ok, data } = await ApApi.saveAdminDirectories({ action: 'deleteInstitution', institutionId: inst.id });
-          if (!ok || !data.success) {
-            alert(data.error || 'Не удалось удалить УО');
-            return;
-          }
-          await loadAppConfigFromApi();
-          if (settingsState.selectedUo === v) settingsState.selectedUo = appConfig.uos[0] || '';
+        if (!inst) return;
+        const { ok, data } = await ApApi.saveAdminDirectories({ action: 'deactivateInstitution', institutionId: inst.id });
+        if (!ok || !data.success) {
+          alert(data.error || 'Не удалось деактивировать УО');
+          return;
         }
+        await loadAppConfigFromApi();
+        if (settingsState.selectedUo === v) settingsState.selectedUo = appConfig.uos[0] || '';
       } else if (kind === 'faculty') {
         if (!settingsState.selectedUo) return;
         const entry = findFacultyEntry(settingsState.selectedUo, v);
-        if (!entry) {
-          appConfig.facultiesByUo[settingsState.selectedUo] = (appConfig.facultiesByUo[settingsState.selectedUo] || []).filter((x) => x !== v);
-        } else {
-          const { ok, data } = await ApApi.saveAdminDirectories({ action: 'deleteFaculty', institutionId: entry.institutionId, facultyId: entry.facultyId });
-          if (!ok || !data.success) {
-            alert(data.error || 'Не удалось удалить факультет');
-            return;
-          }
-          await loadAppConfigFromApi();
+        if (!entry) return;
+        const { ok, data } = await ApApi.saveAdminDirectories({ action: 'deactivateFaculty', institutionId: entry.institutionId, facultyId: entry.facultyId });
+        if (!ok || !data.success) {
+          alert(data.error || 'Не удалось деактивировать факультет');
+          return;
         }
-      } else {
-        const dt = __docTypes.find((t) => (t.displayName || t.name) === v);
-        if (!dt) {
-          appConfig.types = appConfig.types.filter((x) => x !== v);
-        } else {
-          const { ok, data } = await ApApi.deleteAdminDocumentType(dt.id);
-          if (!ok || !data.success) {
-            alert(data.error || 'Не удалось удалить тип работы');
-            return;
-          }
-          await loadAppConfigFromApi();
+        await loadAppConfigFromApi();
+      } else if (__isSuperAdmin) {
+        const id = Number(rmBtn.dataset.id);
+        const dt = Number.isFinite(id) ? __docTypes.find((t) => t.id === id) : __docTypes.find((t) => (t.displayName || t.name) === v);
+        if (!dt) return;
+        const { ok, data } = await ApApi.deleteAdminDocumentType(dt.id);
+        if (!ok || !data.success) {
+          alert(data.error || 'Не удалось деактивировать тип работы');
+          return;
         }
+        await loadAppConfigFromApi();
       }
       saveAppConfig();
       renderSettingsList();
@@ -2615,6 +2689,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       const rows = await readXlsxMatrix(file);
       let added = 0;
       if (kind === 'uo') {
+        if (!__isSuperAdmin) return;
         for (const r of rows) {
           const v = String(r[0] || '').trim();
           if (!v || /^уо$/i.test(v)) continue;
@@ -2648,6 +2723,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         }
         await loadAppConfigFromApi();
       } else if (kind === 'type') {
+        if (!__isSuperAdmin) return;
         for (const r of rows) {
           const v = String(r[0] || '').trim();
           if (!v || /^тип/i.test(v)) continue;
@@ -2696,6 +2772,9 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         p.classList.toggle('is-active', active);
         p.hidden = !active;
       });
+      if (name === 'check') {
+        requestAnimationFrame(() => activateCheckEmbed());
+      }
     });
   });
   // Open tab by URL hash on load
@@ -2948,170 +3027,14 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   }
 
   // ===== Printable PDF report =====
-  const openPrintableReport = async (item, currentUser) => {
-    try {
+  const openPrintableReport = async (item, _currentUser) => {
     const reportDocumentId = item?.dbId || item?.documentId || item?.realId || item?.id;
-    let orig = item.percent ?? 0;
-    let matches = item.matches ?? Math.max(0, 100 - (item.percent ?? 0));
-    let ai = item.ai ?? 0;
-    let sources = [];
-
-    if (reportDocumentId && ApApi.fetchReportMatchRows) {
-      const { rows, stats } = await ApApi.fetchReportMatchRows(reportDocumentId);
-      sources = ApApi.buildReportTableRows(rows, stats);
-      if (stats) {
-        if (stats.orig != null) orig = stats.orig;
-        if (stats.matches != null) matches = stats.matches;
-        if (stats.ai != null) ai = stats.ai;
-      }
+    if (!reportDocumentId) {
+      alert('Не удалось определить документ для отчёта');
+      return;
     }
-
-    const id = item?.id ? String(item.id) : 'AP-' + (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).toUpperCase();
-    const { verifyUrl, docUrl, verifyQrImage, originalQrImage } = reportDocumentId && ApApi.resolveReportQrUrls
-      ? await ApApi.resolveReportQrUrls(reportDocumentId)
-      : { verifyUrl: '', docUrl: '', verifyQrImage: '', originalQrImage: '' };
-    const qrSrc = (dataUrl, url) => dataUrl || (url && ApApi.qrImageUrl ? ApApi.qrImageUrl(url) : '');
-    const qrVerify = qrSrc(verifyQrImage, verifyUrl);
-    const qrDoc = qrSrc(originalQrImage, docUrl);
-    const logoUrl = new URL('bsuir-logo.jpg', location.href).href;
-    const C = 2 * Math.PI * 42;
-    const ringSvg = (p, color, w = 10, size = 48) => `
-      <svg viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true">
-        <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" stroke-width="${w}"/>
-        <circle cx="50" cy="50" r="42" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - p / 100)}" transform="rotate(-90 50 50)"/>
-      </svg>`;
-    /*
-    const pctCircleHtml = (p, color, size = 48) => `
-      <div class="src-table__pct-circle">
-        ${ringSvg(p, color, 8, size)}
-        <span class="src-table__pct-circle__val">${p ?? '—'}%</span>
-      </div>`;
-    */
-    const sourcesHtml = sources.map((m, i) => `
-      <tr>
-        <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
-        <td class="src-table__title">${escapeHtml(m.title || '—')}</td>
-        <td>${escapeHtml(m.docType || '—')}</td>
-        <td><code>${escapeHtml(m.docId)}</code></td>
-        <td class="src-table__pct"><span>${ApApi.formatReportPercentCell ? ApApi.formatReportPercentCell(m) : (m.percent != null ? m.percent + '%' : '—')}</span></td>
-      </tr>
-    `).join('');
-    const wordCount = item.wordCount || 0;
-    const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Отчёт — ${escapeHtml(item.title)}</title>
-<style>
-:root { --primary: #2563eb; --primary-dark: #1d4ed8; --primary-soft: #dbeafe; --ink: #0a1f44; --ink-2: #1e293b; --muted: #64748b; --bg-2: #f4f8fd; --border: rgba(15, 41, 92, 0.08); }
-* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif; color: var(--ink); background: #fff; padding: 40px 48px; max-width: 960px; margin: 0 auto; line-height: 1.55; }
-h1 { font-size: 20px; letter-spacing: -0.3px; margin: 0 0 6px; line-height: 1.3; }
-h2 { font-size: 16px; margin: 0 0 14px; color: var(--ink); }
-.head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 18px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
-.brand { display: inline-flex; align-items: center; gap: 10px; background: var(--primary-soft); color: var(--primary); font-size: 12px; font-weight: 700; letter-spacing: 0.8px; padding: 6px 16px 6px 10px; border-radius: 999px; }
-.brand img { width: 28px; height: 28px; flex-shrink: 0; object-fit: contain; }
-.meta-id { font-size: 12px; color: var(--muted); }
-.meta-id code { background: var(--bg-2); padding: 2px 8px; border-radius: 6px; font-family: ui-monospace, "SF Mono", monospace; font-size: 11px; color: var(--ink-2); }
-.subtitle { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
-.card { background: #fff; border: 1px solid var(--border); border-radius: 22px; padding: 22px 24px; margin-bottom: 18px; }
-.metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-.metric { background: #fff; border: 1px solid var(--border); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.metric--main { background: var(--bg-2); }
-.metric__circle { width: 110px; height: 110px; position: relative; display: grid; place-items: center; }
-.metric__circle svg { position: absolute; inset: 0; }
-.metric__val { position: relative; z-index: 1; font-size: 24px; font-weight: 700; color: var(--ink); display: inline-flex; align-items: baseline; gap: 1px; }
-.metric__val span:last-child { font-size: 13px; }
-.metric__label { font-size: 14px; color: var(--ink-2); font-weight: 500; }
-.metric--main .metric__label { font-weight: 700; color: var(--ink); }
-.meta { display: grid; grid-template-columns: 200px 1fr; gap: 12px 24px; font-size: 14px; margin: 0; }
-.meta dt { margin: 0; color: var(--muted); }
-.meta dd { margin: 0; color: var(--ink); font-weight: 500; }
-.signature { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin: 12px 0 24px; font-size: 13px; }
-.signature__row { display: flex; align-items: end; gap: 12px; }
-.signature__label { color: var(--ink-2); white-space: nowrap; }
-.signature__line { flex: 1; border-bottom: 1px solid #94a3b8; height: 18px; }
-.src-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
-.src-table thead th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; padding: 10px 12px; background: var(--bg-2); border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.5px; }
-.src-table thead th:first-child { border-top-left-radius: 12px; }
-.src-table thead th:last-child { border-top-right-radius: 12px; }
-.src-table tbody td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--ink-2); }
-.src-table tbody tr:last-child td { border-bottom: none; }
-.src-table__num { color: var(--muted); font-weight: 700; width: 36px; }
-.src-table__quote { font-style: italic; line-height: 1.45; min-width: 280px; }
-.src-table code { background: var(--bg-2); padding: 2px 8px; border-radius: 6px; font-family: ui-monospace, "SF Mono", monospace; font-size: 11px; color: var(--ink-2); }
-.src-table__pct { text-align: right; white-space: nowrap; }
-.src-table__pct span { background: #fee2e2; color: #b91c1c; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; display: inline-block; }
-/*
-.src-table__pct-circle { position: relative; width: 48px; height: 48px; margin-left: auto; }
-.src-table__pct-circle svg { display: block; width: 48px; height: 48px; }
-.src-table__pct-circle__val {
-  position: absolute; inset: 0; display: grid; place-items: center;
-  font-size: 11px; font-weight: 700; color: var(--ink); line-height: 1;
-}
-*/
-.qrs { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 18px 0; }
-.qr { background: #fff; border: 1px solid var(--border); border-radius: 18px; padding: 16px; text-align: center; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 10px; line-height: 1.4; }
-.qr img { width: 160px; height: 160px; }
-footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
-@page { size: A4; margin: 10mm; @top-left{content:""} @top-center{content:""} @top-right{content:""} @bottom-left{content:""} @bottom-center{content:""} @bottom-right{content:""} }
-@media print { body { padding: 0; max-width: none; } .qr, .src-table tr { break-inside: avoid; } h2 { break-after: avoid; } .metric--main { background: var(--bg-2) !important; } }
-</style></head><body>
-<div class="head">
-  <span class="brand"><img src="${logoUrl}" alt="БГУИР"/>АНТИПЛАГИАТ · БГУИР</span>
-  <div class="meta-id">ID отчёта <code>${id}</code></div>
-</div>
-<h1>${escapeHtml(item.title)}</h1>
-<p class="subtitle">Отчёт о проверке на оригинальность</p>
-<div class="card">
-  <div class="metrics">
-    <div class="metric">
-      <div class="metric__circle">${ringSvg(ai, '#8b5cf6', 10, 110)}<span class="metric__val"><span>${ai}</span><span>%</span></span></div>
-      <div class="metric__label">ИИ-генерация</div>
-    </div>
-    <div class="metric metric--main">
-      <div class="metric__circle">${ringSvg(orig, '#2563eb', 12, 110)}<span class="metric__val"><span>${orig}</span><span>%</span></span></div>
-      <div class="metric__label">Оригинальность</div>
-    </div>
-    <div class="metric">
-      <div class="metric__circle">${ringSvg(matches, '#dc2626', 10, 110)}<span class="metric__val"><span>${matches}</span><span>%</span></span></div>
-      <div class="metric__label">Совпадения</div>
-    </div>
-  </div>
-</div>
-<div class="card">
-  <h2>Сведения о работе</h2>
-  <dl class="meta">
-    <dt>Автор</dt><dd>${escapeHtml(currentUser ? currentUser.name : item.author || '—')}</dd>
-    <dt>Учебное заведение</dt><dd>${escapeHtml(item.uo || item.institution || '—')}</dd>
-    <dt>Тип работы</dt><dd>${escapeHtml(item.type)}</dd>
-    <dt>Количество слов</dt><dd>${wordCount ? Number(wordCount).toLocaleString('ru-RU') : '—'}</dd>
-    <dt>Дата проверки</dt><dd>${fmtDate(item.date)}</dd>
-  </dl>
-</div>
-<div class="signature">
-  <div class="signature__row"><span class="signature__label">Дата:</span><span class="signature__line"></span></div>
-  <div class="signature__row"><span class="signature__label">Подпись проверяющего:</span><span class="signature__line"></span></div>
-</div>
-<div class="card">
-  <h2>Найденные заимствования</h2>
-  <table class="src-table">
-    <thead><tr><th>№</th><th>Название работы</th><th>Тип работы</th><th>ID документа</th><th style="text-align:right;">Схожесть</th></tr></thead>
-    <tbody>${sourcesHtml}</tbody>
-  </table>
-</div>
-<div class="qrs">
-  <div class="qr"${qrVerify ? '' : ' hidden'}>${qrVerify ? `<img src="${qrVerify}" alt=""/>` : ''}Для подтверждения подлинности и актуальности данной справки отсканируйте QR-код</div>
-  <div class="qr"${qrDoc ? '' : ' hidden'}>${qrDoc ? `<img src="${qrDoc}" alt=""/>` : ''}Для просмотра оригинальной электронной версии документа отсканируйте QR-код</div>
-</div>
-<footer><span>antiplagiat.bsuir.by</span><span>${verifyUrl}</span></footer>
-<script>const __t=document.title;window.addEventListener('beforeprint',()=>{document.title=' ';});window.addEventListener('afterprint',()=>{document.title=__t;});window.addEventListener('load',()=>setTimeout(()=>window.print(),500));<\/script>
-</body></html>`;
-    if (ApApi.openReportPrintWindow) ApApi.openReportPrintWindow(html);
-    else {
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      window.open(URL.createObjectURL(blob), '_blank');
-    }
-    } catch (err) {
-      console.error('openPrintableReport', err);
-      alert('Не удалось открыть отчёт: ' + (err?.message || err));
-    }
+    if (ApApi.openPrintableReportById && ApApi.openPrintableReportById(reportDocumentId)) return;
+    window.open('report.html?documentId=' + encodeURIComponent(reportDocumentId), '_blank', 'noopener,noreferrer');
   };
 
   // User card modal
@@ -4267,29 +4190,26 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
   renderSubmissions();
 
   const activateCheckTab = () => {
-    const iframe = document.getElementById('checkIframe');
-    if (iframe && !iframe.src) iframe.src = 'app.html?embed=admin';
     const tab = document.querySelector('.app__tab[data-tab="check"]');
     if (tab) tab.click();
   };
   document.getElementById('subsCheckBtn').addEventListener('click', activateCheckTab);
-  // The header check button has data-tab="check" — handled by generic tabs handler,
-  // but we also need to set the iframe src on first activation.
-  document.querySelector('.app__tab[data-tab="check"]').addEventListener('click', () => {
-    const iframe = document.getElementById('checkIframe');
-    if (iframe && !iframe.src) iframe.src = 'app.html?embed=admin';
-  });
-  // Auto-resize the check iframe to fit its content (no internal scroll)
-  window.addEventListener('message', (e) => {
-    if (!e || !e.data) return;
+
+  function activateCheckEmbed() {
     const iframe = document.getElementById('checkIframe');
     if (!iframe) return;
-    if (e.data.type === 'ap-embed-height') {
-      const newH = (e.data.height || 0) + 4;
-      const curH = parseInt(iframe.style.height, 10) || 0;
-      // Avoid jitter: only update when diff > 8px (small reflows ignored)
-      if (Math.abs(newH - curH) > 8) iframe.style.height = newH + 'px';
-    } else if (e.data.type === 'ap-show-matches') {
+    if (!iframe.src) {
+      iframe.src = 'app.html?embed=admin';
+      return;
+    }
+    try {
+      iframe.contentWindow?.postMessage({ type: 'ap-embed-recalc' }, '*');
+    } catch (_) {}
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e || !e.data) return;
+    if (e.data.type === 'ap-show-matches') {
       openAdminMatches(e.data.documentId, e.data.matchPct ?? 0);
       // openAdminMatches(e.data.documentId, e.data.matchPct ?? 0, e.data.aiPct ?? 0);
     }
@@ -4460,10 +4380,9 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
   const repoPagi = document.getElementById('repoPagination');
   let repository = [];
   function rebuildRepository() {
-    repository = submissions.filter((s) => s.status === 'final').map((s, i) => ({
+    repository = submissions.filter((s) => s.status === 'final').map((s) => ({
       ...s,
       dbId: s.id,
-      id: 'AP-DOC-' + (i + 1).toString(36).toUpperCase().padStart(4, '0'),
       indexed: s.date,
     }));
   }
@@ -4517,7 +4436,7 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
       if (window.lucide) window.lucide.createIcons();
       repoGrid.querySelectorAll('[data-repo-action]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          const item = repository.find((x) => x.id === btn.dataset.id);
+          const item = repository.find((x) => String(x.id) === String(btn.dataset.id));
           if (!item) return;
           const action = btn.dataset.repoAction;
           if (action === 'download') openPrintableReport(item, null);
@@ -4534,13 +4453,14 @@ footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border
           else if (action === 'edit') openSubEdit(item);
           else if (action === 'delete') {
             confirmAction(
-              'Удалить работу из локального хранилища? Она больше не будет участвовать в проверке других работ.',
-              () => {
-                const idx = repository.findIndex((x) => x.id === item.id);
-                if (idx >= 0) {
-                  repository.splice(idx, 1);
-                  renderRepo();
+              'Удалить работу из хранилища? Она больше не будет участвовать в проверке других работ.',
+              async () => {
+                const { ok, data } = await ApApi.deleteAdminDocument(item.id);
+                if (!ok) {
+                  alert(data?.error || 'Не удалось удалить документ');
+                  return;
                 }
+                await loadSubmissions();
               }
             );
           }

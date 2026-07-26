@@ -23,17 +23,31 @@
 html, body { margin: 0; padding: 0; }
 [hidden] { display: none !important; }
 
-/* Embed mode (when shown inside admin iframe) */
-html.embed-admin { overflow-y: visible; }
-html.embed-admin body { background: transparent; min-height: 0; }
-html.embed-admin .page { padding: 0; width: 100%; }
+/* Embed mode (when shown inside admin iframe) — no inner scroll; iframe scrolls once */
+html.embed-admin { overflow: visible; height: auto; }
+html.embed-admin body {
+  background: #eaf1fb;
+  min-height: auto;
+  height: auto;
+  overflow: visible;
+  background-image: none;
+}
+html.embed-admin .page { padding: 12px 12px 16px; width: 100%; max-width: none; box-sizing: border-box; overflow: visible; }
 html.embed-admin .header { display: none; }
-html.embed-admin .app { margin: 0; }
+html.embed-admin .app { margin: 0; gap: 12px; overflow: visible; }
+html.embed-admin .stage-card { border-radius: 20px; }
+html.embed-admin .app__panel { overflow: visible; }
 html.embed-admin .modal__backdrop,
 html.embed-admin .modal__dialog { animation: none !important; }
 
-/* Scrollbar — brand design */
-html { scrollbar-width: thin; scrollbar-color: rgba(37, 99, 235, 0.35) transparent; overflow-y: scroll; }
+html.is-workflow-ui body { min-height: auto; }
+html.is-workflow-ui .page { padding-bottom: 24px; }
+html.embed-admin.is-workflow-ui .page { padding-bottom: 8px; }
+html.embed-admin.is-workflow-ui .stage-stepper { margin-bottom: 4px; }
+html.embed-admin.is-workflow-ui [data-stage-card="3"] { padding: 20px; gap: 14px; }
+
+/* Scrollbar — brand design (auto = no bar when content fits) */
+html { scrollbar-width: thin; scrollbar-color: rgba(37, 99, 235, 0.35) transparent; overflow-y: auto; }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
@@ -58,6 +72,7 @@ body {
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 a { color: inherit; text-decoration: none; }
 .page { width: min(1280px, 94%); margin: 0 auto; padding: 6px 0 60px; }
@@ -354,14 +369,11 @@ a { color: inherit; text-decoration: none; }
   transform: rotate(-90deg);
 }
 .metric-circle__bg, .metric-circle__fg {
-  fill: none; stroke-width: var(--ring-w);
+  fill: none;
 }
 .metric-circle__bg { stroke: #e2e8f0; }
 .metric-circle__fg {
-  stroke: var(--color);
   stroke-linecap: round;
-  stroke-dasharray: 263.89;
-  stroke-dashoffset: calc(263.89 * (1 - var(--p) / 100));
   transition: stroke-dashoffset .6s ease;
 }
 .metric-circle__text {
@@ -1135,27 +1147,12 @@ a { color: inherit; text-decoration: none; }
   function runApp() {
   if (__embedAdmin) {
     document.documentElement.classList.add('embed-admin');
-    // Send content height to parent so the iframe can grow and avoid internal scroll
-    let lastSentH = 0;
-    const sendHeight = () => {
-      const h = Math.max(
-        document.documentElement.scrollHeight,
-        document.body ? document.body.scrollHeight : 0
-      );
-      // Only send when height changes by more than 4px to avoid feedback jitter
-      if (Math.abs(h - lastSentH) <= 4) return;
-      lastSentH = h;
-      try { parent.postMessage({ type: 'ap-embed-height', height: h }, '*'); } catch (_) {}
-    };
-    if (typeof ResizeObserver !== 'undefined') {
-      const ro = new ResizeObserver(sendHeight);
-      window.addEventListener('load', () => { ro.observe(document.body); sendHeight(); });
-    } else {
-      window.addEventListener('load', sendHeight);
-      window.addEventListener('resize', sendHeight);
-    }
-    setInterval(sendHeight, 1500); // fallback for dynamic DOM changes
-    // Notify parent about modal state so it can show its own backdrop / scroll
+    window.addEventListener('message', (e) => {
+      if (e?.data?.type === 'ap-embed-recalc') {
+        window.dispatchEvent(new Event('resize'));
+      }
+    });
+    // Notify parent about modal state (matches open in admin shell)
     const reportModalState = () => {
       const anyOpen = Array.from(document.querySelectorAll('.modal')).some((m) => !m.hidden);
       try { parent.postMessage({ type: anyOpen ? 'ap-modal-open' : 'ap-modal-close' }, '*'); } catch (_) {}
@@ -1171,6 +1168,7 @@ a { color: inherit; text-decoration: none; }
   if (window.lucide && typeof window.lucide.createIcons === 'function') {
     window.lucide.createIcons();
   }
+  if (ApApi.initMetricCirclesIn) ApApi.initMetricCirclesIn(document);
 
   applyUserMenu(__currentUser);
 
@@ -1214,10 +1212,21 @@ a { color: inherit; text-decoration: none; }
     const patch = {};
     const pe = __currentUser.profileEditable || {};
     if (pe.institution && p.uo) patch.institution = p.uo;
-    if (pe.faculty && p.faculty) patch.faculty = p.faculty;
+    if (pe.faculty) {
+      if (p.facultyId) patch.facultyId = p.facultyId;
+      else if (p.faculty) patch.faculty = p.faculty;
+    }
     if (pe.group && p.group) patch.group = p.group;
-    await ApApi.updateProfile(patch);
-    __currentUser = { ...__currentUser, institution: p.uo || __currentUser.institution, faculty: p.faculty, group: p.group };
+    const res = await ApApi.updateProfile(patch);
+    if (!res.ok || !res.data?.success) {
+      throw new Error(res.data?.error || 'Не удалось сохранить профиль');
+    }
+    if (res.data.user) {
+      __currentUser = { ...__currentUser, ...res.data.user };
+    } else {
+      __currentUser = { ...__currentUser, institution: p.uo || __currentUser.institution, faculty: p.faculty, group: p.group };
+    }
+    return res;
   };
 
   const applyProfilePolicyUi = () => {
@@ -1237,9 +1246,11 @@ a { color: inherit; text-decoration: none; }
   // App config: load from API (institutions/faculties + document types)
   const fallbackConfig = {
     uos: ['БГУИР'],
-    facultiesByUo: { 'БГУИР': ['ФИТУ', 'ФКСиС', 'ИИТ', 'ФКП'] },
+    facultiesByUo: { 'БГУИР': [] },
   };
   let appConfig = { ...fallbackConfig, types: [] };
+  let __institutions = [];
+  let __directoriesLoaded = false;
   const defaultWorkTypes = [
     'Дипломная работа / проект',
     'Курсовая работа / проект',
@@ -1287,14 +1298,30 @@ a { color: inherit; text-decoration: none; }
     if (window.lucide) window.lucide.createIcons();
   };
 
+  const escAttr = (s) => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+  const findInstitutionByName = (name) => __institutions.find((i) => i.name === name);
+
+  const maybeOpenCompleteProfile = () => {
+    if (__isAdmin || !__directoriesLoaded) return;
+    if (__currentUser.needsProfileCompletion) openCompleteProfile();
+    else if (__currentUser.profileBlocked) {
+      console.warn('Profile incomplete — contact your university administrator.');
+    }
+  };
+
   // Load real config asynchronously; UI will refresh when ready
   Promise.all([ApApi.getDirectories(), ApApi.getDocumentTypes()]).then(([dirRes, typesRes]) => {
     if (dirRes.ok && dirRes.data.institutions) {
-      const insts = dirRes.data.institutions;
-      appConfig.uos = insts.map((i) => i.name);
+      __institutions = dirRes.data.institutions;
+      appConfig.uos = __institutions.map((i) => i.name);
       appConfig.facultiesByUo = {};
-      insts.forEach((i) => { appConfig.facultiesByUo[i.name] = i.faculties.map((f) => f.name); });
+      __institutions.forEach((i) => {
+        appConfig.facultiesByUo[i.name] = (i.faculties || []).map((f) => f.name);
+      });
     }
+    __directoriesLoaded = true;
+    populateUoSelect();
     if (typesRes.ok && typesRes.data.types && typesRes.data.types.length) {
       appConfig.types = typesRes.data.types.map((t) => t.displayName || t.name);
       populateWorkTypeOptions(typesRes.data.types);
@@ -1302,6 +1329,7 @@ a { color: inherit; text-decoration: none; }
     }
     refreshProfileUi();
     applyProfilePolicyUi();
+    maybeOpenCompleteProfile();
   });
   const refreshProfileUi = () => {
     const p = loadProfile();
@@ -1326,15 +1354,19 @@ a { color: inherit; text-decoration: none; }
   const uoSelectMenu = document.getElementById('uoSelectMenu');
   const facultySelect = document.getElementById('facultySelect');
   const facultySelectMenu = document.getElementById('facultySelectMenu');
-  const setSelectValue = (sel, val, placeholder) => {
+  const setSelectValue = (sel, val, placeholder, label) => {
     const valueEl = sel.querySelector('.custom-select__value');
+    const display = label || val || '';
     sel.dataset.value = val || '';
+    if (label) sel.dataset.label = label;
+    else delete sel.dataset.label;
     if (val) {
-      valueEl.textContent = val;
+      valueEl.textContent = display;
       sel.classList.remove('is-placeholder', 'has-error');
     } else {
       valueEl.textContent = placeholder;
       sel.classList.add('is-placeholder');
+      delete sel.dataset.label;
     }
     sel.querySelectorAll('.custom-select__option').forEach((o) => o.classList.toggle('is-selected', o.dataset.value === val));
   };
@@ -1357,13 +1389,19 @@ a { color: inherit; text-decoration: none; }
     sel.querySelector('.custom-select__menu').hidden = true;
   };
   const populateFacultySelect = (uo) => {
-    const list = appConfig.facultiesByUo[uo] || [];
-    facultySelectMenu.innerHTML = list.map((v) => `
-      <li class="custom-select__option" role="option" data-value="${v}">${v}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>
+    const inst = findInstitutionByName(uo);
+    const faculties = inst?.faculties || [];
+    if (!faculties.length) {
+      facultySelectMenu.innerHTML = '<li class="custom-select__option" role="option" data-value="" disabled>Загрузка справочника…</li>';
+      return;
+    }
+    facultySelectMenu.innerHTML = faculties.map((f) => `
+      <li class="custom-select__option" role="option" data-value="${escAttr(f.id)}" data-label="${escAttr(f.name)}">${f.name}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>
     `).join('');
     facultySelectMenu.querySelectorAll('.custom-select__option').forEach((opt) => {
+      if (!opt.dataset.value) return;
       opt.addEventListener('click', () => {
-        setSelectValue(facultySelect, opt.dataset.value, 'Выберите факультет');
+        setSelectValue(facultySelect, opt.dataset.value, 'Выберите факультет', opt.dataset.label || opt.textContent.trim());
         const err = document.getElementById('completeProfileError');
         if (err) err.hidden = true;
         closeCs(facultySelect);
@@ -1422,12 +1460,22 @@ a { color: inherit; text-decoration: none; }
     const uoVal = __currentUser.institution || p.uo || appConfig.uos[0] || 'БГУИР';
     setSelectValue(uoSelect, uoVal, 'Выберите УО');
     populateFacultySelect(uoVal);
-    // Pre-fill faculty if valid for current UO
-    const facsForUo = appConfig.facultiesByUo[uoVal] || [];
-    setSelectValue(facultySelect, p.faculty && facsForUo.includes(p.faculty) ? p.faculty : '', 'Выберите факультет');
+    const inst = findInstitutionByName(uoVal);
+    const facsForUo = inst?.faculties || [];
+    const currentFac = p.faculty?.trim();
+    const matchedFac = currentFac
+      ? facsForUo.find((f) => f.id === currentFac || f.name === currentFac)
+      : null;
+    setSelectValue(
+      facultySelect,
+      matchedFac?.id || '',
+      'Выберите факультет',
+      matchedFac?.name || '',
+    );
     // Pre-fill group
     groupInput.value = p.group || '';
     groupInput.classList.remove('has-error');
+    completeProfileError.textContent = 'Выберите факультет.';
     completeProfileError.hidden = true;
     document.getElementById('uoError').hidden = true;
     document.getElementById('groupError').hidden = true;
@@ -1483,7 +1531,13 @@ a { color: inherit; text-decoration: none; }
       uoSelect.classList.add('has-error');
       ok = false;
     }
+    if (!__directoriesLoaded) {
+      completeProfileError.textContent = 'Справочник факультетов загружается. Подождите несколько секунд и повторите.';
+      completeProfileError.hidden = false;
+      return;
+    }
     if (!facultyVal) {
+      completeProfileError.textContent = 'Выберите факультет.';
       completeProfileError.hidden = false;
       facultySelect.classList.add('has-error');
       ok = false;
@@ -1494,16 +1548,19 @@ a { color: inherit; text-decoration: none; }
       ok = false;
     }
     if (!ok) return;
-    await saveProfile({ uo: uoVal, faculty: facultyVal, group: groupVal });
-    __currentUser = { ...__currentUser, faculty: facultyVal, group: groupVal, needsProfileCompletion: false };
-    refreshProfileUi();
-    closeCompleteProfile();
+    try {
+      const facultyId = facultySelect.dataset.value;
+      const facultyName = facultySelect.dataset.label || '';
+      await saveProfile({ uo: uoVal, facultyId, faculty: facultyName, group: groupVal });
+      refreshProfileUi();
+      closeCompleteProfile();
+    } catch (err) {
+      completeProfileError.textContent = err?.message || 'Не удалось сохранить профиль';
+      completeProfileError.hidden = false;
+    }
   });
   if (!__isAdmin) {
-    if (__currentUser.needsProfileCompletion) openCompleteProfile();
-    else if (__currentUser.profileBlocked) {
-      console.warn('Profile incomplete — contact your university administrator.');
-    }
+    maybeOpenCompleteProfile();
   }
 
   // Logout
@@ -1659,6 +1716,7 @@ a { color: inherit; text-decoration: none; }
       item.classList.toggle('is-done', s < n);
     });
     appSection.classList.toggle('is-in-workflow', n > 1);
+    document.documentElement.classList.toggle('is-workflow-ui', n >= 2 && n <= 4);
   };
 
   const saveAsDraft = () => {
@@ -1962,16 +2020,21 @@ a { color: inherit; text-decoration: none; }
       similarDocuments: apiData ? apiData.similarDocuments : [],
     };
     document.getElementById('resultValue').textContent = percent;
-    document.getElementById('resultCircle').style.setProperty('--p', percent);
+    ApApi.setMetricCircle(document.getElementById('resultCircle'), percent);
     document.getElementById('matchValue').textContent = matches;
-    document.getElementById('matchCircle').style.setProperty('--p', matches);
+    ApApi.setMetricCircle(document.getElementById('matchCircle'), matches);
     document.getElementById('aiValue').textContent = ai;
-    document.getElementById('aiCircle').style.setProperty('--p', ai);
+    ApApi.setMetricCircle(document.getElementById('aiCircle'), ai);
     document.getElementById('resultTitle').textContent = currentResult.title;
     document.getElementById('resultType').textContent = currentResult.type;
     document.getElementById('resultFile').textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
     document.getElementById('resultCheckedAt').textContent = formatDate(new Date().toISOString());
     showStage(3);
+    requestAnimationFrame(() => {
+      ApApi.setMetricCircle(document.getElementById('resultCircle'), percent);
+      ApApi.setMetricCircle(document.getElementById('matchCircle'), matches);
+      ApApi.setMetricCircle(document.getElementById('aiCircle'), ai);
+    });
     startDraftTimer();
   };
 
@@ -2439,326 +2502,15 @@ a { color: inherit; text-decoration: none; }
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[c]));
 
-  // Printable PDF
+  // Printable PDF — unified report.html (same as QR scan)
   const openPrintableReport = async (item) => {
-    try {
     const reportDocumentId = item?.dbId || item?.documentId || item?.realId || item?.id;
-    let orig = item.percent ?? 0;
-    let matches = item.matches ?? Math.max(0, 100 - orig);
-    let ai = item.ai ?? 0;
-    let sources = [];
-
-    if (reportDocumentId && ApApi.fetchReportMatchRows) {
-      const { rows, stats } = await ApApi.fetchReportMatchRows(reportDocumentId);
-      sources = ApApi.buildReportTableRows(rows, stats);
-      if (stats) {
-        if (stats.orig != null) orig = stats.orig;
-        if (stats.matches != null) matches = stats.matches;
-        if (stats.ai != null) ai = stats.ai;
-      }
+    if (!reportDocumentId) {
+      alert('Не удалось определить документ для отчёта');
+      return;
     }
-
-    const id = item.id || ('AP-' + Date.now().toString(36).toUpperCase());
-    const { verifyUrl, docUrl, verifyQrImage, originalQrImage } = reportDocumentId && ApApi.resolveReportQrUrls
-      ? await ApApi.resolveReportQrUrls(reportDocumentId)
-      : { verifyUrl: '', docUrl: '', verifyQrImage: '', originalQrImage: '' };
-    const qrSrc = (dataUrl, url) => dataUrl || (url && ApApi.qrImageUrl ? ApApi.qrImageUrl(url) : '');
-    const qrVerify = qrSrc(verifyQrImage, verifyUrl);
-    const qrDoc = qrSrc(originalQrImage, docUrl);
-    const logoUrl = new URL('bsuir-logo.jpg', location.href).href;
-
-    // Circle helper (same style as on the site)
-    const C = 2 * Math.PI * 42;
-    const ringSvg = (p, color, w = 10, size = 48) => `
-      <svg viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true">
-        <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" stroke-width="${w}"/>
-        <circle cx="50" cy="50" r="42" fill="none" stroke="${color}" stroke-width="${w}"
-          stroke-linecap="round" stroke-dasharray="${C}"
-          stroke-dashoffset="${C * (1 - p / 100)}"
-          transform="rotate(-90 50 50)"/>
-      </svg>`;
-
-    // Matches table from GET /api/documents/:id/matches
-    /*
-    const pctCircleHtml = (p, color, size = 48) => `
-      <div class="src-table__pct-circle">
-        ${ringSvg(p, color, 8, size)}
-        <span class="src-table__pct-circle__val">${p}%</span>
-      </div>`;
-    */
-    const sourcesHtml = sources.map((m, i) => `
-      <tr>
-        <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
-        <td class="src-table__title">${escapeHtml(m.title || '—')}</td>
-        <td>${escapeHtml(m.docType || '—')}</td>
-        <td><code>${escapeHtml(m.docId)}</code></td>
-        <td class="src-table__pct"><span>${ApApi.formatReportPercentCell ? ApApi.formatReportPercentCell(m) : (m.percent != null ? m.percent + '%' : '—')}</span></td>
-      </tr>
-    `).join('');
-
-    const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Отчёт — ${escapeHtml(item.title)}</title>
-<style>
-  :root {
-    --primary: #2563eb;
-    --primary-dark: #1d4ed8;
-    --primary-soft: #dbeafe;
-    --ink: #0a1f44;
-    --ink-2: #1e293b;
-    --muted: #64748b;
-    --bg-2: #f4f8fd;
-    --border: rgba(15, 41, 92, 0.08);
-  }
-  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
-    color: var(--ink); background: #fff;
-    padding: 40px 48px; max-width: 960px; margin: 0 auto;
-    line-height: 1.55;
-  }
-  h1 { font-size: 20px; letter-spacing: -0.3px; margin: 0 0 6px; line-height: 1.3; }
-  h2 { font-size: 16px; margin: 0 0 14px; color: var(--ink); }
-
-  .head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding-bottom: 18px; border-bottom: 1px solid var(--border); margin-bottom: 24px;
-  }
-  .brand {
-    display: inline-flex; align-items: center; gap: 10px;
-    background: var(--primary-soft); color: var(--primary);
-    font-size: 12px; font-weight: 700; letter-spacing: 0.8px;
-    padding: 6px 16px 6px 10px; border-radius: 999px;
-  }
-  .brand img { width: 28px; height: 28px; flex-shrink: 0; object-fit: contain; }
-  .meta-id { font-size: 12px; color: var(--muted); }
-  .meta-id code {
-    background: var(--bg-2); padding: 2px 8px; border-radius: 6px;
-    font-family: ui-monospace, "SF Mono", monospace; font-size: 11px; color: var(--ink-2);
-  }
-
-  .subtitle { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
-
-  .card {
-    background: #fff; border: 1px solid var(--border); border-radius: 22px;
-    padding: 22px 24px; margin-bottom: 18px;
-  }
-
-  .metrics {
-    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
-  }
-  .metric {
-    background: #fff; border: 1px solid var(--border); border-radius: 18px;
-    padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px;
-  }
-  .metric--main { background: var(--bg-2); }
-  .metric__circle { width: 110px; height: 110px; position: relative; display: grid; place-items: center; }
-  .metric__circle svg { position: absolute; inset: 0; }
-  .metric__val {
-    position: relative; z-index: 1; font-size: 24px; font-weight: 700; color: var(--ink);
-    display: inline-flex; align-items: baseline; gap: 1px;
-  }
-  .metric__val span:last-child { font-size: 13px; }
-  .metric__label { font-size: 14px; color: var(--ink-2); font-weight: 500; }
-  .metric--main .metric__label { font-weight: 700; color: var(--ink); }
-
-  .meta {
-    display: grid; grid-template-columns: 200px 1fr; gap: 12px 24px;
-    font-size: 14px; margin: 0;
-  }
-  .meta dt { margin: 0; color: var(--muted); }
-  .meta dd { margin: 0; color: var(--ink); font-weight: 500; }
-  .status-pill {
-    display: inline-block; background: #dcfce7; color: #166534;
-    padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
-  }
-
-  .src-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
-  .src-table thead th {
-    text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
-    padding: 10px 12px; background: var(--bg-2);
-    border-bottom: 1px solid var(--border);
-    text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  .src-table thead th:first-child { border-top-left-radius: 12px; }
-  .src-table thead th:last-child { border-top-right-radius: 12px; }
-  .src-table tbody td {
-    padding: 12px; border-bottom: 1px solid var(--border);
-    vertical-align: top; color: var(--ink-2);
-  }
-  .src-table tbody tr:last-child td { border-bottom: none; }
-  .src-table__num { color: var(--muted); font-weight: 700; width: 36px; }
-  .src-table__type { font-weight: 600; color: var(--ink); white-space: nowrap; }
-  .src-table__quote { font-style: italic; line-height: 1.45; min-width: 280px; }
-  .src-table code {
-    background: var(--bg-2); padding: 2px 8px; border-radius: 6px;
-    font-family: ui-monospace, "SF Mono", monospace; font-size: 11px; color: var(--ink-2);
-  }
-  .src-table__pct { text-align: right; white-space: nowrap; }
-  .src-table__pct span {
-    background: #fee2e2; color: #b91c1c;
-    padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
-    display: inline-block;
-  }
-  /*
-  .src-table__pct-circle {
-    position: relative; width: 48px; height: 48px; margin-left: auto;
-  }
-  .src-table__pct-circle svg { display: block; width: 48px; height: 48px; }
-  .src-table__pct-circle__val {
-    position: absolute; inset: 0; display: grid; place-items: center;
-    font-size: 11px; font-weight: 700; color: var(--ink); line-height: 1;
-  }
-  */
-
-  .signature {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
-    margin: 12px 0 24px; font-size: 13px;
-  }
-  .signature__row { display: flex; align-items: end; gap: 12px; }
-  .signature__label { color: var(--ink-2); white-space: nowrap; }
-  .signature__line { flex: 1; border-bottom: 1px solid #94a3b8; height: 18px; }
-
-  .qrs {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
-    padding: 18px 0;
-  }
-  .qr {
-    background: #fff; border: 1px solid var(--border); border-radius: 18px;
-    padding: 16px; text-align: center; font-size: 12px; color: var(--muted);
-    display: flex; flex-direction: column; align-items: center; gap: 10px; line-height: 1.4;
-  }
-  .qr img { width: 160px; height: 160px; }
-
-  footer {
-    margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border);
-    font-size: 12px; color: var(--muted);
-    display: flex; justify-content: space-between;
-  }
-  @page {
-    size: A4;
-    margin: 10mm;
-    @top-left { content: ""; }
-    @top-center { content: ""; }
-    @top-right { content: ""; }
-    @bottom-left { content: ""; }
-    @bottom-center { content: ""; }
-    @bottom-right { content: ""; }
-  }
-  @media print {
-    body { padding: 0; max-width: none; }
-    .qr { break-inside: avoid; }
-    .src-table tr { break-inside: avoid; }
-    h2 { break-after: avoid; }
-    .metric--main { background: var(--bg-2) !important; }
-    .matches-list__percent, .src-table__pct span, .status-pill, .metric__circle circle {
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-  }
-</style></head><body>
-
-  <div class="head">
-    <span class="brand"><img src="${logoUrl}" alt="БГУИР"/>АНТИПЛАГИАТ · БГУИР</span>
-    <div class="meta-id">ID отчёта <code>${id}</code></div>
-  </div>
-
-  <h1>${escapeHtml(item.title)}</h1>
-  <p class="subtitle">Отчёт о проверке на оригинальность</p>
-
-  <div class="card">
-    <div class="metrics">
-      <div class="metric">
-        <div class="metric__circle">
-          ${ringSvg(ai, '#8b5cf6', 10, 110)}
-          <span class="metric__val"><span>${ai}</span><span>%</span></span>
-        </div>
-        <div class="metric__label">ИИ-генерация</div>
-      </div>
-      <div class="metric metric--main">
-        <div class="metric__circle">
-          ${ringSvg(orig, '#2563eb', 12, 110)}
-          <span class="metric__val"><span>${orig}</span><span>%</span></span>
-        </div>
-        <div class="metric__label">Оригинальность</div>
-      </div>
-      <div class="metric">
-        <div class="metric__circle">
-          ${ringSvg(matches, '#dc2626', 10, 110)}
-          <span class="metric__val"><span>${matches}</span><span>%</span></span>
-        </div>
-        <div class="metric__label">Совпадения</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Сведения о работе</h2>
-    <dl class="meta">
-      <dt>Автор</dt><dd>${escapeHtml((__currentUser && __currentUser.fullName) || item.author || '—')}</dd>
-      <dt>Учебное заведение</dt><dd>${escapeHtml(item.institution || (__currentUser && __currentUser.institution) || '—')}</dd>
-      <dt>Тип работы</dt><dd>${escapeHtml(item.type)}</dd>
-      <dt>Количество слов</dt><dd>${item.wordCount ? Number(item.wordCount).toLocaleString('ru-RU') : '—'}</dd>
-      <dt>Дата проверки</dt><dd>${formatDate(item.savedAt || new Date().toISOString())}</dd>
-    </dl>
-  </div>
-
-  <div class="signature">
-    <div class="signature__row">
-      <span class="signature__label">Дата:</span>
-      <span class="signature__line"></span>
-    </div>
-    <div class="signature__row">
-      <span class="signature__label">Подпись проверяющего:</span>
-      <span class="signature__line"></span>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Найденные заимствования</h2>
-    <table class="src-table">
-      <thead>
-        <tr>
-          <th>№</th>
-          <th>Название работы</th>
-          <th>Тип работы</th>
-          <th>ID документа</th>
-          <th style="text-align: right;">Схожесть</th>
-        </tr>
-      </thead>
-      <tbody>${sourcesHtml}</tbody>
-    </table>
-  </div>
-
-  <div class="qrs">
-    <div class="qr"${qrVerify ? '' : ' hidden'}>
-      ${qrVerify ? `<img src="${qrVerify}" alt=""/>` : ''}
-      Для подтверждения подлинности и актуальности данной справки отсканируйте QR-код
-    </div>
-    <div class="qr"${qrDoc ? '' : ' hidden'}>
-      ${qrDoc ? `<img src="${qrDoc}" alt=""/>` : ''}
-      Для просмотра оригинальной электронной версии документа отсканируйте QR-код
-    </div>
-  </div>
-
-  <footer>
-    <span>antiplagiat.bsuir.by</span>
-    <span>${verifyUrl}</span>
-  </footer>
-  <script>
-    const __t = document.title;
-    window.addEventListener('beforeprint', () => { document.title = ' '; });
-    window.addEventListener('afterprint', () => { document.title = __t; });
-    window.addEventListener('load', () => setTimeout(() => window.print(), 500));
-  <\/script>
-</body></html>`;
-    if (ApApi.openReportPrintWindow) ApApi.openReportPrintWindow(html);
-    else {
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      window.open(URL.createObjectURL(blob), '_blank');
-    }
-    } catch (err) {
-      console.error('openPrintableReport', err);
-      alert('Не удалось открыть отчёт: ' + (err?.message || err));
-    }
+    if (ApApi.openPrintableReportById && ApApi.openPrintableReportById(reportDocumentId)) return;
+    window.open('report.html?documentId=' + encodeURIComponent(reportDocumentId), '_blank', 'noopener,noreferrer');
   };
 
   // Initial render

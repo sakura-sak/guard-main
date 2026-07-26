@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { deleteDocumentType, updateDocumentType } from "@/lib/document-types"
+import { deactivateDocumentType, updateDocumentType } from "@/lib/document-types"
 import { logError, logInfo } from "@/lib/logger"
-import { requireAdminApi } from "@/lib/require-admin-api"
+import { requireSuperAdminApi } from "@/lib/require-admin-api"
 
 function parseId(raw: string): number | null {
   const id = parseInt(raw, 10)
@@ -12,7 +12,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requireAdminApi(request)
+  const gate = await requireSuperAdminApi(request)
   if (!gate.ok) return gate.response
 
   const { id: idRaw } = await params
@@ -24,7 +24,7 @@ export async function PATCH(
   try {
     const body = await request.json()
     const { displayName, name, description, isActive } = body
-    const result = await updateDocumentType(id, { displayName, name, description, isActive })
+    const result = await updateDocumentType(id, { displayName, name, description, isActive }, gate.username)
 
     if (!result.success) {
       return NextResponse.json({ success: false, error: result.error }, { status: 404 })
@@ -44,11 +44,12 @@ export async function PATCH(
   }
 }
 
+/** Soft delete: sets isActive=false (blocked if type is referenced by documents). */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requireAdminApi(request)
+  const gate = await requireSuperAdminApi(request)
   if (!gate.ok) return gate.response
 
   const { id: idRaw } = await params
@@ -58,21 +59,21 @@ export async function DELETE(
   }
 
   try {
-    const result = await deleteDocumentType(id)
+    const result = await deactivateDocumentType(id, gate.username)
     if (!result.success) {
-      return NextResponse.json({ success: false, error: result.error }, { status: 404 })
+      return NextResponse.json({ success: false, error: result.error }, { status: 400 })
     }
 
-    logInfo("Тип работы удалён", gate.username, "admin", "delete_document_type", { typeId: id })
+    logInfo("Тип работы деактивирован", gate.username, "admin", "deactivate_document_type", { typeId: id })
     return NextResponse.json({ success: true })
   } catch (error) {
     logError(
-      "Ошибка при удалении типа работы",
+      "Ошибка при деактивации типа работы",
       error instanceof Error ? error : String(error),
       gate.username,
       "admin",
-      "delete_document_type",
+      "deactivate_document_type",
     )
-    return NextResponse.json({ success: false, error: "Ошибка при удалении типа работы" }, { status: 500 })
+    return NextResponse.json({ success: false, error: "Ошибка при деактивации типа работы" }, { status: 500 })
   }
 }

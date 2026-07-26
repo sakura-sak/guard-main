@@ -27,14 +27,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { fullName, institution, faculty, group, email } = body
+    const { fullName, institution, faculty, facultyId, group, email } = body
     const policy = profileEditPolicy(dbUser.role, dbUser.institutionId, dbUser.institution)
 
     if (isStudentOrTeacher(dbUser.role)) {
       if (institution !== undefined && !policy.institution) {
         return NextResponse.json({ success: false, error: "Нельзя изменить учебное заведение" }, { status: 403 })
       }
-      if (faculty !== undefined && !policy.faculty) {
+      if ((faculty !== undefined || facultyId !== undefined) && !policy.faculty) {
         return NextResponse.json({ success: false, error: "Факультет задаётся администратором" }, { status: 403 })
       }
       if (group !== undefined && !policy.group) {
@@ -42,15 +42,19 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    const ok = await updateUserProfile(gate.user.username, {
+    const result = await updateUserProfile(gate.user.username, {
       fullName: policy.fullName && typeof fullName === "string" ? fullName : undefined,
       institution: policy.institution && typeof institution === "string" ? institution : undefined,
       faculty: policy.faculty && typeof faculty === "string" ? faculty : undefined,
+      facultyId: policy.faculty && typeof facultyId === "string" ? facultyId : undefined,
       group: policy.group && typeof group === "string" ? group : undefined,
       email: policy.email && typeof email === "string" ? email : undefined,
     })
-    if (!ok) {
-      return NextResponse.json({ success: false, error: "Не удалось обновить профиль" }, { status: 500 })
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, error: result.error || "Не удалось обновить профиль" },
+        { status: result.error?.includes("справочнике") ? 400 : 500 },
+      )
     }
     const updated = await getUserByUsername(gate.user.username)
     return NextResponse.json({

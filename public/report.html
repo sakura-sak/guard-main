@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Отчёт — Антиплагиат БГУИР</title>
+</head>
+<body>
+  <div id="reportLoading" style="padding:2rem;text-align:center;color:#64748b;font-family:system-ui,sans-serif;">
+    Загрузка отчёта…
+  </div>
+  <div id="reportError" hidden style="padding:2rem;color:#b91c1c;font-family:system-ui,sans-serif;"></div>
+  <div id="reportRoot"></div>
+  <script src="api.js"></script>
+  <script src="report-print.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      const documentId = params.get('documentId');
+      const sig = params.get('sig') || '';
+      const loading = document.getElementById('reportLoading');
+      const errorEl = document.getElementById('reportError');
+      const root = document.getElementById('reportRoot');
+
+      function showError(msg) {
+        loading.hidden = true;
+        errorEl.textContent = msg;
+        errorEl.hidden = false;
+      }
+
+      if (!documentId) {
+        showError('Не указан ID документа');
+        return;
+      }
+
+      const qs = sig ? ('?sig=' + encodeURIComponent(sig)) : '';
+      try {
+        const res = await fetch('/api/report/' + encodeURIComponent(documentId) + '/print-data' + qs, {
+          credentials: 'include',
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          showError(data.error || 'Не удалось загрузить отчёт');
+          return;
+        }
+
+        document.title = 'Отчёт — ' + (data.title || documentId);
+        root.innerHTML = window.ApReportPrint.buildDocumentHtml(data);
+        loading.hidden = true;
+        await window.ApReportPrint.waitForImages(root);
+      } catch (err) {
+        showError(err.message || 'Ошибка сети');
+      }
+    })();
+  </script>
+</body>
+</html>

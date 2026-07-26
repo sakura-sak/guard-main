@@ -68,9 +68,10 @@ export function buildReportQrLinks(documentId: number, baseUrl: string): ReportQ
   const base = baseUrl.replace(/\/$/, "")
   const sigReport = signDocumentAccess("report", documentId)
   const sigOriginal = signDocumentAccess("original", documentId)
+  const reportQuery = `documentId=${documentId}&sig=${encodeURIComponent(sigReport)}`
   return {
-    verifyUrl: `${base}/api/report/v/${documentId}/${encodeURIComponent(sigReport)}`,
+    verifyUrl: `${base}/report.html?${reportQuery}`,
     originalUrl: `${base}/api/report/${documentId}/original?sig=${encodeURIComponent(sigOriginal)}`,
-    reportPdfUrl: `${base}/api/report/${documentId}/view?sig=${encodeURIComponent(sigReport)}`,
+    reportPdfUrl: `${base}/report.html?${reportQuery}`,
   }
 }

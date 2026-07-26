@@ -1,13 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createDocumentType, getAllDocumentTypes } from "@/lib/document-types"
 import { logError, logInfo } from "@/lib/logger"
-import { requireAdminApi } from "@/lib/require-admin-api"
+import { requireAdminApi, requireSuperAdminApi } from "@/lib/require-admin-api"
 
 export async function GET(request: NextRequest) {
   const gate = await requireAdminApi(request)
   if (!gate.ok) return gate.response
   try {
-    const types = await getAllDocumentTypes(true)
+    const types = await getAllDocumentTypes(gate.isSuperAdmin)
     return NextResponse.json({ success: true, types })
   } catch (error) {
     console.error("Error fetching document types:", error)
@@ -16,12 +16,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const gate = await requireAdminApi(request)
+  const gate = await requireSuperAdminApi(request)
   if (!gate.ok) return gate.response
   try {
     const body = await request.json()
     const { displayName, name, description, isActive } = body
-    const result = await createDocumentType({ displayName, name, description, isActive })
+    const result = await createDocumentType({ displayName, name, description, isActive }, gate.username)
 
     if (!result.success) {
       return NextResponse.json({ success: false, error: result.error }, { status: 400 })

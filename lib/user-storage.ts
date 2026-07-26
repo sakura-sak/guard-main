@@ -7,7 +7,6 @@
 
 import type { User, UserRole } from "./auth"
 import { prisma } from "./prisma"
-import { ensureSqliteSeededFromLocalJson } from "./sqlite-seed"
 import { resolveInstitutionId, resolveFacultyId } from "./directories"
 
 export interface StoredUser {
@@ -33,7 +32,6 @@ export interface UserDatabase {
 }
 
 async function initDb() {
-  await ensureSqliteSeededFromLocalJson()
   return prisma
 }
 
@@ -208,27 +206,68 @@ export async function updateUserAdditionalRoles(username: string, additionalRole
 
 export async function updateUserProfile(
   username: string,
-  data: { fullName?: string; institution?: string; faculty?: string; group?: string; email?: string },
-): Promise<boolean> {
+  data: {
+    fullName?: string
+    institution?: string
+    faculty?: string
+    facultyId?: string
+    group?: string
+    email?: string
+  },
+): Promise<{ success: boolean; error?: string }> {
   const client = await initDb()
+  const trimmedUsername = username.trim()
+  const existing = await client.user.findUnique({ where: { username: trimmedUsername } })
+  if (!existing) return { success: false, error: "Пользователь не найден" }
 
   const patch: Record<string, unknown> = {}
   if (data.fullName !== undefined) patch.fullName = data.fullName || null
   if (data.group !== undefined) patch.groupName = data.group || null
   if (data.email !== undefined) patch.email = data.email || null
 
+  let institutionId = existing.institutionId
   if (data.institution !== undefined) {
-    patch.institutionId = await resolveInstitutionId(data.institution || "БГУИР")
-  }
-  if (data.faculty !== undefined) {
-    const instId = patch.institutionId as string | undefined
-      ?? (await client.user.findUnique({ where: { username: username.trim() } }))?.institutionId
-      ?? null
-    patch.facultyId = instId ? await resolveFacultyId(instId, data.faculty) : null
+    institutionId = await resolveInstitutionId(data.institution || "БГУИР")
+    patch.institutionId = institutionId
   }
 
-  const info = await client.user.updateMany({ where: { username: username.trim() }, data: patch })
-  return info.count > 0
+  if (data.facultyId !== undefined) {
+    const facId = data.facultyId.trim()
+    if (!facId) {
+      patch.facultyId = null
+    } else {
+      if (!institutionId) {
+        return { success: false, error: "Не указано учебное заведение" }
+      }
+      const fac = await client.faculty.findFirst({
+        where: { id: facId, institutionId, isActive: true },
+      })
+      if (!fac) {
+        return { success: false, error: "Факультет не найден в справочнике" }
+      }
+      patch.facultyId = fac.id
+    }
+  } else if (data.faculty !== undefined) {
+    const label = data.faculty.trim()
+    if (!label) {
+      patch.facultyId = null
+    } else {
+      if (!institutionId) {
+        return { success: false, error: "Не указано учебное заведение" }
+      }
+      const resolved = await resolveFacultyId(institutionId, label)
+      if (!resolved) {
+        return {
+          success: false,
+          error: "Факультет не найден в справочнике. Выберите значение из списка.",
+        }
+      }
+      patch.facultyId = resolved
+    }
+  }
+
+  const info = await client.user.updateMany({ where: { username: trimmedUsername }, data: patch })
+  return info.count > 0 ? { success: true } : { success: false, error: "Не удалось обновить профиль" }
 }
 
 export async function updateUserByAdmin(
