@@ -7,9 +7,11 @@
 import fs from "fs"
 import path from "path"
 import { prisma } from "./prisma"
+import { comparisonCategories } from "./comparison-scope"
+import { signDocumentAccess } from "./report-access"
 
 // Типы
-export type DocumentStatus = "draft" | "final" | "archived"
+export type DocumentStatus = "processing" | "draft" | "final" | "archived" | "failed"
 
 export interface StoredDocument {
   id: number
@@ -40,10 +42,14 @@ export interface StoredDocument {
   originalityPercent?: number
   /** Векторный плагиат (Python / Qdrant), % */
   plagiarismPercentMl?: number
+  /** Локальный MinHash плагиат, % */
+  localPlagiarismPercent?: number
   /** Оценка AI-признаков (Python), % */
   aiPercentMl?: number
   processingTimeMs?: number
   expiresAt?: string
+  analysisCompletedAt?: string
+  resultViewedAt?: string
 }
 
 const DATA_DIR = path.join(process.cwd(), "data")
@@ -159,9 +165,19 @@ function mapRowToStoredDocument(row: any): StoredDocument {
     originalityPercent: typeof row.originalityPercent === "number" ? row.originalityPercent : undefined,
     plagiarismPercentMl:
       typeof row.plagiarismPercentMl === "number" ? row.plagiarismPercentMl : undefined,
+    localPlagiarismPercent:
+      typeof row.localPlagiarismPercent === "number" ? row.localPlagiarismPercent : undefined,
     aiPercentMl: typeof row.aiPercentMl === "number" ? row.aiPercentMl : undefined,
     processingTimeMs: typeof row.processingTimeMs === "number" ? row.processingTimeMs : undefined,
     expiresAt: row.expiresAt instanceof Date ? row.expiresAt.toISOString() : row.expiresAt ?? undefined,
+    analysisCompletedAt:
+      row.analysisCompletedAt instanceof Date
+        ? row.analysisCompletedAt.toISOString()
+        : row.analysisCompletedAt ?? undefined,
+    resultViewedAt:
+      row.resultViewedAt instanceof Date
+        ? row.resultViewedAt.toISOString()
+        : row.resultViewedAt ?? undefined,
   }
 }
 
@@ -345,8 +361,8 @@ export async function getAllDocumentsFromDb(
 }
 
 /**
- * Пул для сравнения: черновики и финальные работы той же категории и того же УО.
- * Без institutionId сравнение не выполняется (изоляция вузов).
+ * Пул для сравнения: черновики и финальные работы того же типа (или graduation-пула)
+ * и того же УО. Без institutionId сравнение не выполняется (изоляция вузов).
  * excludeUserId — не сравнивать с другими работами того же автора (только чужие).
  */
 export async function getDocumentsForComparison(
@@ -358,18 +374,18 @@ export async function getDocumentsForComparison(
   const instId = institutionId?.trim()
   if (!instId) return []
 
-  const safeCategory = category.replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_").trim() || "uncategorized"
+  const categories = comparisonCategories(category)
   const db = await initDb()
 
   const excludeUser = excludeUserId?.trim()
   const where: {
-    category: string
+    category: { in: string[] }
     status: { in: DocumentStatus[] }
     institutionId: string
     id?: { not: number }
     OR?: Array<{ userId: null } | { userId: { not: string } }>
   } = {
-    category: safeCategory,
+    category: { in: categories },
     status: { in: ["draft", "final"] },
     institutionId: instId,
   }
@@ -556,7 +572,7 @@ export async function purgeArchivedDocumentStorage(): Promise<{
       }
     }
 
-    if (deleteReportPdf(row.id)) reportsDeleted++
+    if (await deleteReportPdf(row.id)) reportsDeleted++
 
     await db.document.update({
       where: { id: row.id },
@@ -610,18 +626,57 @@ function ensureReportsDir() {
   if (!fs.existsSync(REPORTS_DIR)) fs.mkdirSync(REPORTS_DIR, { recursive: true })
 }
 
-export function saveReportPdf(
+function reportRelativePath(documentId: number): string {
+  return `data/reports/${documentId}.pdf`
+}
+
+/** Upsert metadata row in `reports` when a PDF spravka is stored on disk. */
+async function syncReportDbRecord(
+  documentId: number,
+  generatedById?: string | null,
+): Promise<void> {
+  const filePath = reportRelativePath(documentId)
+  const accessToken = signDocumentAccess("report", documentId)
+  const existing = await prisma.report.findFirst({
+    where: { documentId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  })
+  if (existing) {
+    await prisma.report.update({
+      where: { id: existing.id },
+      data: {
+        filePath,
+        accessToken,
+        generatedById: generatedById ?? undefined,
+        createdAt: new Date(),
+      },
+    })
+    return
+  }
+  await prisma.report.create({
+    data: {
+      documentId,
+      filePath,
+      accessToken,
+      generatedById: generatedById ?? null,
+    },
+  })
+}
+
+export async function saveReportPdf(
   documentId: number,
   pdfBuffer: Buffer,
-  originalityPercent?: number,
-): boolean {
+  options?: { originalityPercent?: number; generatedById?: string | null },
+): Promise<boolean> {
   ensureReportsDir()
   const filePath = path.join(REPORTS_DIR, `${documentId}.pdf`)
   try {
     fs.writeFileSync(filePath, pdfBuffer)
-    if (originalityPercent !== undefined) {
-      void updateDocumentOriginality(documentId, originalityPercent)
+    if (options?.originalityPercent !== undefined) {
+      await updateDocumentOriginality(documentId, options.originalityPercent)
     }
+    await syncReportDbRecord(documentId, options?.generatedById)
     return true
   } catch (err) {
     console.error("Error saving report PDF:", err)
@@ -644,14 +699,53 @@ export function getReportPdfBuffer(documentId: number): Buffer | null {
   }
 }
 
-export function deleteReportPdf(documentId: number): boolean {
-  const p = getReportPdfPath(documentId)
-  if (!p) return false
-  try {
-    fs.unlinkSync(p)
-    return true
-  } catch (err) {
-    console.error("Error deleting report PDF:", err)
-    return false
+/** Create `reports` rows for PDFs already on disk (one-time migration). */
+export async function backfillReportsFromDisk(): Promise<{ created: number; skipped: number }> {
+  ensureReportsDir()
+  let created = 0
+  let skipped = 0
+  const entries = fs.readdirSync(REPORTS_DIR).filter((name) => /^\d+\.pdf$/i.test(name))
+  for (const name of entries) {
+    const documentId = parseInt(name.replace(/\.pdf$/i, ""), 10)
+    if (Number.isNaN(documentId)) continue
+    const doc = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: { id: true, userId: true },
+    })
+    if (!doc) {
+      skipped++
+      continue
+    }
+    const existing = await prisma.report.findFirst({
+      where: { documentId },
+      select: { id: true },
+    })
+    if (existing) {
+      skipped++
+      continue
+    }
+    await syncReportDbRecord(documentId, doc.userId)
+    created++
   }
+  return { created, skipped }
+}
+
+export async function deleteReportPdf(documentId: number): Promise<boolean> {
+  const p = getReportPdfPath(documentId)
+  let ok = true
+  if (p) {
+    try {
+      fs.unlinkSync(p)
+    } catch (err) {
+      console.error("Error deleting report PDF:", err)
+      ok = false
+    }
+  }
+  try {
+    await prisma.report.deleteMany({ where: { documentId } })
+  } catch (err) {
+    console.error("Error deleting report rows:", err)
+    ok = false
+  }
+  return ok
 }

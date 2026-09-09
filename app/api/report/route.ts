@@ -81,7 +81,10 @@ export async function POST(request: NextRequest) {
 
     const isFinal = result.status === "final" && result.documentId
     if (isFinal) {
-      saveReportPdf(result.documentId, pdfBuffer, result.uniquenessPercent)
+      await saveReportPdf(result.documentId, pdfBuffer, {
+        originalityPercent: result.uniquenessPercent,
+        generatedById: result.userId ?? null,
+      })
     }
 
     logInfo("PDF отчет сгенерирован", result.userId, result.userRole, "generate_report", {

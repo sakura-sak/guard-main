@@ -37,7 +37,11 @@ export async function GET(
       status: doc.status,
       originalityPercent: doc.originalityPercent,
       plagiarismPercentMl: doc.plagiarismPercentMl,
+      localPlagiarismPercent: doc.localPlagiarismPercent,
       aiPercentMl: doc.aiPercentMl,
+      processingTimeMs: doc.processingTimeMs,
+      analysisCompletedAt: doc.analysisCompletedAt,
+      resultViewedAt: doc.resultViewedAt,
       expiresAt: doc.expiresAt,
     })),
   })

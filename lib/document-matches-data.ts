@@ -1,3 +1,4 @@
+import { allocatePercents } from "@/lib/allocate-percents"
 import { getDocumentByIdFromDb, getDocumentsForComparison, type StoredDocument } from "@/lib/local-storage"
 import {
   compareMinHashSignatures,
@@ -186,7 +187,7 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
     }
   }
 
-  const borrowMatches = [...bySource.values()].sort((a, b) => b.similarity - a.similarity)
+  let borrowMatches = [...bySource.values()].sort((a, b) => b.similarity - a.similarity)
 
   const byType = emptyByType()
   for (const m of borrowMatches) {
@@ -209,9 +210,38 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
     }
   }
 
-  const localPlagiarismPercent = roundPercent(similarDocs[0]?.similarity ?? 0)
+  const localPlagiarismPercent = roundPercent(
+    typeof doc.localPlagiarismPercent === "number"
+      ? doc.localPlagiarismPercent
+      : similarDocs[0]?.similarity ?? 0,
+  )
   const mlPlagiarismPercent = roundPercent(doc.plagiarismPercentMl ?? 0)
   const plagiarismPercent = Math.max(localPlagiarismPercent, mlPlagiarismPercent)
+
+  // Replace pairwise similarity with contribution shares that sum to plagiarismPercent.
+  if (borrowMatches.length > 0) {
+    const shares = allocatePercents(
+      borrowMatches.map((m) => m.similarity),
+      plagiarismPercent,
+      1,
+    )
+    borrowMatches = borrowMatches
+      .map((m, i) => ({ ...m, similarity: shares[i] ?? 0 }))
+      .sort((a, b) => b.similarity - a.similarity)
+
+    const shareById = new Map(borrowMatches.map((m) => [m.sourceId, m.similarity]))
+    for (const [id, sim] of similarById) {
+      const share = shareById.get(id)
+      if (share != null) {
+        similarById.set(id, { ...sim, similarity: share })
+      }
+    }
+    for (const frag of fragments) {
+      if (frag.type !== "borrow") continue
+      const share = shareById.get(frag.sourceId)
+      if (share != null) frag.similarity = share
+    }
+  }
 
   const aiPercent = doc.aiPercentMl ?? 0
   const aiMatches: DocumentMatchesPayload["aiMatches"] = []

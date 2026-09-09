@@ -52,18 +52,37 @@ export async function PATCH(
       )
     }
 
+    if (doc.status === "processing") {
+      return NextResponse.json(
+        { success: false, error: "Документ ещё обрабатывается. Дождитесь завершения проверки." },
+        { status: 409 },
+      )
+    }
+    if (doc.status === "failed") {
+      return NextResponse.json(
+        { success: false, error: "Проверка документа завершилась с ошибкой. Загрузите документ заново." },
+        { status: 409 },
+      )
+    }
+    if (status === "final" && doc.status !== "draft") {
+      return NextResponse.json(
+        { success: false, error: "Финализировать можно только черновик с готовым результатом." },
+        { status: 400 },
+      )
+    }
+
     const updated = await updateDocumentStatus(id, status as DocumentStatus)
 
     if (updated) {
       if (status === "final") {
         try {
-          deleteReportPdf(id)
+          await deleteReportPdf(id)
           const payload = await buildReportPayloadForDocument(id, resolvePublicBaseUrl(request))
           if (!payload) {
             throw new Error(`Документ ${id} не найден при сборке PDF`)
           }
           const pdfBytes = await generatePDFReport(payload)
-          saveReportPdf(id, Buffer.from(pdfBytes))
+          await saveReportPdf(id, Buffer.from(pdfBytes), { generatedById: userId })
         } catch (e) {
           // Не блокируем смену статуса, если генерация отчета не удалась
           logError(

@@ -8,7 +8,12 @@ function roundPercent(n: number): number {
   return Math.round(Math.max(0, Math.min(100, n)) * 100) / 100
 }
 
-function plagiarismFromDoc(originalityPercent: number | null | undefined, plagiarismPercentMl: number | null | undefined): number {
+function plagiarismFromDoc(
+  originalityPercent: number | null | undefined,
+  plagiarismPercentMl: number | null | undefined,
+  status?: string | null,
+): number {
+  if (status === "processing" || status === "failed") return 0
   if (typeof originalityPercent === "number" && Number.isFinite(originalityPercent)) {
     return roundPercent(100 - originalityPercent)
   }
@@ -58,7 +63,7 @@ export async function GET(request: NextRequest) {
     }
     filteredDocs = filteredDocs.filter((doc) => {
       const orig = doc.originalityPercent ?? null
-      const plag = plagiarismFromDoc(doc.originalityPercent, doc.plagiarismPercentMl)
+      const plag = plagiarismFromDoc(doc.originalityPercent, doc.plagiarismPercentMl, doc.status)
       if (orig !== null) {
         if (orig < minUniqueness || orig > maxUniqueness) return false
       }
@@ -175,7 +180,7 @@ export async function GET(request: NextRequest) {
       const typeLabel = labelByCategory[doc.category] ?? staticCategoryLabel(doc.category)
       const percent =
         typeof doc.originalityPercent === "number" ? roundPercent(doc.originalityPercent) : 0
-      const matches = plagiarismFromDoc(doc.originalityPercent, doc.plagiarismPercentMl)
+      const matches = plagiarismFromDoc(doc.originalityPercent, doc.plagiarismPercentMl, doc.status)
       const ai = typeof doc.aiPercentMl === "number" ? roundPercent(doc.aiPercentMl) : 0
       return {
         id: doc.id,

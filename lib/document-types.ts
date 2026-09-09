@@ -54,6 +54,59 @@ export function slugifyDocumentTypeName(displayName: string): string {
   return base
 }
 
+/** Same normalization as documents.category on upload. */
+export function normalizeCategorySlug(category: string): string {
+  return category.replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_").trim() || "uncategorized"
+}
+
+/**
+ * Resolve DocumentType.id for a document's institution + category slug.
+ * New uploads should always set documentTypeId when the type exists in the catalog.
+ */
+export async function resolveDocumentTypeId(
+  institutionId: string | null | undefined,
+  categorySlug: string,
+): Promise<number | null> {
+  const instId = institutionId?.trim()
+  if (!instId) return null
+
+  const slug = normalizeCategorySlug(categorySlug)
+  if (!slug || slug === "uncategorized") return null
+
+  await ensureDocumentTypesForInstitution(instId)
+
+  const row = await prisma.documentType.findUnique({
+    where: { institutionId_name: { institutionId: instId, name: slug } },
+    select: { id: true, isActive: true },
+  })
+  if (!row || row.isActive === false) return null
+  return row.id
+}
+
+/** One-time helper: fill document_type_id for rows that only have category slug. */
+export async function backfillDocumentTypeIds(): Promise<{ updated: number; skipped: number }> {
+  const docs = await prisma.document.findMany({
+    where: { documentTypeId: null, institutionId: { not: null } },
+    select: { id: true, category: true, institutionId: true },
+  })
+
+  let updated = 0
+  let skipped = 0
+  for (const doc of docs) {
+    const typeId = await resolveDocumentTypeId(doc.institutionId, doc.category)
+    if (!typeId) {
+      skipped += 1
+      continue
+    }
+    await prisma.document.update({
+      where: { id: doc.id },
+      data: { documentTypeId: typeId },
+    })
+    updated += 1
+  }
+  return { updated, skipped }
+}
+
 async function uniqueSlug(base: string, institutionId: string): Promise<string> {
   let slug = slugifyDocumentTypeName(base)
   let n = 1

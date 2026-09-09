@@ -41,9 +41,12 @@ export async function GET(request: NextRequest) {
       faculty: doc.faculty,
       originalityPercent: doc.originalityPercent,
       plagiarismPercentMl: doc.plagiarismPercentMl,
+      localPlagiarismPercent: doc.localPlagiarismPercent,
       aiPercentMl: doc.aiPercentMl,
       documentType: doc.documentType,
       processingTimeMs: doc.processingTimeMs,
+      analysisCompletedAt: doc.analysisCompletedAt,
+      resultViewedAt: doc.resultViewedAt,
       expiresAt: doc.expiresAt ?? (doc.status === "draft" ? computeDraftExpiresAt(doc.uploadDate) : null),
     }))
 

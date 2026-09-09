@@ -15,4 +15,3 @@ nginx.conf
 tsconfig.tsbuildinfo
 .idea
 *.log
-scripts

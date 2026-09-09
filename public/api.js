@@ -100,15 +100,23 @@
   // ─── Upload ───────────────────────────────────────────────────────────────
 
   /**
-   * Upload & save a document (creates DB record + saves file).
-   * Send as FormData with fields:
-   *   file (File), title, content, category, status ("draft"|"final"),
-   *   author?, institution?, originality_percent?, plagiarism_percent_ml?,
-   *   ai_percent_ml?, processing_time_ms?, document_type?, semantic_matches_json?
+   * Upload & enqueue async analysis (202). FormData:
+   *   file, title, content, category, institution?, institutionId?, document_type?
    * @param {FormData} formData
-   * @returns {{ ok, data: { success, document: { id, title, filename, wordCount } } }}
+   * @returns {{ ok, status, data: { success, status, jobId, document } }}
    */
   const uploadDocument = (formData) => POST('/api/upload', formData, true);
+
+  /** Active processing job or latest unviewed completed result. */
+  const getAnalysisState = () => GET('/api/analysis/state');
+
+  /** Per-document analysis state. */
+  const getDocumentAnalysis = (documentId) =>
+    GET(`/api/documents/${documentId}/analysis`);
+
+  /** Mark completed result as viewed (stage 3 shown). */
+  const markAnalysisViewed = (documentId) =>
+    POST(`/api/documents/${documentId}/analysis/viewed`, {});
 
   // ─── Documents ────────────────────────────────────────────────────────────
 
@@ -257,7 +265,7 @@
       const sim = simById.get(m.sourceId);
       const pct = Math.round(m.similarity ?? 0);
       const typeLabel = m.matchTypeLabel || '';
-      const cat = categoryLabel(m.category || sim?.category);
+      const cat = m.categoryLabel || categoryLabel(m.category || sim?.categoryLabel || sim?.category);
       rows.push({
         title: m.sourceTitle || '—',
         // quote: m.quote || m.sourceTitle || '—',
@@ -489,6 +497,44 @@
     }, { once: true });
   }
 
+  /** Trigger browser download of the original uploaded file. */
+  async function downloadDocumentFile(documentId, fallbackName) {
+    const id = documentId != null ? String(documentId).trim() : '';
+    if (!id) return { ok: false, error: 'Нет ID документа' };
+    const res = await fetch('/api/documents/' + encodeURIComponent(id) + '/file', {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      let err = 'Не удалось скачать файл';
+      try {
+        const data = await res.json();
+        if (data.error) err = data.error;
+      } catch { /* binary body */ }
+      return { ok: false, error: err };
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    let filename = fallbackName || 'document';
+    const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+    const asciiMatch = /filename="([^"]+)"/i.exec(cd);
+    if (utf8Match) {
+      try { filename = decodeURIComponent(utf8Match[1]); } catch { filename = utf8Match[1]; }
+    } else if (asciiMatch) {
+      filename = asciiMatch[1];
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+    return { ok: true };
+  }
+
   // ─── Expose ───────────────────────────────────────────────────────────────
 
   global.ApApi = {
@@ -500,9 +546,11 @@
     getDirectories, getDocumentTypes,
     // check & upload
     checkDocument, uploadDocument,
+    getAnalysisState, getDocumentAnalysis, markAnalysisViewed,
     // documents
     getUserDocuments, updateDocumentStatus, updateDocumentTitle,
     deleteUserDocument, getDocumentMatches, generateReport, getReportQrLinks, resolveReportQrUrls,
+    downloadDocumentFile,
     fetchReportMatchRows, mapBorrowRowsFromMatchesApi, buildReportTableRows, formatReportPercentCell,
     loadCategoryLabels, setCategoryLabelsFromTypes, categoryLabel, qrImageUrl, applyQrToImg, openReportPrintWindow,
     openPrintableReportById, setMetricCircle, initMetricCirclesIn, METRIC_RING_LENGTH,

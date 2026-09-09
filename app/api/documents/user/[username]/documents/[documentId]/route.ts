@@ -45,7 +45,7 @@ export async function DELETE(
       )
     }
 
-    deleteReportPdf(id)
+    await deleteReportPdf(id)
     const deleted = await deleteDocumentFromDb(id)
 
     if (deleted) {

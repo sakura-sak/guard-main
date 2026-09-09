@@ -1,3 +1,4 @@
+import { purgeOldAuditLogs } from "@/lib/audit-log"
 import { purgeArchivedDocumentStorage } from "@/lib/local-storage"
 
 function msUntilNextLocalTime(hour: number, minute: number): number {
@@ -12,7 +13,7 @@ function msUntilNextLocalTime(hour: number, minute: number): number {
 
 let started = false
 
-/** Runs purgeArchivedDocumentStorage once per day at ARCHIVE_PURGE_HOUR:ARCHIVE_PURGE_MINUTE (local server time). */
+/** Runs archive + audit retention purge once per day at ARCHIVE_PURGE_HOUR:ARCHIVE_PURGE_MINUTE. */
 export function startNightlyArchivePurgeScheduler(): void {
   if (started) return
   if (process.env.ARCHIVE_PURGE_ENABLED === "false") return
@@ -32,6 +33,14 @@ export function startNightlyArchivePurgeScheduler(): void {
     } catch (err) {
       console.error("[nightly-cleanup] archived storage purge failed:", err)
     }
+    try {
+      const deleted = await purgeOldAuditLogs()
+      if (deleted > 0) {
+        console.log(`[nightly-cleanup] audit_logs purge: deleted ${deleted} rows older than retention`)
+      }
+    } catch (err) {
+      console.error("[nightly-cleanup] audit_logs purge failed:", err)
+    }
   }
 
   const scheduleNext = () => {
@@ -43,6 +52,6 @@ export function startNightlyArchivePurgeScheduler(): void {
 
   scheduleNext()
   console.log(
-    `[nightly-cleanup] scheduled daily archive purge at ${String(safeHour).padStart(2, "0")}:${String(safeMinute).padStart(2, "0")} (server local time)`,
+    `[nightly-cleanup] scheduled daily archive+audit purge at ${String(safeHour).padStart(2, "0")}:${String(safeMinute).padStart(2, "0")} (server local time)`,
   )
 }

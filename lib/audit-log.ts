@@ -47,23 +47,49 @@ export async function writeAuditLog(entry: {
   ipAddress?: string
 }): Promise<void> {
   try {
+    // audit_logs.user_id FK → users.username. LDAP logs often fire before the
+    // local user row exists (or on failed login); keep the event, drop the FK.
+    let userId: string | null = entry.userId?.trim() || null
+    const details: Record<string, unknown> = {
+      level: entry.level ?? "info",
+      message: entry.message,
+      ...entry.details,
+    }
+    if (userId) {
+      const exists = await prisma.user.findUnique({
+        where: { username: userId },
+        select: { username: true },
+      })
+      if (!exists) {
+        details.username = userId
+        userId = null
+      }
+    }
+
     await prisma.auditLog.create({
       data: {
-        userId: entry.userId ?? null,
+        userId,
         action: entry.action,
         entityType: entry.entityType ?? null,
         entityId: entry.entityId != null ? String(entry.entityId) : null,
-        details: JSON.stringify({
-          level: entry.level ?? "info",
-          message: entry.message,
-          ...entry.details,
-        }),
+        details: JSON.stringify(details),
         ipAddress: entry.ipAddress ?? null,
       },
     })
   } catch (err) {
     console.error("Failed to write audit log:", err)
   }
+}
+
+/** Delete audit rows older than `retentionDays` (default from AUDIT_LOG_RETENTION_DAYS or 30). */
+export async function purgeOldAuditLogs(retentionDays?: number): Promise<number> {
+  const raw = retentionDays ?? Number.parseInt(process.env.AUDIT_LOG_RETENTION_DAYS || "30", 10)
+  const days = Number.isFinite(raw) ? Math.min(3650, Math.max(1, raw)) : 30
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  const result = await prisma.auditLog.deleteMany({
+    where: { createdAt: { lt: cutoff } },
+  })
+  return result.count
 }
 
 export async function getAuditLogs(opts?: {

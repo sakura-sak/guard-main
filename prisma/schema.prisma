@@ -86,24 +86,27 @@ model User {
 
 // ─── 5. Document (metadata only) ───────────────────────────────────────────────
 model Document {
-  id                  Int       @id @default(autoincrement())
-  title               String
-  filename            String?
-  fileFormat          String?   @map("file_format") // "word" | "pdf"
-  filePath            String?   @map("file_path")
-  wordCount           Int       @map("word_count")
-  uploadDate          DateTime  @map("upload_date")
-  category            String // slug used for file-storage paths
-  status              String // "draft" | "final" | "archived"
-  userId              String?   @map("user_id")
-  institutionId       String?   @map("institution_id")
-  facultyId           String?   @map("faculty_id")
-  documentTypeId      Int?      @map("document_type_id")
-  originalityPercent  Float?    @map("originality_percent")
-  plagiarismPercentMl Float?    @map("plagiarism_percent_ml")
-  aiPercentMl         Float?    @map("ai_percent_ml")
-  processingTimeMs    Int?      @map("processing_time_ms")
-  expiresAt           DateTime? @map("expires_at")
+  id                     Int       @id @default(autoincrement())
+  title                  String
+  filename               String?
+  fileFormat             String?   @map("file_format") // "word" | "pdf"
+  filePath               String?   @map("file_path")
+  wordCount              Int       @map("word_count")
+  uploadDate             DateTime  @map("upload_date")
+  category               String // slug used for file-storage paths
+  status                 String // "processing" | "draft" | "final" | "archived" | "failed"
+  userId                 String?   @map("user_id")
+  institutionId          String?   @map("institution_id")
+  facultyId              String?   @map("faculty_id")
+  documentTypeId         Int?      @map("document_type_id")
+  originalityPercent     Float?    @map("originality_percent")
+  plagiarismPercentMl    Float?    @map("plagiarism_percent_ml")
+  localPlagiarismPercent Float?    @map("local_plagiarism_percent")
+  aiPercentMl            Float?    @map("ai_percent_ml")
+  processingTimeMs       Int?      @map("processing_time_ms")
+  expiresAt              DateTime? @map("expires_at")
+  analysisCompletedAt    DateTime? @map("analysis_completed_at")
+  resultViewedAt         DateTime? @map("result_viewed_at")
 
   user             User?              @relation(fields: [userId], references: [username], onDelete: SetNull)
   institution      Institution?       @relation(fields: [institutionId], references: [id], onDelete: SetNull)
@@ -111,6 +114,7 @@ model Document {
   documentType     DocumentType?      @relation(fields: [documentTypeId], references: [id], onDelete: SetNull)
   contentPayload   DocumentContent?
   signaturePayload DocumentSignature?
+  analysisJob      AnalysisJob?
 
   matchesAsSource PlagiarismMatch[] @relation("SourceDocument")
   matchesAsTarget PlagiarismMatch[] @relation("TargetDocument")
@@ -120,9 +124,38 @@ model Document {
   @@index([category], map: "idx_documents_category")
   @@index([userId], map: "idx_documents_user_id")
   @@index([status], map: "idx_documents_status")
+  @@index([userId, status], map: "idx_documents_user_status")
   @@index([institutionId], map: "idx_documents_institution_id")
   @@index([documentTypeId], map: "idx_documents_document_type_id")
   @@map("documents")
+}
+
+// ─── 5c. Durable async analysis queue (one active job per user) ────────────────
+model AnalysisJob {
+  id            Int       @id @default(autoincrement())
+  documentId    Int       @unique @map("document_id")
+  userId        String    @map("user_id")
+  institutionId String?   @map("institution_id")
+  status        String // "queued" | "processing" | "completed" | "failed"
+  // Set only while queued/processing; unique forbids a second active upload per user.
+  activeUserId  String?   @unique @map("active_user_id")
+  attempts      Int       @default(0)
+  // External ML job id from POST /v1/jobs (submit once, then poll).
+  mlJobId       String?   @map("ml_job_id")
+  availableAt   DateTime  @default(now()) @map("available_at")
+  leaseUntil    DateTime? @map("lease_until")
+  startedAt     DateTime? @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt], map: "idx_analysis_jobs_status_available")
+  @@index([institutionId, status, createdAt], map: "idx_analysis_jobs_institution")
+  @@index([userId, createdAt], map: "idx_analysis_jobs_user")
+  @@map("analysis_jobs")
 }
 
 // ─── 5a. Document text (heavy payload) ────────────────────────────────────────

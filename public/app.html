@@ -417,6 +417,8 @@ a { color: inherit; text-decoration: none; }
   padding: 4px 10px; border-radius: 999px; letter-spacing: 0.3px;
 }
 .status-pill--draft { background: #fef3c7; color: #92400e; }
+.status-pill--processing { background: #dbeafe; color: #1d4ed8; }
+.status-pill--failed { background: #fee2e2; color: #b91c1c; }
 .draft-timer {
   display: inline-flex; align-items: center; gap: 6px;
   margin-left: 10px; padding: 4px 10px; border-radius: 999px;
@@ -852,7 +854,7 @@ a { color: inherit; text-decoration: none; }
       <div class="stage-card" data-stage-card="2" hidden>
         <div class="stage-card__head">
           <h3>Проверка текстового документа</h3>
-          <p class="stage-card__sub">Идёт автоматический поиск заимствований по локальному хранилищу оригиналов учебного заведения.</p>
+          <p class="stage-card__sub" id="scanStageSub">Документ в очереди на проверку. Можно закрыть страницу — результат сохранится, и этап 2 восстановится при возврате.</p>
         </div>
         <div class="scan-progress">
           <div class="scan-progress__bar"><div class="scan-progress__fill" id="scanFill"></div></div>
@@ -1888,7 +1890,14 @@ a { color: inherit; text-decoration: none; }
         p.classList.toggle('is-active', active);
         p.hidden = !active;
       });
-      if (name === 'history') renderHistory();
+      if (name === 'history') {
+        analysisPollMode = 'history';
+        renderHistory();
+        startAnalysisPolling('history');
+      } else if (name === 'check') {
+        analysisPollMode = 'check';
+        void resumeAnalysisUi();
+      }
     });
   });
 
@@ -2047,12 +2056,14 @@ a { color: inherit; text-decoration: none; }
     return `${h}:${m}:${s}`;
   };
 
-  const startDraftTimer = () => {
+  const startDraftTimer = (expiresAtMs) => {
     stopDraftTimer();
     const timerEl = document.getElementById('draftTimer');
     const valEl = document.getElementById('draftTimerValue');
     if (!timerEl || !valEl) return;
-    const expiresAt = Date.now() + DRAFT_TTL_MS;
+    const expiresAt = typeof expiresAtMs === 'number' && Number.isFinite(expiresAtMs)
+      ? expiresAtMs
+      : Date.now() + DRAFT_TTL_MS;
     const tick = () => {
       const left = expiresAt - Date.now();
       valEl.textContent = formatRemaining(left);
@@ -2220,28 +2231,59 @@ a { color: inherit; text-decoration: none; }
     });
   }
   const scanSteps = [
-    'Проверка формата и извлечение текста',
-    'Сегментация документа на блоки',
-    'Поиск по локальному хранилищу учебного заведения',
-    'Сверка с другими работами',
-    'Исключение ранее загруженных работ автора',
-    'Подсчёт процента оригинальности'
+    'Загрузка документа и постановка в очередь',
+    'Ожидание свободного слота анализа',
+    'Семантический и лексический поиск',
+    'Классификация заимствований',
+    'Сохранение результата в базу',
+    'Подготовка черновой версии отчёта',
   ];
+  const scanStageSub = document.getElementById('scanStageSub');
 
-  const startScan = async (file) => {
-    pendingScanFile = file;
-    hideScanError();
-    showStage(2);
+  let processingDocumentId = null;
+  let analysisPollTimer = null;
+  let analysisPollAbort = null;
+  let analysisPollBackoffMs = 5000;
+  let analysisPollMode = 'check'; // 'check' | 'history'
+  let analysisResumeApplied = false;
+
+  const stopAnalysisPolling = () => {
+    if (analysisPollTimer) {
+      clearTimeout(analysisPollTimer);
+      analysisPollTimer = null;
+    }
+    if (analysisPollAbort) {
+      try { analysisPollAbort.abort(); } catch (_) {}
+      analysisPollAbort = null;
+    }
+  };
+
+  const setScanProgressUi = (jobStatus, queuePosition) => {
+    const queued = jobStatus === 'queued';
+    if (scanStageSub) {
+      if (queued) {
+        const pos = queuePosition != null ? ` Позиция в очереди: ${queuePosition}.` : '';
+        scanStageSub.textContent = `Документ в очереди на проверку.${pos} Можно закрыть страницу — результат сохранится.`;
+      } else {
+        scanStageSub.textContent = 'Идёт анализ документа. Можно закрыть страницу — результат сохранится, и этап 2 восстановится при возврате.';
+      }
+    }
+    if (!scanAnimating) {
+      const target = queued ? 35 : 70;
+      scanFill.style.width = target + '%';
+      scanLabel.textContent = (queued ? 'В очереди' : 'Анализ…');
+    }
+  };
+
+  const startScanAnimation = () => {
+    let p = 0, step = 0;
+    scanAnimating = true;
     scanFill.style.width = '0%';
     scanLabel.textContent = '0%';
     scanLog.innerHTML = '';
-
-    // Animate progress bar while real API call runs
-    let p = 0, step = 0;
-    scanAnimating = true;
     const animTick = () => {
       if (!scanAnimating) return;
-      p = Math.min(90, p + (2 + Math.random() * 5)); // max 90% until API responds
+      p = Math.min(85, p + (1 + Math.random() * 3));
       scanFill.style.width = p + '%';
       scanLabel.textContent = Math.round(p) + '%';
       const targetStep = Math.min(Math.floor((p / 100) * (scanSteps.length - 1)), scanSteps.length - 1);
@@ -2251,110 +2293,35 @@ a { color: inherit; text-decoration: none; }
         scanLog.appendChild(li);
         requestAnimationFrame(() => li.classList.add('is-visible'));
       }
-      if (p < 90) setTimeout(animTick, 300);
+      if (p < 85) setTimeout(animTick, 500);
     };
     animTick();
-
-    try {
-      // 1. Parse file text on the client side
-      if (!window.ApFileParser) throw new Error('Парсер файлов не загружен');
-      const parsed = await ApFileParser.parseFile(file);
-
-      if (parsed.text.length < 50) {
-        throw new Error('Документ слишком короткий для проверки (менее 50 символов)');
-      }
-
-      // 2. Check for plagiarism
-      const category = workType.dataset.value || 'uncategorized';
-      const instParams = getCheckInstitutionParams();
-
-      const checkRes = await ApApi.checkDocument({
-        content:     parsed.text,
-        filename:    file.name,
-        category,
-        institution: instParams.institution || '',
-        institutionId: instParams.institutionId || undefined,
-      });
-
-      if (!checkRes.ok || !checkRes.data.success) {
-        const msg = checkRes.data?.error || 'Произошла ошибка';
-        throw Object.assign(new Error(msg), { retryable: !checkRes.ok || checkRes.status >= 500 });
-      }
-
-      const checkData = checkRes.data;
-
-      // 3. Upload + save as draft
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('title', workTitle.value.trim());
-      fd.append('content', parsed.text);
-      fd.append('category', category);
-      fd.append('status', 'draft');
-      fd.append('institution', instParams.institution || '');
-      if (instParams.institutionId) fd.append('institutionId', instParams.institutionId);
-      fd.append('originality_percent', String(checkData.uniquenessPercent));
-      fd.append('plagiarism_percent_ml', String(checkData.mlPlagiarismPercent ?? 0));
-      fd.append('ai_percent_ml', String(checkData.mlAiPercent ?? 0));
-      fd.append('processing_time_ms', String(checkData.processingTimeMs || 0));
-      fd.append('document_type', parsed.fileType);
-      if (Array.isArray(checkData.semanticMatches) && checkData.semanticMatches.length) {
-        fd.append('semantic_matches_json', JSON.stringify(checkData.semanticMatches));
-      }
-
-      const uploadRes = await ApApi.uploadDocument(fd);
-      if (!uploadRes.ok || !uploadRes.data.success) {
-        const msg = uploadRes.data?.error || 'Произошла ошибка';
-        throw Object.assign(new Error(msg), { retryable: !uploadRes.ok || uploadRes.status >= 500 });
-      }
-      const docId = uploadRes.data.document.id;
-      checkData.savedDocument = uploadRes.data.document;
-
-      // 4. Finish animation
-      scanAnimating = false;
-      scanFill.style.width = '100%';
-      scanLabel.textContent = '100%';
-      while (step < scanSteps.length) {
-        const li = document.createElement('li');
-        li.textContent = scanSteps[step++];
-        scanLog.appendChild(li);
-        requestAnimationFrame(() => li.classList.add('is-visible'));
-      }
-
-      pendingScanFile = null;
-      await renderHistory();
-      setTimeout(() => showResult(file, checkData, docId), 400);
-
-    } catch (err) {
-      const retryable = Boolean(err && err.retryable);
-      const msg = retryable
-        ? 'Произошла ошибка'
-        : (err.message || 'Произошла ошибка');
-      showScanError(msg, retryable);
-      if (!retryable) {
-        setTimeout(() => showStage(1), 3000);
-      }
-    }
   };
 
-  const showResult = (file, apiData, docId) => {
-    const percent = Math.round(apiData ? apiData.uniquenessPercent : 0);
-    const matches = Math.round(apiData ? apiData.plagiarismPercent : 0);
-    const ai      = Math.round(apiData ? apiData.mlAiPercent       : 0);
+  const showResultFromState = async (state) => {
+    stopAnalysisPolling();
+    scanAnimating = false;
+    const percent = Math.round(state.originalityPercent ?? Math.max(0, 100 - (state.plagiarismPercent ?? 0)));
+    const matches = Math.round(state.plagiarismPercent ?? 0);
+    const ai = Math.round(state.aiPercentMl ?? 0);
     const inst = getCheckInstitutionParams();
     currentResult = {
-      id: docId,
+      id: state.documentId,
       percent, matches, ai,
-      title:    workTitle.value.trim(),
-      type:     workType.dataset.label || getWorkTypeLabel(workType.dataset.value),
-      typeSlug: workType.dataset.value,
-      fileName: file.name,
-      fileSize: file.size,
-      wordCount: apiData?.savedDocument?.wordCount || null,
+      title: state.title || workTitle.value.trim() || '—',
+      type: getWorkTypeLabel(state.category) || state.category || '—',
+      typeSlug: state.category || '',
+      fileName: state.filename || '—',
+      fileSize: null,
+      wordCount: state.wordCount || null,
       author: __currentUser?.fullName || __currentUser?.username || '—',
       institution: inst.institution || __currentUser?.institution || '—',
-      savedAt: new Date().toISOString(),
-      similarDocuments: apiData ? apiData.similarDocuments : [],
+      savedAt: state.analysisCompletedAt || state.uploadDate || new Date().toISOString(),
+      expiresAt: state.expiresAt || null,
+      status: 'draft',
+      similarDocuments: [],
     };
+    if (workTitle && state.title) workTitle.value = state.title;
     document.getElementById('resultValue').textContent = percent;
     ApApi.setMetricCircle(document.getElementById('resultCircle'), percent);
     document.getElementById('matchValue').textContent = matches;
@@ -2363,15 +2330,207 @@ a { color: inherit; text-decoration: none; }
     ApApi.setMetricCircle(document.getElementById('aiCircle'), ai);
     document.getElementById('resultTitle').textContent = currentResult.title;
     document.getElementById('resultType').textContent = currentResult.type;
-    document.getElementById('resultFile').textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
-    document.getElementById('resultCheckedAt').textContent = formatDate(new Date().toISOString());
+    document.getElementById('resultFile').textContent = state.filename || '—';
+    document.getElementById('resultCheckedAt').textContent = formatDate(currentResult.savedAt);
     showStage(3);
     requestAnimationFrame(() => {
       ApApi.setMetricCircle(document.getElementById('resultCircle'), percent);
       ApApi.setMetricCircle(document.getElementById('matchCircle'), matches);
       ApApi.setMetricCircle(document.getElementById('aiCircle'), ai);
     });
-    startDraftTimer();
+    startDraftTimer(state.expiresAt ? new Date(state.expiresAt).getTime() : null);
+    processingDocumentId = null;
+    if (state.documentId && ApApi.markAnalysisViewed) {
+      try { await ApApi.markAnalysisViewed(state.documentId); } catch (_) {}
+    }
+    await renderHistory();
+  };
+
+  const handleAnalysisState = async (state) => {
+    if (!state || !state.success) return;
+    if (state.documentStatus === 'failed' || state.jobStatus === 'failed') {
+      stopAnalysisPolling();
+      processingDocumentId = null;
+      showStage(2);
+      showScanError(state.lastError || 'Проверка завершилась с ошибкой. Загрузите документ заново.', false);
+      if (state.documentId && ApApi.markAnalysisViewed) {
+        try { await ApApi.markAnalysisViewed(state.documentId); } catch (_) {}
+      }
+      await renderHistory();
+      return;
+    }
+    if (state.kind === 'active') {
+      processingDocumentId = state.documentId;
+      if (currentStage !== 2) showStage(2);
+      setScanProgressUi(state.jobStatus, state.queuePosition);
+      return;
+    }
+    if (state.kind === 'unviewed_result') {
+      await showResultFromState(state);
+    }
+  };
+
+  const scheduleAnalysisPoll = (ms) => {
+    stopAnalysisPolling();
+    analysisPollTimer = setTimeout(() => { void pollAnalysisOnce(); }, ms);
+  };
+
+  const pollAnalysisOnce = async () => {
+    if (document.hidden) return;
+    analysisPollAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    try {
+      const { ok, data } = await ApApi.getAnalysisState();
+      if (!ok || !data?.success) {
+        analysisPollBackoffMs = Math.min(30000, analysisPollBackoffMs * 2);
+        scheduleAnalysisPoll(analysisPollBackoffMs + Math.floor(Math.random() * 500));
+        return;
+      }
+      analysisPollBackoffMs = analysisPollMode === 'check' ? 5000 : 20000;
+      await handleAnalysisState(data);
+      if (data.kind === 'active') {
+        scheduleAnalysisPoll(analysisPollBackoffMs + Math.floor(Math.random() * 400));
+      } else if (data.kind === 'none' && processingDocumentId) {
+        // Specific doc may have completed; refresh once more via document endpoint
+        const det = await ApApi.getDocumentAnalysis(processingDocumentId);
+        if (det.ok && det.data?.success) {
+          if (det.data.documentStatus === 'draft') {
+            await showResultFromState({ ...det.data, kind: 'unviewed_result' });
+            return;
+          }
+          if (det.data.documentStatus === 'failed') {
+            await handleAnalysisState({ ...det.data, kind: 'active', jobStatus: 'failed', success: true });
+            return;
+          }
+        }
+        scheduleAnalysisPoll(analysisPollBackoffMs);
+      } else if (analysisPollMode === 'history') {
+        scheduleAnalysisPoll(analysisPollBackoffMs);
+      }
+      if (analysisPollMode === 'history') await renderHistory();
+    } catch (_) {
+      analysisPollBackoffMs = Math.min(30000, analysisPollBackoffMs * 2);
+      scheduleAnalysisPoll(analysisPollBackoffMs);
+    }
+  };
+
+  const startAnalysisPolling = (mode = 'check') => {
+    analysisPollMode = mode;
+    analysisPollBackoffMs = mode === 'check' ? 5000 : 20000;
+    void pollAnalysisOnce();
+  };
+
+  const resumeAnalysisUi = async () => {
+    if (!ApApi.getAnalysisState) return;
+    const { ok, data } = await ApApi.getAnalysisState();
+    if (!ok || !data?.success) return;
+    if (data.kind === 'active') {
+      analysisResumeApplied = true;
+      processingDocumentId = data.documentId;
+      hideScanError();
+      showStage(2);
+      startScanAnimation();
+      scanAnimating = false;
+      setScanProgressUi(data.jobStatus, data.queuePosition);
+      if (data.title && workTitle) workTitle.value = data.title;
+      startAnalysisPolling('check');
+      return;
+    }
+    if (data.kind === 'unviewed_result') {
+      analysisResumeApplied = true;
+      await showResultFromState(data);
+    }
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopAnalysisPolling();
+      return;
+    }
+    if (processingDocumentId || currentStage === 2) startAnalysisPolling('check');
+    else startAnalysisPolling('history');
+  });
+  window.addEventListener('focus', () => {
+    if (document.hidden) return;
+    if (processingDocumentId || currentStage === 2) void pollAnalysisOnce();
+  });
+
+  const startScan = async (file) => {
+    pendingScanFile = file;
+    hideScanError();
+
+    // Server-side one-active lock; also block client if we already know about a job
+    try {
+      const st = await ApApi.getAnalysisState();
+      if (st.ok && st.data?.kind === 'active') {
+        alert(st.data.title
+          ? `У вас уже проверяется документ «${st.data.title}». Дождитесь завершения.`
+          : 'У вас уже есть документ на проверке. Дождитесь завершения.');
+        await resumeAnalysisUi();
+        return;
+      }
+    } catch (_) {}
+
+    showStage(2);
+    startScanAnimation();
+
+    try {
+      if (!window.ApFileParser) throw new Error('Парсер файлов не загружен');
+      const parsed = await ApFileParser.parseFile(file);
+
+      if (parsed.text.length < 50) {
+        throw new Error('Документ слишком короткий для проверки (менее 50 символов)');
+      }
+
+      const category = workType.dataset.value || 'uncategorized';
+      const instParams = getCheckInstitutionParams();
+
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('title', workTitle.value.trim());
+      fd.append('content', parsed.text);
+      fd.append('category', category);
+      fd.append('institution', instParams.institution || '');
+      if (instParams.institutionId) fd.append('institutionId', instParams.institutionId);
+      fd.append('document_type', parsed.fileType);
+
+      const uploadRes = await ApApi.uploadDocument(fd);
+      if (uploadRes.status === 409 || uploadRes.data?.code === 'ACTIVE_JOB_EXISTS') {
+        throw Object.assign(new Error(uploadRes.data?.error || 'Документ уже на проверке'), { retryable: false });
+      }
+      if (!uploadRes.ok || !uploadRes.data.success) {
+        const msg = uploadRes.data?.error || 'Произошла ошибка';
+        throw Object.assign(new Error(msg), { retryable: !uploadRes.ok || uploadRes.status >= 500 });
+      }
+
+      processingDocumentId = uploadRes.data.document.id;
+      pendingScanFile = null;
+      setScanProgressUi('queued', null);
+      await renderHistory();
+      startAnalysisPolling('check');
+    } catch (err) {
+      const retryable = Boolean(err && err.retryable);
+      const msg = err.message || 'Произошла ошибка';
+      showScanError(msg, retryable);
+      if (!retryable && !String(msg).includes('уже')) {
+        setTimeout(() => showStage(1), 3000);
+      } else if (String(msg).includes('проверк')) {
+        await resumeAnalysisUi();
+      }
+    }
+  };
+
+  const showResult = (file, apiData, docId) => {
+    showResultFromState({
+      documentId: docId,
+      originalityPercent: apiData?.uniquenessPercent,
+      plagiarismPercent: apiData?.plagiarismPercent,
+      aiPercentMl: apiData?.mlAiPercent,
+      title: workTitle.value.trim(),
+      category: workType.dataset.value,
+      filename: file?.name,
+      wordCount: apiData?.savedDocument?.wordCount,
+      analysisCompletedAt: new Date().toISOString(),
+    });
   };
 
   document.getElementById('redoBtn').addEventListener('click', () => {
@@ -2403,15 +2562,14 @@ a { color: inherit; text-decoration: none; }
     const isAi = false;
     const dataset = borrowMatchesData;
     const total = dataset.length;
+    const pagi = document.getElementById('matchesPagination');
     if (!total) {
       const msg = borrowMatchStats.matches > 0 && borrowMatchStats.ml >= borrowMatchStats.local
         ? `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${borrowMatchStats.matches}%) сформирован семантическим анализом ML/Qdrant.`
         : 'Заимствования не обнаружены.';
         // : (isAi ? 'ИИ-фрагменты не обнаружены.' : 'Заимствования не обнаружены.');
       matchesList.innerHTML = `<li class="uc-empty">${escapeHtml(msg)}</li>`;
-      const pagi = document.getElementById('matchesPagination');
-      pagi.hidden = true;
-      pagi.innerHTML = '';
+      if (pagi) { pagi.hidden = true; pagi.innerHTML = ''; }
       return;
     }
     const pages = Math.max(1, Math.ceil(total / MATCHES_PER_PAGE));
@@ -2422,9 +2580,9 @@ a { color: inherit; text-decoration: none; }
       const title = m.title || m.source || '—';
       const docType = m.docType || '—';
       const docId = m.docId || '—';
-      const typeMeta = m.matchTypeLabel
-        ? `<span>Тип: <b>${escapeHtml(m.matchTypeLabel)}</b></span>`
-        : '';
+      // const typeMeta = m.matchTypeLabel
+      //   ? `<span>Тип: <b>${escapeHtml(m.matchTypeLabel)}</b></span>`
+      //   : '';
       return `
         <li class="matches-list__item">
           <div class="matches-list__head">
@@ -2434,7 +2592,6 @@ a { color: inherit; text-decoration: none; }
           <p class="matches-list__quote matches-list__quote--name">${escapeHtml(title)}</p>
           <div class="matches-list__meta">
             <span>ID документа <code>${escapeHtml(docId)}</code></span>
-            ${typeMeta}
           </div>
         </li>
       `;
@@ -2453,11 +2610,9 @@ a { color: inherit; text-decoration: none; }
       `;
       */
     }).join('');
-    const pagi = document.getElementById('matchesPagination');
     if (total <= MATCHES_PER_PAGE) {
-      pagi.hidden = true;
-      pagi.innerHTML = '';
-    } else {
+      if (pagi) { pagi.hidden = true; pagi.innerHTML = ''; }
+    } else if (pagi) {
       pagi.hidden = false;
       const btns = [];
       btns.push(`<button class="pagination__btn" data-page="prev" ${matchesPage === 1 ? 'disabled' : ''}>‹</button>`);
@@ -2485,9 +2640,11 @@ a { color: inherit; text-decoration: none; }
     // aiMatchesData = [];
     borrowMatchStats = { matches: item?.matches ?? 0, local: 0, ml: 0 };
     if (!item?.id || !ApApi.getDocumentMatches) return;
-    if (ApApi.loadCategoryLabels) await ApApi.loadCategoryLabels();
+    // categoryLabel already comes from GET /matches — do not block on /document-types
     const { ok, data } = await ApApi.getDocumentMatches(item.id);
-    if (!ok || !data?.success) return;
+    if (!ok || !data?.success) {
+      throw new Error(data?.error || 'Не удалось загрузить заимствования');
+    }
     const simById = new Map((data.similarDocuments || []).map((s) => [s.id, s]));
     const local = Math.round(data.localPlagiarismPercent ?? 0);
     const ml = Math.round(data.mlPlagiarismPercent ?? 0);
@@ -2498,7 +2655,8 @@ a { color: inherit; text-decoration: none; }
       title: m.sourceTitle || '—',
       percent: Math.round((m.similarity ?? 0) * 10) / 10,
       docId: m.sourceId ? String(m.sourceId) : '—',
-      docType: categoryLabel(m.category || simById.get(m.sourceId)?.category),
+      docType: m.categoryLabel
+        || categoryLabel(m.category || simById.get(m.sourceId)?.categoryLabel || simById.get(m.sourceId)?.category),
       matchType: m.matchType || null,
       matchTypeLabel: m.matchTypeLabel || null,
       // quote: m.quote || '—',
@@ -2544,8 +2702,13 @@ a { color: inherit; text-decoration: none; }
     matchesModal.hidden = false;
     document.body.style.overflow = 'hidden';
     matchesList.innerHTML = '<li class="uc-empty">Загрузка заимствований…</li>';
-    await loadMatchRows(item);
-    renderMatches();
+    try {
+      await loadMatchRows(item);
+      renderMatches();
+    } catch (err) {
+      console.error('openMatches failed', err);
+      matchesList.innerHTML = `<li class="uc-empty">${escapeHtml(err?.message || 'Не удалось загрузить заимствования')}</li>`;
+    }
   };
 
   /*
@@ -2693,21 +2856,28 @@ a { color: inherit; text-decoration: none; }
     if (!__isAdmin && __currentUser) {
       const { ok, data } = await ApApi.getUserDocuments(__currentUser.username);
       if (ok && data.documents) {
-        __historyCache = data.documents.map((doc) => ({
-          id:      doc.id,
-          title:   doc.title,
-          type:    doc.categoryLabel || doc.category || '',
-          percent: Math.round(doc.originalityPercent ?? 0),
-          matches: Math.round(Math.max(0, 100 - (doc.originalityPercent ?? 100))),
-          ai:      Math.round(doc.aiPercentMl ?? 0),
-          status:  doc.status,
-          savedAt: doc.uploadDate,
-          expiresAt: doc.expiresAt,
-          fileName: doc.filename,
-          wordCount: doc.wordCount,
-          author: doc.author,
-          institution: doc.institution || (__currentUser && __currentUser.institution) || 'БГУИР',
-        }));
+        __historyCache = data.documents.map((doc) => {
+          const local = doc.localPlagiarismPercent ?? 0;
+          const ml = doc.plagiarismPercentMl ?? 0;
+          const plag = Math.max(local, ml);
+          const isProcessing = doc.status === 'processing';
+          const isFailed = doc.status === 'failed';
+          return {
+            id:      doc.id,
+            title:   doc.title,
+            type:    doc.categoryLabel || doc.category || '',
+            percent: isProcessing || isFailed ? null : Math.round(doc.originalityPercent ?? Math.max(0, 100 - plag)),
+            matches: isProcessing || isFailed ? null : Math.round(plag),
+            ai:      isProcessing || isFailed ? null : Math.round(doc.aiPercentMl ?? 0),
+            status:  doc.status,
+            savedAt: doc.uploadDate,
+            expiresAt: doc.expiresAt,
+            fileName: doc.filename,
+            wordCount: doc.wordCount,
+            author: doc.author,
+            institution: doc.institution || (__currentUser && __currentUser.institution) || 'БГУИР',
+          };
+        });
       }
     }
 
@@ -2723,38 +2893,62 @@ a { color: inherit; text-decoration: none; }
     const visible = items.slice(start, start + HISTORY_PER_PAGE);
     list.innerHTML = visible.map((it) => {
       const isDraft = it.status === 'draft';
-      const pillClass = isDraft ? 'status-pill--draft' : 'status-pill--final';
-      const pillLabel = isDraft ? 'Черновая' : 'Финальная';
+      const isProcessing = it.status === 'processing';
+      const isFailed = it.status === 'failed';
+      const pillClass = isProcessing
+        ? 'status-pill--processing'
+        : isFailed
+          ? 'status-pill--failed'
+          : isDraft
+            ? 'status-pill--draft'
+            : 'status-pill--final';
+      const pillLabel = isProcessing
+        ? 'Обрабатывается'
+        : isFailed
+          ? 'Ошибка'
+          : isDraft
+            ? 'Черновая'
+            : 'Финальная';
       const timer = isDraft && it.expiresAt
         ? `<span class="history-timer" data-expires="${it.expiresAt}">
              <i data-lucide="clock" class="icon-16"></i>
              <span>Хранится <strong>${formatRemaining(new Date(it.expiresAt).getTime() - Date.now())}</strong></span>
            </span>`
         : '';
-      const actionBtn = isDraft
-        ? `<div class="history-list__actions">
+      const percentLabel = it.percent == null ? '—' : `${it.percent}%`;
+      const aiLabel = it.ai == null ? '—' : `ИИ ${it.ai}%`;
+      let actionBtn = '';
+      if (isProcessing) {
+        actionBtn = `<div class="history-list__actions"><span class="history-list__meta">Ожидайте завершения проверки</span></div>`;
+      } else if (isFailed) {
+        actionBtn = `<div class="history-list__actions">
+             <button class="history-list__btn" data-action="delete" data-id="${it.id}"><i data-lucide="trash-2" class="icon-16"></i> Удалить</button>
+           </div>`;
+      } else if (isDraft) {
+        actionBtn = `<div class="history-list__actions">
              <button class="history-list__btn history-list__btn--icon" data-action="view" data-id="${it.id}" aria-label="Просмотреть заимствования" title="Просмотреть заимствования"><i data-lucide="file-search-2" class="icon-16"></i></button>
-             <!-- aria-label="Просмотреть заимствования и ИИ-генерации" title="Просмотреть заимствования и ИИ-генерации" -->
              <button class="history-list__btn history-list__btn--primary" data-action="finalize" data-id="${it.id}"><i data-lucide="check" class="icon-16"></i> Финальная</button>
-           </div>`
-        : `<div class="history-list__actions">
+           </div>`;
+      } else {
+        actionBtn = `<div class="history-list__actions">
              <button class="history-list__btn history-list__btn--icon" data-action="view" data-id="${it.id}" aria-label="Просмотреть заимствования" title="Просмотреть заимствования"><i data-lucide="file-search-2" class="icon-16"></i></button>
              <button class="history-list__btn" data-action="pdf" data-id="${it.id}"><i data-lucide="download" class="icon-16"></i> PDF</button>
            </div>`;
+      }
       return `
         <li class="history-list__item">
           <div>
             <div class="history-list__name">
               ${escapeHtml(it.title)}
-              <button class="history-list__edit" type="button" data-action="edit" data-id="${it.id}" aria-label="Изменить название">
+              ${isProcessing || isFailed ? '' : `<button class="history-list__edit" type="button" data-action="edit" data-id="${it.id}" aria-label="Изменить название">
                 <i data-lucide="pencil" class="icon-16"></i>
-              </button>
+              </button>`}
             </div>
             <div class="history-list__meta">${escapeHtml(it.type)} · ${formatDate(it.savedAt)}</div>
           </div>
           <div class="history-list__percents">
-            <span class="history-list__percent" title="Оригинальность">${it.percent}%</span>
-            <span class="history-list__ai" title="ИИ-генерация">ИИ ${it.ai ?? 0}%</span>
+            <span class="history-list__percent" title="Оригинальность">${percentLabel}</span>
+            <span class="history-list__ai" title="ИИ-генерация">${aiLabel}</span>
           </div>
           <div class="history-list__status">
             <span class="status-pill ${pillClass}">${pillLabel}</span>
@@ -2857,8 +3051,10 @@ a { color: inherit; text-decoration: none; }
     window.open('report.html?documentId=' + encodeURIComponent(reportDocumentId), '_blank', 'noopener,noreferrer');
   };
 
-  // Initial render
-  renderHistory();
+  // Initial render + restore stage 2 / unviewed draft if any
+  renderHistory().then(() => resumeAnalysisUi()).then(() => {
+    if (!analysisResumeApplied) startAnalysisPolling('history');
+  });
   } // end runApp
 })();
 </script>

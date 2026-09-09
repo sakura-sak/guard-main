@@ -1,22 +1,35 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { saveFileToDisk, addDocumentToDb, updateDocumentMlScores } from "@/lib/local-storage"
-import { createShingles, MinHash, normalizeContentForCheck } from "@/lib/plagiarism/algorithms"
-import { analyzeWithMlService } from "@/lib/analysis-client"
+import fs from "fs"
+import path from "path"
+import { saveFileToDisk } from "@/lib/local-storage"
+import { normalizeContentForCheck } from "@/lib/plagiarism/algorithms"
+import { createProcessingDocumentWithJob } from "@/lib/analysis-jobs"
+import { computeLocalPlagiarismPercent, computeMinHashSignature } from "@/lib/local-plagiarism"
 import { resolveCheckInstitutionScope } from "@/lib/check-institution-scope"
 import { resolveFacultyId } from "@/lib/directories"
 import { logInfo, logError } from "@/lib/logger"
-import {
-  normalizeMlSemanticMatches,
-  replaceMlMatchesForDocument,
-} from "@/lib/ml-matches-storage"
 import { formatApiUploadError } from "@/lib/prisma-error-message"
 import { requireSessionApi } from "@/lib/require-session-api"
 import { getUserByUsername } from "@/lib/user-storage"
 
-const NUM_HASHES = 128
+function deleteSavedUpload(category: string, savedFilename: string) {
+  try {
+    const full = path.join(process.cwd(), "data", category, "uploads", savedFilename)
+    if (fs.existsSync(full)) fs.unlinkSync(full)
+  } catch {
+    /* best-effort */
+  }
+}
 
-// POST - Загрузка файла и добавление в базу
+/**
+ * Upload-first async analysis:
+ * save file + MinHash + local score, enqueue AnalysisJob, return 202 immediately.
+ * ML is performed by analysis-worker, not in this request.
+ */
 export async function POST(request: NextRequest) {
+  let savedFilename: string | null = null
+  let normCategory = "uncategorized"
+
   try {
     const gate = await requireSessionApi(request)
     if (!gate.ok) return gate.response
@@ -26,7 +39,6 @@ export async function POST(request: NextRequest) {
     const title = formData.get("title") as string
     const category = formData.get("category") as string | null
     const content = formData.get("content") as string
-    const status = (formData.get("status") as "draft" | "final") || "draft"
     const userId = gate.user.username
     const dbUser = await getUserByUsername(userId)
     const scope = await resolveCheckInstitutionScope(gate.user, dbUser, {
@@ -40,52 +52,27 @@ export async function POST(request: NextRequest) {
     const facultyId = institutionId
       ? await resolveFacultyId(institutionId, gate.user.faculty)
       : null
-    const mlPlagRaw = formData.get("plagiarism_percent_ml") as string | null
-    const mlAiRaw = formData.get("ai_percent_ml") as string | null
-    const originalityRaw = formData.get("originality_percent") as string | null
-    const processingTimeMsRaw = formData.get("processing_time_ms") as string | null
     const documentTypeRaw = formData.get("document_type") as string | null
-    const semanticMatchesRaw = formData.get("semantic_matches_json") as string | null
 
     if (!file || !title || !content) {
       return NextResponse.json({ success: false, error: "Файл, название и содержимое обязательны" }, { status: 400 })
     }
 
-    const normCategory =
+    const normalizedContent = normalizeContentForCheck(content)
+    if (normalizedContent.length < 50) {
+      return NextResponse.json(
+        { success: false, error: "Документ слишком короткий для проверки (менее 50 символов)" },
+        { status: 400 },
+      )
+    }
+
+    normCategory =
       (category || "uncategorized").replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_").trim() || "uncategorized"
 
-    // Сохраняем файл в папку категории (coursework, diploma и т.д.)
     const fileBuffer = Buffer.from(await file.arrayBuffer())
-    const savedFilename = saveFileToDisk(fileBuffer, file.name, normCategory)
+    savedFilename = saveFileToDisk(fileBuffer, file.name, normCategory)
 
-    // Нормализуем содержимое для целей проверки (убираем титульный лист, содержание, приложения)
-    const normalizedContent = normalizeContentForCheck(content)
-
-    let plagiarismPercentMl: number | undefined
-    let aiPercentMl: number | undefined
-    let originalityPercent: number | undefined
-    let processingTimeMs: number | undefined
     let documentType: "word" | "pdf" | undefined
-    if (mlPlagRaw != null && String(mlPlagRaw).trim() !== "" && mlAiRaw != null && String(mlAiRaw).trim() !== "") {
-      const p = Number(mlPlagRaw)
-      const a = Number(mlAiRaw)
-      if (!Number.isNaN(p) && !Number.isNaN(a)) {
-        plagiarismPercentMl = p
-        aiPercentMl = a
-      }
-    }
-    if (originalityRaw != null && String(originalityRaw).trim() !== "") {
-      const o = Number(originalityRaw)
-      if (!Number.isNaN(o) && Number.isFinite(o)) {
-        originalityPercent = Math.max(0, Math.min(100, Math.round(o * 100) / 100))
-      }
-    }
-    if (processingTimeMsRaw != null && String(processingTimeMsRaw).trim() !== "") {
-      const t = Number(processingTimeMsRaw)
-      if (!Number.isNaN(t) && Number.isFinite(t) && t >= 0) {
-        processingTimeMs = Math.round(t)
-      }
-    }
     if (documentTypeRaw === "pdf" || documentTypeRaw === "word") {
       documentType = documentTypeRaw
     } else {
@@ -93,13 +80,14 @@ export async function POST(request: NextRequest) {
       documentType = ext === "pdf" ? "pdf" : ext === "doc" || ext === "docx" ? "word" : undefined
     }
 
-    let shingles
+    let shingles: Set<string>
     let signature: number[]
     try {
-      shingles = createShingles(normalizedContent, 5)
-      const minhash = new MinHash(NUM_HASHES)
-      signature = minhash.computeSignature(shingles)
+      const computed = computeMinHashSignature(normalizedContent)
+      shingles = computed.shingles
+      signature = computed.signature
     } catch (e) {
+      if (savedFilename) deleteSavedUpload(normCategory, savedFilename)
       logError("MinHash при загрузке", e instanceof Error ? e : String(e), undefined, undefined, "upload")
       return NextResponse.json(
         {
@@ -111,102 +99,68 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Добавляем в базу данных этой категории
-    let doc = await addDocumentToDb(
-      title,
+    const localPlagiarismPercent = await computeLocalPlagiarismPercent(
       normalizedContent,
       signature,
-      shingles.size,
-      file.name,
-      savedFilename,
       normCategory,
-      status,
-      userId || undefined,
-      institutionId ?? undefined,
-      originalityPercent,
-      plagiarismPercentMl,
-      aiPercentMl,
-      processingTimeMs,
+      institutionId,
+      userId,
+    )
+
+    const created = await createProcessingDocumentWithJob({
+      title: title.trim(),
+      content: normalizedContent,
+      minhashSignature: signature,
+      shingleCount: shingles.size,
+      filename: file.name,
+      savedFilename,
+      category: normCategory,
+      userId,
+      institutionId,
+      facultyId,
       documentType,
-      facultyId ?? undefined,
-    )
+      localPlagiarismPercent,
+    })
 
-    let semanticMatches = normalizeMlSemanticMatches(
-      (() => {
-        if (!semanticMatchesRaw || !String(semanticMatchesRaw).trim()) return []
-        try {
-          return JSON.parse(String(semanticMatchesRaw))
-        } catch {
-          return []
-        }
-      })(),
-    )
-
-    // Дозапрос к ML не должен отменять успешно созданную запись в БД
-    if (
-      (typeof plagiarismPercentMl !== "number" || typeof aiPercentMl !== "number") &&
-      normalizedContent.length >= 50
-    ) {
-      try {
-        const ml = await analyzeWithMlService(normalizedContent, {
-          filename: file.name,
-          documentId: doc.id,
-          institutionId,
-        })
-        if (ml) {
-          await updateDocumentMlScores(doc.id, ml.plagiarismPercent, ml.aiPercent)
-          doc = {
-            ...doc,
-            plagiarismPercentMl: ml.plagiarismPercent,
-            aiPercentMl: ml.aiPercent,
-          }
-          semanticMatches = ml.semanticMatches
-        }
-      } catch (mlErr) {
-        logError(
-          "ML-дозапись после загрузки не выполнена (документ уже в БД)",
-          mlErr instanceof Error ? mlErr : String(mlErr),
-          userId || undefined,
-          doc.id,
-          "upload",
-        )
+    if (!created.ok) {
+      if (savedFilename) deleteSavedUpload(normCategory, savedFilename)
+      if (created.conflict) {
+        return NextResponse.json({ success: false, error: created.error, code: "ACTIVE_JOB_EXISTS" }, { status: 409 })
       }
+      return NextResponse.json({ success: false, error: created.error }, { status: 500 })
     }
 
-    let mlMatchesSaved = 0
-    try {
-      mlMatchesSaved = await replaceMlMatchesForDocument(doc.id, semanticMatches)
-    } catch (matchErr) {
-      logError(
-        "Сохранение ML-совпадений после загрузки не выполнено",
-        matchErr instanceof Error ? matchErr : String(matchErr),
-        userId || undefined,
-        doc.id,
-        "upload",
-      )
-    }
-
-    logInfo("Документ загружен", userId || undefined, undefined, "upload", {
-      documentId: doc.id,
-      title: doc.title,
-      category: category,
-      status: status,
-      mlMatchesSaved,
-      semanticMatchCount: semanticMatches.length,
+    logInfo("Документ поставлен в очередь анализа", userId, undefined, "upload", {
+      documentId: created.documentId,
+      jobId: created.jobId,
+      title: title.trim(),
+      category: normCategory,
+      status: "processing",
+      localPlagiarismPercent,
+      institutionId,
+      documentTypeId: created.documentTypeId,
     })
 
-    return NextResponse.json({
-      success: true,
-      document: {
-        id: doc.id,
-        title: doc.title,
-        filename: doc.filename,
-        filePath: doc.filePath,
-        wordCount: doc.wordCount,
+    return NextResponse.json(
+      {
+        success: true,
+        status: "processing",
+        jobId: created.jobId,
+        document: {
+          id: created.documentId,
+          title: title.trim(),
+          filename: file.name,
+          wordCount: normalizedContent.split(/\s+/).filter((w) => w.length > 0).length,
+          category: normCategory,
+          status: "processing",
+          localPlagiarismPercent,
+        },
+        message: "Документ загружен и поставлен в очередь на проверку",
       },
-      message: `Файл сохранен: ${doc.filePath}`,
-    })
+      { status: 202 },
+    )
   } catch (error) {
+    if (savedFilename) deleteSavedUpload(normCategory, savedFilename)
     logError(
       "Ошибка при загрузке файла",
       error instanceof Error ? error : String(error),

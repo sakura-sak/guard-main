@@ -450,6 +450,8 @@ body.is-uni-admin .dash-global-uo { display: none !important; }
 .status-pill--draft { background: #fef3c7; color: #92400e; }
 .status-pill--final { background: #dcfce7; color: #166534; }
 .status-pill--archived { background: #e2e8f0; color: #475569; }
+.status-pill--processing { background: #dbeafe; color: #1d4ed8; }
+.status-pill--failed { background: #fee2e2; color: #b91c1c; }
 
 .log-level {
   display: inline-flex; align-items: center;
@@ -1524,7 +1526,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
                   <div class="multi-select" id="docFilterType" data-options='[{"value":"Дипломная работа / проект","label":"Дипломная работа / проект"},{"value":"Курсовая работа / проект","label":"Курсовая работа / проект"},{"value":"Лабораторная работа","label":"Лабораторная работа"},{"value":"Практическая работа","label":"Практическая работа"},{"value":"Статьи","label":"Статьи"}]'></div>
                 </div>
                 <div class="filter-popover__field"><span class="filter-popover__label">Статус</span>
-                  <div class="multi-select" id="docFilterStatus" data-options='[{"value":"final","label":"Финальная"},{"value":"draft","label":"Черновая"},{"value":"archived","label":"Архивная"}]'></div>
+                  <div class="multi-select" id="docFilterStatus" data-options='[{"value":"final","label":"Финальная"},{"value":"draft","label":"Черновая"},{"value":"processing","label":"Обрабатывается"},{"value":"failed","label":"Ошибка"},{"value":"archived","label":"Архивная"}]'></div>
                 </div>
                 <div class="filter-popover__field"><span class="filter-popover__label">Оригинальность, %</span>
                   <div class="filter-range">
@@ -1672,7 +1674,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
                 </div>
                 <div class="filter-popover__field">
                   <span class="filter-popover__label">Статус</span>
-                  <div class="multi-select" id="subsFilterStatus" data-options='[{"value":"final","label":"Финальная"},{"value":"draft","label":"Черновая"},{"value":"archived","label":"Архивная"}]'></div>
+                  <div class="multi-select" id="subsFilterStatus" data-options='[{"value":"final","label":"Финальная"},{"value":"draft","label":"Черновая"},{"value":"processing","label":"Обрабатывается"},{"value":"failed","label":"Ошибка"},{"value":"archived","label":"Архивная"}]'></div>
                 </div>
                 <div class="filter-popover__field">
                   <span class="filter-popover__label">Оригинальность, %</span>
@@ -1982,7 +1984,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       </div>
       <div class="settings-section">
         <div class="settings-section__head">
-          <h3 class="settings-section__title">Факультеты <span class="settings-section__sub" id="settingsFacScope"></span></h3>
+          <h3 class="settings-section__title">Факультеты</h3>
           <button class="action-btn" type="button" data-export="faculty"><i data-lucide="download" class="icon-16"></i> Экспорт</button>
           <button class="action-btn" type="button" data-import="faculty"><i data-lucide="upload" class="icon-16"></i> Импорт</button>
         </div>
@@ -1994,7 +1996,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       </div>
       <div class="settings-section" id="settingsTypesSection">
         <div class="settings-section__head">
-          <h3 class="settings-section__title">Типы работ <span class="settings-section__sub" id="settingsTypesScope"></span></h3>
+          <h3 class="settings-section__title">Типы работ</span></h3>
           <button class="action-btn" type="button" data-export="type"><i data-lucide="download" class="icon-16"></i> Экспорт</button>
           <button class="action-btn" type="button" data-import="type"><i data-lucide="upload" class="icon-16"></i> Импорт</button>
         </div>
@@ -2314,6 +2316,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     if (typesRes.ok && typesRes.data.types) {
       __docTypes = typesRes.data.types;
       appConfig.types = __docTypes.filter((t) => t.isActive !== false).map((t) => t.displayName || t.name);
+      if (ApApi.setCategoryLabelsFromTypes) ApApi.setCategoryLabelsFromTypes(__docTypes);
     }
     populateUeSelectorsFromDb();
     // Re-populate filter selects
@@ -2467,7 +2470,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     if (intro) {
       intro.textContent = __isSuperAdmin
         ? 'Управление справочниками. Выберите УО слева — факультеты и типы работ настраиваются для каждого вуза отдельно.'
-        : 'Управление списками факультетов вашего учебного заведения.';
+        : 'Управление списками факультетов. Для добавления нового типа работы необходимо обратиться к главному администратору.';
     }
     const uoEl = document.getElementById('settingsUosList');
     if (!__institutions.length) {
@@ -2960,7 +2963,13 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     if (s.status === 'draft' && s._expiresAt && Date.now() > s._expiresAt) return 'archived';
     return s.status;
   };
-  const statusLabel = (st) => ({ final: 'Финальная', draft: 'Черновая', archived: 'Архивная' }[st] || st);
+  const statusLabel = (st) => ({
+    final: 'Финальная',
+    draft: 'Черновая',
+    archived: 'Архивная',
+    processing: 'Обрабатывается',
+    failed: 'Ошибка',
+  }[st] || st);
   const formatRemaining = (ms) => {
     if (ms <= 0) return '00:00:00';
     const totalSec = Math.floor(ms / 1000);
@@ -3013,7 +3022,8 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       title: m.sourceTitle || '—',
       percent: Math.round((m.similarity ?? 0) * 10) / 10,
       docId: m.sourceId ? String(m.sourceId) : '—',
-      docType: adminCategoryLabel(m.category || simById.get(m.sourceId)?.category),
+      docType: m.categoryLabel
+        || adminCategoryLabel(m.category || simById.get(m.sourceId)?.categoryLabel || simById.get(m.sourceId)?.category),
       matchType: m.matchType || null,
       matchTypeLabel: m.matchTypeLabel || null,
       // quote: m.quote || '—',
@@ -3044,39 +3054,42 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     adminMatchesList.innerHTML = '<li class="uc-empty">Загрузка заимствований…</li>';
     adminMatchesModal.hidden = false;
 
-    if (ApApi.loadCategoryLabels) await ApApi.loadCategoryLabels();
-
     if (!documentId) {
       renderAdminMatches();
       return;
     }
 
-    const { ok, data } = await ApApi.getDocumentMatches(documentId);
-    if (ok && data?.success) {
-      const mapped = mapAdminMatchesApi(data);
-      adminBorrowMatches = mapped.borrows;
-      // adminAiMatches = mapped.ai;
-      if (data.plagiarismPercent != null) adminMatchesPct.match = Math.round(data.plagiarismPercent);
-      // if (data.aiPercent != null) adminMatchesPct.ai = Math.round(data.aiPercent);
-      const local = Math.round(data.localPlagiarismPercent ?? 0);
-      const ml = Math.round(data.mlPlagiarismPercent ?? 0);
-      const matches = Math.round(data.plagiarismPercent ?? Math.max(local, ml));
-      adminMatchStats = { matches, local, ml };
-      if (!adminBorrowMatches.length && matches > 0 && ml >= local) {
-        adminBorrowMatches = [{
-          source: 'Семантический анализ',
-          title: 'Семантический анализ',
-          percent: matches,
-          docId: '—',
-          docType: '—',
-          // quote: `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${matches}%) сформирован векторным поиском.`,
-        }];
+    try {
+      // categoryLabel already comes from GET /matches — do not block on /document-types
+      const { ok, data } = await ApApi.getDocumentMatches(documentId);
+      if (ok && data?.success) {
+        const mapped = mapAdminMatchesApi(data);
+        adminBorrowMatches = mapped.borrows;
+        // adminAiMatches = mapped.ai;
+        if (data.plagiarismPercent != null) adminMatchesPct.match = Math.round(data.plagiarismPercent);
+        // if (data.aiPercent != null) adminMatchesPct.ai = Math.round(data.aiPercent);
+        const local = Math.round(data.localPlagiarismPercent ?? 0);
+        const ml = Math.round(data.mlPlagiarismPercent ?? 0);
+        const matches = Math.round(data.plagiarismPercent ?? Math.max(local, ml));
+        adminMatchStats = { matches, local, ml };
+        if (!adminBorrowMatches.length && matches > 0 && ml >= local) {
+          adminBorrowMatches = [{
+            source: 'Семантический анализ',
+            title: 'Семантический анализ',
+            percent: matches,
+            docId: '—',
+            docType: '—',
+            // quote: `Точные фрагменты в локальной базе не найдены. Показатель совпадений (${matches}%) сформирован векторным поиском.`,
+          }];
+        }
+        renderAdminMatches();
+      } else {
+        adminMatchesList.innerHTML = `<li class="uc-empty">${escapeHtml(data?.error || 'Не удалось загрузить заимствования')}</li>`;
       }
-    } else {
-      adminMatchesList.innerHTML = `<li class="uc-empty">${escapeHtml(data?.error || 'Не удалось загрузить заимствования')}</li>`;
-      return;
+    } catch (err) {
+      console.error('openAdminMatches failed', err);
+      adminMatchesList.innerHTML = `<li class="uc-empty">${escapeHtml(err?.message || 'Не удалось загрузить заимствования')}</li>`;
     }
-    renderAdminMatches();
   }
 
   // ===== Printable PDF report =====
@@ -3622,23 +3635,28 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   async function loadSubmissions() {
     const { ok, data } = await ApApi.getAdminDocuments();
     if (ok && data.documents) {
-      submissions = data.documents.map((d) => ({
-        id:             d.id,
-        title:          d.title,
-        author:         d.author || d.userId || '—',
-        userId:         d.userId || null,
-        uo:             d.institution || null,
-        faculty:        d.faculty || null,
-        type:           normalizeDocType(d.category || d.categoryLabel || '—'),
-        category:       d.category || 'uncategorized',
-        percent:        Math.round(d.originalityPercent ?? 0),
-        ai:             Math.round(d.aiPercentMl ?? 0),
-        wordCount:      d.wordCount ?? null,
-        date:           d.uploadDate ? d.uploadDate.slice(0, 10) : '—',
-        status:         d.status,
-        _expiresAt:     d.expiresAt ? new Date(d.expiresAt).getTime() : null,
-        processingTime: d.processingTimeMs ? Math.round(d.processingTimeMs / 1000) : null,
-      }));
+      submissions = data.documents.map((d) => {
+        const busy = d.status === 'processing' || d.status === 'failed';
+        return {
+          id:             d.id,
+          title:          d.title,
+          author:         d.author || d.userId || '—',
+          userId:         d.userId || null,
+          uo:             d.institution || null,
+          faculty:        d.faculty || null,
+          filename:       d.filename || null,
+          fileFormat:     d.documentType || null,
+          type:           normalizeDocType(d.category || d.categoryLabel || '—'),
+          category:       d.category || 'uncategorized',
+          percent:        busy ? null : Math.round(d.originalityPercent ?? 0),
+          ai:             busy ? null : Math.round(d.aiPercentMl ?? 0),
+          wordCount:      d.wordCount ?? null,
+          date:           d.uploadDate ? d.uploadDate.slice(0, 10) : '—',
+          status:         d.status,
+          _expiresAt:     d.expiresAt ? new Date(d.expiresAt).getTime() : null,
+          processingTime: d.processingTimeMs ? Math.round(d.processingTimeMs / 1000) : null,
+        };
+      });
       refreshOrgFilterOptions();
     }
     rebuildRepository();
@@ -4159,31 +4177,22 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     } else {
       subTbody.innerHTML = slice.map((s) => {
         const eff = getEffectiveStatus(s);
+        const isBusy = eff === 'processing' || eff === 'failed';
         const timer = (eff === 'draft') && s._expiresAt
           ? `<span class="uc-timer" data-expires="${s._expiresAt}">
                <i data-lucide="clock" class="icon-16"></i>
                <span>Хранится <strong>${formatRemaining(s._expiresAt - Date.now())}</strong></span>
              </span>` : '';
         const { uo, faculty } = resolveSubmissionOrg(s);
-        return `
-        <tr>
-          <td><div class="adm-table__name">${escapeHtml(s.title)}</div></td>
-          <td>${escapeHtml(s.author)}</td>
-          <td class="admin-col-uo">${escapeHtml(uo)}</td>
-          <td>${escapeHtml(faculty)}</td>
-          <td>${escapeHtml(s.type)}</td>
-          <td><b style="color: var(--primary);">${s.percent}%</b></td>
-          <td><b style="color: #8b5cf6;">${s.ai}%</b></td>
-          <td>${fmtProcTime(s.processingTime)}</td>
-          <td>${fmtDate(s.date)}</td>
-          <td>
-            <div class="sub-status">
-              <span class="status-pill status-pill--${eff}">${statusLabel(eff)}</span>
-              ${timer}
-            </div>
-          </td>
-          <td>
-            <div class="sub-actions">
+        const percentCell = isBusy ? '—' : `<b style="color: var(--primary);">${s.percent}%</b>`;
+        const aiCell = isBusy ? '—' : `<b style="color: #8b5cf6;">${s.ai}%</b>`;
+        const actions = isBusy
+          ? `<div class="sub-actions">
+              <button class="uc-icon-btn uc-icon-btn--danger" type="button" data-sub-action="delete" data-id="${s.id}" title="Удалить" aria-label="Удалить">
+                <i data-lucide="trash-2" class="icon-16"></i>
+              </button>
+            </div>`
+          : `<div class="sub-actions">
               <button class="uc-icon-btn" type="button" data-sub-action="matches" data-id="${s.id}" title="Заимствования" aria-label="Заимствования">
                 <i data-lucide="file-search-2" class="icon-16"></i>
               </button>
@@ -4196,8 +4205,25 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
               <button class="uc-icon-btn uc-icon-btn--danger" type="button" data-sub-action="delete" data-id="${s.id}" title="Удалить" aria-label="Удалить">
                 <i data-lucide="trash-2" class="icon-16"></i>
               </button>
+            </div>`;
+        return `
+        <tr>
+          <td><div class="adm-table__name">${escapeHtml(s.title)}</div></td>
+          <td>${escapeHtml(s.author)}</td>
+          <td class="admin-col-uo">${escapeHtml(uo)}</td>
+          <td>${escapeHtml(faculty)}</td>
+          <td>${escapeHtml(s.type)}</td>
+          <td>${percentCell}</td>
+          <td>${aiCell}</td>
+          <td>${fmtProcTime(s.processingTime)}</td>
+          <td>${fmtDate(s.date)}</td>
+          <td>
+            <div class="sub-status">
+              <span class="status-pill status-pill--${eff}">${statusLabel(eff)}</span>
+              ${timer}
             </div>
           </td>
+          <td>${actions}</td>
         </tr>
       `;
       }).join('');
@@ -4206,6 +4232,13 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           const item = submissions.find((x) => String(x.id) === String(btn.dataset.id));
           if (!item) return;
           const action = btn.dataset.subAction;
+          const eff = getEffectiveStatus(item);
+          if ((action === 'matches' || action === 'download') && (eff === 'processing' || eff === 'failed')) {
+            alert(eff === 'processing'
+              ? 'Документ ещё обрабатывается.'
+              : 'Проверка документа завершилась с ошибкой.');
+            return;
+          }
           if (action === 'matches') {
             const matchPct = Math.max(0, 100 - (item.percent || 0));
             openAdminMatches(item.id, matchPct, item.ai ?? 0);
@@ -4328,7 +4361,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     }
   });
 
-  const renderAdminMatches = () => {
+  function renderAdminMatches() {
     // const isAi = adminMatchesTab === 'ai';
     const isAi = false;
     const dataset = adminBorrowMatches;
@@ -4341,8 +4374,10 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         : 'Заимствования не обнаружены.';
         // : (isAi ? 'ИИ-фрагменты не обнаружены.' : 'Заимствования не обнаружены.');
       adminMatchesList.innerHTML = `<li class="uc-empty">${emptyMsg}</li>`;
-      adminMatchesPagi.hidden = true;
-      adminMatchesPagi.innerHTML = '';
+      if (adminMatchesPagi) {
+        adminMatchesPagi.hidden = true;
+        adminMatchesPagi.innerHTML = '';
+      }
       return;
     }
     const pages = Math.max(1, Math.ceil(total / ADMIN_MATCHES_PER_PAGE));
@@ -4379,7 +4414,6 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           <p class="matches-list__quote matches-list__quote--name">${escapeHtml(m.title || m.source || '—')}</p>
           <div class="matches-list__meta">
             <span>ID документа <code>${escapeHtml(m.docId || '—')}</code></span>
-            ${m.matchTypeLabel ? `<span>Тип: <b>${escapeHtml(m.matchTypeLabel)}</b></span>` : ''}
           </div>
         </li>`;
       /*
@@ -4397,8 +4431,8 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       */
     }).join('');
     if (total <= ADMIN_MATCHES_PER_PAGE) {
-      adminMatchesPagi.hidden = true; adminMatchesPagi.innerHTML = '';
-    } else {
+      if (adminMatchesPagi) { adminMatchesPagi.hidden = true; adminMatchesPagi.innerHTML = ''; }
+    } else if (adminMatchesPagi) {
       adminMatchesPagi.hidden = false;
       const btns = [`<button class="pagination__btn" data-p="prev" ${adminMatchesPage === 1 ? 'disabled' : ''}>‹</button>`];
       buildPageList(adminMatchesPage, pages).forEach((p) => {
@@ -4557,14 +4591,9 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           const action = btn.dataset.repoAction;
           if (action === 'download') openPrintableReport(item, null);
           else if (action === 'download-doc') {
-            const safeName = (item.title || 'document').replace(/[\\/:*?"<>|]/g, '_');
-            const content = `${item.title}\n\nАвтор: ${item.author}\nТип: ${item.type}\nДата индексации: ${item.indexed}\n\n[Исходный документ — текстовая заглушка для демонстрации]`;
-            const blob = new Blob([content], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = safeName + '.docx';
-            document.body.appendChild(a); a.click();
-            setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+            ApApi.downloadDocumentFile(item.id, item.filename || item.title).then(({ ok, error }) => {
+              if (!ok) alert(error || 'Не удалось скачать документ');
+            });
           }
           else if (action === 'edit') openSubEdit(item);
           else if (action === 'delete') {

@@ -2,19 +2,15 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getDocumentByIdFromDb, isFileAccessAllowed } from "@/lib/local-storage"
 import { verifyDocumentAccess } from "@/lib/report-access"
 import { getQrSignature } from "@/lib/report-verify-get"
-import fs from "fs"
-import path from "path"
-
-const MIME: Record<string, string> = {
-  ".pdf": "application/pdf",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".doc": "application/msword",
-}
+import {
+  contentDispositionAttachment,
+  readDocumentFileFromDisk,
+  resolveDocumentDownloadMeta,
+} from "@/lib/document-download"
 
 /**
  * GET /api/report/:documentId/original?sig=...
  * Отдаёт оригинальную загруженную работу. Требуется подпись sig из QR-кода.
- * Без валидной подписи доступ запрещён (защита от подмены ID и доступа к чужим документам).
  */
 export async function GET(
   request: NextRequest,
@@ -57,23 +53,19 @@ export async function GET(
       )
     }
 
-    const fullPath = path.join(process.cwd(), doc.filePath)
-    if (!fs.existsSync(fullPath)) {
+    const buf = readDocumentFileFromDisk(doc.filePath)
+    if (!buf) {
       return NextResponse.json(
         { success: false, error: "Файл работы не найден на диске" },
         { status: 404 },
       )
     }
 
-    const buf = fs.readFileSync(fullPath)
-    const ext = path.extname(doc.filePath).toLowerCase()
-    const mime = MIME[ext] ?? "application/octet-stream"
-    const filenameAscii = `work-${id}${ext}`
-
+    const meta = resolveDocumentDownloadMeta(doc)
     return new NextResponse(buf, {
       headers: {
-        "Content-Type": mime,
-        "Content-Disposition": `inline; filename="${filenameAscii}"`,
+        "Content-Type": meta.mime,
+        "Content-Disposition": contentDispositionAttachment(meta.downloadNameAscii, meta.downloadName),
         "Cache-Control": "private, max-age=3600",
       },
     })

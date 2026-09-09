@@ -1,8 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDocumentByIdFromDb } from "@/lib/local-storage"
 import { getDocumentMatchesData } from "@/lib/document-matches-data"
+import { getAllDocumentTypes, getDocumentTypesForInstitution } from "@/lib/document-types"
+import { categoryLabel as staticCategoryLabel } from "@/lib/category-labels"
 import { logInfo } from "@/lib/logger"
 import { requireSessionApi } from "@/lib/require-session-api"
+
+function resolveCategoryLabel(
+  labelByCategory: Record<string, string>,
+  category?: string | null,
+): string {
+  if (!category) return "—"
+  return labelByCategory[category] ?? staticCategoryLabel(category)
+}
 
 export async function GET(
   request: NextRequest,
@@ -28,10 +38,28 @@ export async function GET(
     return NextResponse.json({ success: false, error: "Нет доступа" }, { status: 403 })
   }
 
+  if (doc.status === "processing") {
+    return NextResponse.json(
+      { success: false, error: "Документ ещё обрабатывается", status: "processing" },
+      { status: 409 },
+    )
+  }
+  if (doc.status === "failed") {
+    return NextResponse.json(
+      { success: false, error: "Проверка документа завершилась с ошибкой", status: "failed" },
+      { status: 409 },
+    )
+  }
+
   const payload = await getDocumentMatchesData(id)
   if (!payload) {
     return NextResponse.json({ success: false, error: "Документ не найден" }, { status: 404 })
   }
+
+  const docTypes = doc.institutionId
+    ? await getDocumentTypesForInstitution(doc.institutionId, false)
+    : await getAllDocumentTypes()
+  const labelByCategory = Object.fromEntries(docTypes.map((t) => [t.name, t.displayName]))
 
   logInfo("Заимствования рассчитаны для документа", gate.user.username, gate.user.role, "document_matches", {
     documentId: id,
@@ -47,10 +75,36 @@ export async function GET(
 
   return NextResponse.json({
     success: true,
-    similarDocuments: payload.similarDocuments,
-    fragments: payload.fragments,
-    borrowMatches: payload.borrowMatches,
-    aiMatches: payload.aiMatches,
+    similarDocuments: payload.similarDocuments.map((s) => ({
+      id: s.id,
+      title: s.title,
+      author: s.author,
+      userId: s.userId,
+      similarity: s.similarity,
+      category: s.category,
+      categoryLabel: resolveCategoryLabel(labelByCategory, s.category),
+    })),
+    // UI list does not render fragments; keep payload small for the modal.
+    fragments: [],
+    borrowMatches: payload.borrowMatches.map((m) => ({
+      sourceTitle: m.sourceTitle,
+      sourceId: m.sourceId,
+      sourceAuthor: m.sourceAuthor,
+      similarity: m.similarity,
+      matchType: m.matchType,
+      matchTypeLabel: m.matchTypeLabel,
+      category: m.category,
+      categoryLabel: resolveCategoryLabel(labelByCategory, m.category),
+      wordCount: m.wordCount,
+      type: m.type,
+    })),
+    aiMatches: payload.aiMatches.map((m) => ({
+      sourceTitle: m.sourceTitle,
+      sourceId: m.sourceId,
+      similarity: m.similarity,
+      confidence: m.confidence,
+      type: m.type,
+    })),
     aiPercent: payload.aiPercent,
     localPlagiarismPercent: payload.localPlagiarismPercent,
     mlPlagiarismPercent: payload.mlPlagiarismPercent,

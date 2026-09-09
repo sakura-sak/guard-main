@@ -111,6 +111,8 @@ export async function POST(request: NextRequest) {
     const ml = await analyzeWithMlService(normalizedContent, {
       filename: typeof checkFilename === "string" ? checkFilename : undefined,
       institutionId,
+      category,
+      userId: gate.user.username,
     })
 
     const processingTime = Date.now() - startTime

@@ -40,8 +40,27 @@ function writeLog(entry: LogEntry) {
   }
 }
 
+/** Operational noise — keep in file/console, do not fill audit_logs. */
+const AUDIT_SKIP_ACTIONS = new Set([
+  "analysis_request",
+  "analysis_response",
+])
+
+const AUDIT_SKIP_MESSAGE_RE =
+  /heartbeat|still loading models|Analysis job claimed|ML job missing|leaving job for reclaim|Unexpected worker error/i
+
+function shouldMirrorToAudit(entry: LogEntry): boolean {
+  if (!entry.action) return false
+  // Always keep warnings/errors in audit
+  if (entry.level === "warning" || entry.level === "error") return true
+  if (entry.level === "debug") return false
+  if (AUDIT_SKIP_ACTIONS.has(entry.action)) return false
+  if (AUDIT_SKIP_MESSAGE_RE.test(entry.message || "")) return false
+  return true
+}
+
 function mirrorToAudit(entry: LogEntry) {
-  if (!entry.action) return
+  if (!shouldMirrorToAudit(entry)) return
   const level: AuditLevel =
     entry.level === "warning" ? "warning" : entry.level === "error" ? "error" : entry.level === "debug" ? "debug" : "info"
   void writeAuditLog({
