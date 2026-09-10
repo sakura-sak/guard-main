@@ -9,6 +9,25 @@ import type { GuardSessionPayload } from "./guard-session.types"
 
 export { GUARD_SESSION_COOKIE }
 
+/** Absolute cookie lifetime when idle timeout is disabled (SESSION_IDLE_TIMEOUT_SEC=0). */
+export const DEFAULT_SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 7
+
+/** Default idle timeout: 2 hours. */
+export const DEFAULT_SESSION_IDLE_TIMEOUT_SEC = 7200
+
+export function getSessionIdleTimeoutSec(): number {
+  const raw = process.env.SESSION_IDLE_TIMEOUT_SEC
+  if (raw === undefined || raw.trim() === "") return DEFAULT_SESSION_IDLE_TIMEOUT_SEC
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isFinite(n) || n < 0) return DEFAULT_SESSION_IDLE_TIMEOUT_SEC
+  return n
+}
+
+export function getSessionCookieMaxAgeSec(): number {
+  const idle = getSessionIdleTimeoutSec()
+  return idle > 0 ? idle : DEFAULT_SESSION_MAX_AGE_SEC
+}
+
 type HeaderReader = { headers: { get(name: string): string | null } }
 
 /** Secure flag for session cookie: env override, then X-Forwarded-Proto, else non-production only. */
@@ -55,15 +74,18 @@ export function signGuardSessionCookie(
   username: string,
   role: UserRole | string,
   additionalRoles?: UserRole[],
-  maxAgeSec = 60 * 60 * 24 * 7,
+  maxAgeSec = DEFAULT_SESSION_MAX_AGE_SEC,
+  actMs?: number,
 ): string {
   const secret = getSecret()
-  const exp = Date.now() + maxAgeSec * 1000
+  const now = Date.now()
+  const exp = now + maxAgeSec * 1000
   const payloadObj: GuardSessionPayload = {
     sub: username,
     exp,
     role,
     ar: additionalRoles?.length ? additionalRoles : undefined,
+    act: typeof actMs === "number" && Number.isFinite(actMs) ? actMs : now,
   }
   const payloadB64 = Buffer.from(JSON.stringify(payloadObj), "utf8").toString("base64url")
   const sig = createHmac("sha256", secret).update(payloadB64).digest("base64url")

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="login-modal-open">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Антиплагиат БГУИР — система проверки текстов на заимствования</title>
+<title>Вход — Антиплагиат БГУИР</title>
 <style>
 :root {
   --primary: #2563eb;
@@ -57,7 +57,7 @@ body {
 }
 a { color: inherit; text-decoration: none; }
 em { font-style: italic; color: var(--primary); font-weight: 500; }
-.page { width: min(1280px, 94%); margin: 0 auto; padding: 6px 0 60px; }
+.page { display: none; width: min(1280px, 94%); margin: 0 auto; padding: 6px 0 60px; }
 .card {
   background: var(--card); border-radius: var(--radius);
   box-shadow: var(--shadow-sm); border: 1px solid var(--border);
@@ -1868,10 +1868,9 @@ html.login-modal-open body {
 </div>
 
 <!-- ============ LOGIN MODAL ============ -->
-<div class="modal" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
-  <div class="modal__backdrop" data-close></div>
+<div class="modal is-open" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
+  <div class="modal__backdrop"></div>
   <div class="modal__dialog">
-    <button class="modal__close" type="button" data-close aria-label="Закрыть">&times;</button>
 
     <div class="login-modal__logo">
       <img src="bsuir-logo.jpg" alt="БГУИР"/>
@@ -2013,27 +2012,17 @@ html.login-modal-open body {
     });
   });
 
-  // Login modal
+  // Login is the only screen for guests: do not close back to the landing page.
   const modal = document.getElementById('loginModal');
   const openModal = () => {
     modal.classList.add('is-open');
     document.documentElement.classList.add('login-modal-open');
     document.body.style.overflow = 'hidden';
   };
-  const closeModal = () => {
-    modal.classList.remove('is-open');
-    document.documentElement.classList.remove('login-modal-open');
-    document.body.style.overflow = '';
-  };
   document.querySelectorAll('a[href="#login"]').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); openModal(); });
   });
-  modal.querySelectorAll('[data-close]').forEach((el) => {
-    el.addEventListener('click', closeModal);
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
-  });
+  openModal();
 
   // Password visibility toggle
   const pwdInput = document.getElementById('passwordInput');
@@ -2074,7 +2063,6 @@ html.login-modal-open body {
       if (submitBtn) submitBtn.disabled = false;
 
       if (ok && data.success && data.user) {
-        closeModal();
         const role = data.user.role;
         const isAdmin = role === 'admin' || role === 'superadmin';
         window.location.href = isAdmin ? 'admin.html' : 'app.html';

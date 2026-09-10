@@ -2215,6 +2215,9 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     __currentAdminUser = res.data.user;
     __isSuperAdmin = role === 'superadmin';
     __isUniAdmin = role === 'admin';
+    if (typeof ApApi.startIdleWatch === 'function') {
+      ApApi.startIdleWatch(res.data.idleTimeoutSec);
+    }
     document.body.classList.toggle('is-superadmin', __isSuperAdmin);
     document.body.classList.toggle('is-uni-admin', __isUniAdmin);
     applyAdminUserMenu(__currentAdminUser);

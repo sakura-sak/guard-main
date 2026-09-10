@@ -1,7 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { hasRole, type User, type UserRole } from "./auth"
 import { GUARD_SESSION_COOKIE } from "./guard-session.constants"
-import { verifyGuardSessionCookie } from "./guard-session.node"
+import {
+  getSessionCookieMaxAgeSec,
+  getSessionIdleTimeoutSec,
+  sessionCookieOptions,
+  signGuardSessionCookie,
+  verifyGuardSessionCookie,
+} from "./guard-session.node"
+import type { GuardSessionPayload } from "./guard-session.types"
 import { getUserByUsername } from "./user-storage"
 
 export type SessionUser = User & {
@@ -22,6 +29,18 @@ function toUser(payload: {
   }
 }
 
+async function refreshSessionCookie(request: NextRequest, payload: GuardSessionPayload): Promise<void> {
+  const maxAge = getSessionCookieMaxAgeSec()
+  const token = signGuardSessionCookie(payload.sub, payload.role, payload.ar, maxAge, Date.now())
+  try {
+    const { cookies } = await import("next/headers")
+    const jar = await cookies()
+    jar.set(GUARD_SESSION_COOKIE, token, sessionCookieOptions(request, maxAge))
+  } catch {
+    /* no request cookie store (unit tests) */
+  }
+}
+
 export async function requireSessionApi(
   request: NextRequest,
   allowedRoles?: UserRole[],
@@ -39,6 +58,18 @@ export async function requireSessionApi(
       ok: false,
       response: NextResponse.json({ success: false, error: "Сессия недействительна или истекла" }, { status: 401 }),
     }
+  }
+
+  const idleTimeoutSec = getSessionIdleTimeoutSec()
+  if (idleTimeoutSec > 0) {
+    const lastAct = typeof payload.act === "number" && Number.isFinite(payload.act) ? payload.act : Date.now()
+    if (Date.now() - lastAct > idleTimeoutSec * 1000) {
+      return {
+        ok: false,
+        response: NextResponse.json({ success: false, error: "Сессия недействительна или истекла" }, { status: 401 }),
+      }
+    }
+    await refreshSessionCookie(request, payload)
   }
 
   const dbUser = await getUserByUsername(payload.sub)

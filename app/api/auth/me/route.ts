@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { requireSessionApi } from "@/lib/require-session-api"
 import { getUserByUsername } from "@/lib/user-storage"
 import { buildSessionUserPayload } from "@/lib/session-user-payload"
+import { getSessionIdleTimeoutSec } from "@/lib/guard-session.node"
 
 export async function GET(request: NextRequest) {
   const gate = await requireSessionApi(request)
@@ -13,5 +14,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     user: buildSessionUserPayload(dbUser),
+    idleTimeoutSec: getSessionIdleTimeoutSec(),
   })
 }

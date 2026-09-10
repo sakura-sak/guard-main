@@ -1176,6 +1176,9 @@ a { color: inherit; text-decoration: none; }
     __isAdmin = role === 'admin' || role === 'superadmin';
     __isSuperAdmin = role === 'superadmin';
     __isUniAdmin = role === 'admin';
+    if (typeof ApApi.startIdleWatch === 'function') {
+      ApApi.startIdleWatch(data.idleTimeoutSec);
+    }
     runApp();
   }
 
