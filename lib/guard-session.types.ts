@@ -6,4 +6,6 @@ export type GuardSessionPayload = {
   exp: number
   role: UserRole | string
   ar?: UserRole[]
+  /** Last activity timestamp (ms). Missing on cookies issued before idle timeout. */
+  act?: number
 }

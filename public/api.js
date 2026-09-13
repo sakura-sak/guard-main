@@ -55,6 +55,49 @@
    */
   const getMe = () => GET('/api/auth/me');
 
+  /**
+   * Logout after SESSION_IDLE_TIMEOUT_SEC of no mouse/keyboard/touch.
+   * While the user is active, periodically call getMe so the server cookie slides.
+   */
+  function startIdleWatch(idleTimeoutSec) {
+    const timeoutSec = Number(idleTimeoutSec);
+    if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) return;
+    if (global.__apIdleWatchStarted) return;
+    global.__apIdleWatchStarted = true;
+
+    let lastActivity = Date.now();
+    const timeoutMs = timeoutSec * 1000;
+    const keepaliveMs = Math.min(5 * 60 * 1000, Math.max(15000, timeoutMs / 4));
+    let loggingOut = false;
+
+    function markActivity() {
+      lastActivity = Date.now();
+    }
+
+    ;['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach((evt) => {
+      document.addEventListener(evt, markActivity, { passive: true });
+    });
+
+    async function expireSession() {
+      if (loggingOut) return;
+      loggingOut = true;
+      try { await logout(); } catch { /* ignore */ }
+      window.location.replace('index.html');
+    }
+
+    setInterval(function () {
+      if (Date.now() - lastActivity >= timeoutMs) expireSession();
+    }, 15000);
+
+    setInterval(function () {
+      if (loggingOut) return;
+      if (Date.now() - lastActivity >= timeoutMs) return;
+      getMe().then(function (res) {
+        if (!res.ok) expireSession();
+      });
+    }, keepaliveMs);
+  }
+
   // ─── User profile ─────────────────────────────────────────────────────────
 
   /** Get current user's full profile. */
@@ -539,7 +582,7 @@
 
   global.ApApi = {
     // auth
-    login, logout, getMe,
+    login, logout, getMe, startIdleWatch,
     // user
     getProfile, updateProfile,
     // directories & types

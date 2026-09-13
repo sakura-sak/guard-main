@@ -5,6 +5,7 @@ import { authenticateLDAP, mapLDAPUserToUser, getLDAPConfig } from "@/lib/ldap"
 import type { UserRole } from "@/lib/auth"
 import {
   GUARD_SESSION_COOKIE,
+  getSessionCookieMaxAgeSec,
   sessionCookieOptions,
   signGuardSessionCookie,
 } from "@/lib/guard-session.node"
@@ -15,12 +16,14 @@ function jsonWithSessionCookie(
   session: { username: string; role: string; additionalRoles?: UserRole[] },
 ): NextResponse {
   const res = NextResponse.json(body)
+  const maxAge = getSessionCookieMaxAgeSec()
   const token = signGuardSessionCookie(
     session.username,
     session.role as UserRole,
     session.additionalRoles,
+    maxAge,
   )
-  res.cookies.set(GUARD_SESSION_COOKIE, token, sessionCookieOptions(request, 60 * 60 * 24 * 7))
+  res.cookies.set(GUARD_SESSION_COOKIE, token, sessionCookieOptions(request, maxAge))
   return res
 }
 
