@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Guard API — Антиплагиат БГУИР</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --ink: #0a1f44;
+      --muted: #64748b;
+      --bg: #eaf1fb;
+      --card: #fff;
+      --border: rgba(15, 41, 92, 0.08);
+      --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 32px 20px 80px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    .ver { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .note {
+      background: #dbeafe;
+      border: 1px solid rgba(37, 99, 235, 0.25);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      margin: 0 0 24px;
+    }
+    .intro p, .intro ul { margin: 0 0 12px; }
+    .intro code, code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      background: #f1f5f9;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    nav {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin-bottom: 32px;
+    }
+    nav h2 { font-size: 15px; margin: 0 0 8px; }
+    nav ol { margin: 0; padding-left: 20px; }
+    nav a { color: var(--primary); text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    section { margin-bottom: 36px; }
+    section > h2 {
+      font-size: 20px;
+      margin: 0 0 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tag-desc { color: var(--muted); margin: 0 0 16px; }
+    .op {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 18px;
+      margin: 0 0 12px;
+    }
+    .op__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .op__path { font-size: 14px; background: transparent; padding: 0; }
+    .op h3 { font-size: 16px; margin: 10px 0 8px; }
+    .op p { margin: 0 0 8px; }
+    .auth { font-size: 14px; color: var(--muted); }
+    .resp-label { font-size: 13px; font-weight: 700; margin: 10px 0 4px !important; }
+    .resp { margin: 0; padding-left: 18px; font-size: 14px; color: var(--muted); }
+    .ex pre {
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      background: #0a1f44;
+      color: #eaf1fb;
+      border-radius: 10px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .ex pre code { background: transparent; color: inherit; padding: 0; font-size: inherit; }
+    .method {
+      display: inline-block;
+      min-width: 56px;
+      text-align: center;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .method--get { background: #16a34a; }
+    .method--post { background: #2563eb; }
+    .method--patch { background: #d97706; }
+    .method--put { background: #d97706; }
+    .method--delete { background: #dc2626; }
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: #92400e;
+      background: #fef3c7;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Guard API — Антиплагиат БГУИР</h1>
+    <p class="ver">версия 1.0.0</p>
+    <nav>
+      <h2>Содержание</h2>
+      <ol><li><a href="#tag-auth">auth</a> — Вход, сессия, регистрация</li><li><a href="#tag-documents">documents</a> — Загрузка, список, статусы, файлы</li><li><a href="#tag-analysis">analysis</a> — Очередь анализа и состояние проверки</li><li><a href="#tag-reports">reports</a> — PDF-справки, QR, публичная проверка</li><li><a href="#tag-profile">profile</a> — Профиль текущего пользователя</li><li><a href="#tag-directories">directories</a> — Справочники УО, факультетов и типов работ</li><li><a href="#tag-admin">admin</a> — Админ-панель (admin / superadmin)</li><li><a href="#tag-cron">cron</a> — Фоновые задачи</li></ol>
+    </nav>
+    <section id="tag-auth">
+  <h2>auth</h2>
+  <p class="tag-desc">Вход, сессия, регистрация</p>
+  <article class="op" id="post--api-auth-login">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/auth/login</code>
+    
+  </div>
+  <h3>Вход</h3>
+  <p>LDAP (если включён), иначе локальная база. Устанавливает cookie <code>guard_session</code>.</p>
+  <p class="auth"><strong>Доступ:</strong> без авторизации</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Успех</li><li><code>400</code> — </li><li><code>500</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/auth/login&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;username&quot;: &quot;admin&quot;,
+  &quot;password&quot;: &quot;secret&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;user&quot;: {
+    &quot;username&quot;: &quot;admin&quot;,
+    &quot;role&quot;: &quot;admin&quot;,
+    &quot;fullName&quot;: &quot;Администратор&quot;,
+    &quot;institution&quot;: &quot;БГУИР&quot;,
+    &quot;institutionId&quot;: &quot;bsuir&quot;
+  }
+}</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="post--api-auth-logout">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/auth/logout</code>
+    
+  </div>
+  <h3>Выход</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> без авторизации</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Cookie очищена</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/auth/logout&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-auth-me">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/auth/me</code>
+    
+  </div>
+  <h3>Текущий пользователь</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Сессия</li><li><code>401</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/auth/me&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;user&quot;: {
+    &quot;username&quot;: &quot;admin&quot;,
+    &quot;role&quot;: &quot;admin&quot;,
+    &quot;fullName&quot;: &quot;Администратор&quot;,
+    &quot;institution&quot;: &quot;БГУИР&quot;,
+    &quot;institutionId&quot;: &quot;bsuir&quot;
+  },
+  &quot;idleTimeoutSec&quot;: 7200
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="post--api-auth-register">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/auth/register</code>
+    
+  </div>
+  <h3>Саморегистрация</h3>
+  <p>Публичный эндпоинт без авторизации.</p>
+  <p class="auth"><strong>Доступ:</strong> без авторизации</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Пользователь создан</li><li><code>400</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/auth/register&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;username&quot;: &quot;ivanov&quot;,
+  &quot;password&quot;: &quot;secret12&quot;,
+  &quot;fullName&quot;: &quot;Иванов Иван&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;user&quot;: {
+    &quot;username&quot;: &quot;ivanov&quot;,
+    &quot;role&quot;: &quot;student&quot;
+  }
+}</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+</section>
+<section id="tag-documents">
+  <h2>documents</h2>
+  <p class="tag-desc">Загрузка, список, статусы, файлы</p>
+  <article class="op" id="post--api-upload">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/upload</code>
+    
+  </div>
+  <h3>Загрузка файла и постановка в очередь анализа</h3>
+  <p>Возвращает <code>202</code> сразу. ML выполняет <code>analysis-worker</code>.<br />Плагин Moodle передаёт <code>X-API-Key</code> и <code>username</code> (LDAP uid).</p>
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session) или заголовок X-API-Key или Authorization: Bearer</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>202</code> — Поставлено в очередь</li><li><code>400</code> — </li><li><code>409</code> — У пользователя уже есть активная задача</li><li><code>503</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/upload&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;X-API-Key: &lt;MOODLE_API_KEY&gt;&quot; \
+  -H &quot;X-Moodle-Username: 7123456&quot; \
+  -F &quot;file=@lab.docx&quot; -F &quot;title=Лабораторная&quot; -F &quot;content=текст работы не короче 50 символов&quot; -F &quot;category=lab&quot; -F &quot;username=7123456&quot;</code></pre>
+  <p class="resp-label">Пример ответа 202</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;status&quot;: &quot;processing&quot;,
+  &quot;jobId&quot;: 3,
+  &quot;document&quot;: {
+    &quot;id&quot;: 42,
+    &quot;title&quot;: &quot;Лабораторная&quot;,
+    &quot;category&quot;: &quot;lab&quot;,
+    &quot;status&quot;: &quot;processing&quot;,
+    &quot;localPlagiarismPercent&quot;: 12.5
+  }
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="post--api-check">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/check</code>
+    
+  </div>
+  <h3>Синхронная проверка (legacy)</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Результат проверки</li><li><code>400</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/check&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;content&quot;: &quot;методы поиска похожих документов в корпусе университета методы поиска похожих документов в корпусе университета методы поиска похожих документов в корпусе университета методы поиска похожих документов в корпусе университета &quot;,
+  &quot;filename&quot;: &quot;lab.docx&quot;,
+  &quot;category&quot;: &quot;lab&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-documents">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/documents</code>
+    
+  </div>
+  <h3>Список документов (админ)</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Список</li><li><code>401</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/documents&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="delete--api-documents">
+  <div class="op__head">
+    <span class="method method--delete">DELETE</span>
+    <code class="op__path">/api/documents</code>
+    
+  </div>
+  <h3>Удалить документ</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X DELETE &quot;https://antiplagiat.example/api/documents&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="patch--api-documents-documentId-">
+  <div class="op__head">
+    <span class="method method--patch">PATCH</span>
+    <code class="op__path">/api/documents/{documentId}</code>
+    
+  </div>
+  <h3>Изменить название или категорию</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Обновлено</li><li><code>403</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X PATCH &quot;https://antiplagiat.example/api/documents/42&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;title&quot;: &quot;Новое название&quot;,
+  &quot;category&quot;: &quot;lab&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-documents-user-username-">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/documents/user/{username}</code>
+    
+  </div>
+  <h3>Работы пользователя</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Список</li><li><code>403</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/documents/user/7123456&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="delete--api-documents-user-username-documents-documentId-">
+  <div class="op__head">
+    <span class="method method--delete">DELETE</span>
+    <code class="op__path">/api/documents/user/{username}/documents/{documentId}</code>
+    
+  </div>
+  <h3>Удалить свою работу</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — </li><li><code>404</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X DELETE &quot;https://antiplagiat.example/api/documents/user/7123456/documents/42&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-documents-documentId-file">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/documents/{documentId}/file</code>
+    
+  </div>
+  <h3>Скачать исходный файл</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Файл</li><li><code>403</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/documents/42/file&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200 (не JSON)</p>
+  <pre><code>(бинарное тело: PDF, PNG или исходный файл)</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-documents-documentId-matches">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/documents/{documentId}/matches</code>
+    
+  </div>
+  <h3>Заимствования для отчёта</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Совпадения</li><li><code>409</code> — Документ ещё обрабатывается</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/documents/42/matches&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="patch--api-documents-documentId-status">
+  <div class="op__head">
+    <span class="method method--patch">PATCH</span>
+    <code class="op__path">/api/documents/{documentId}/status</code>
+    
+  </div>
+  <h3>Сменить статус draft → final</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Обновлено</li><li><code>409</code> — processing / failed</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X PATCH &quot;https://antiplagiat.example/api/documents/42/status&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;status&quot;: &quot;final&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+</section>
+<section id="tag-analysis">
+  <h2>analysis</h2>
+  <p class="tag-desc">Очередь анализа и состояние проверки</p>
+  <article class="op" id="get--api-documents-documentId-analysis">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/documents/{documentId}/analysis</code>
+    
+  </div>
+  <h3>Статус анализа документа</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session) или заголовок X-API-Key или Authorization: Bearer</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Статус</li><li><code>401</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/documents/42/analysis?username=7123456&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;X-API-Key: &lt;MOODLE_API_KEY&gt;&quot; \
+  -H &quot;X-Moodle-Username: 7123456&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;documentId&quot;: 42,
+  &quot;jobStatus&quot;: &quot;done&quot;,
+  &quot;documentStatus&quot;: &quot;draft&quot;,
+  &quot;originalityPercent&quot;: 81.7,
+  &quot;plagiarismPercent&quot;: 18.3,
+  &quot;aiPercentMl&quot;: 7.4
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="post--api-documents-documentId-analysis-viewed">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/documents/{documentId}/analysis/viewed</code>
+    
+  </div>
+  <h3>Отметить результат просмотренным</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/documents/42/analysis/viewed&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-analysis-state">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/analysis/state</code>
+    
+  </div>
+  <h3>Активная задача или непросмотренный результат</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — kind = active | unviewed_result | none</li><li><code>401</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/analysis/state&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-analysis-health">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/analysis/health</code>
+    
+  </div>
+  <h3>Очередь analysis-worker</h3>
+  <p>Если задан <code>CLEANUP_CRON_SECRET</code>, нужен заголовок <code>X-Cron-Secret</code> или <code>?secret=</code>.</p>
+  <p class="auth"><strong>Доступ:</strong> заголовок X-Cron-Secret</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — queued / processing / failed24h</li><li><code>401</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/analysis/health&quot; \
+  -H &quot;X-Cron-Secret: &lt;CLEANUP_CRON_SECRET&gt;&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+</section>
+<section id="tag-reports">
+  <h2>reports</h2>
+  <p class="tag-desc">PDF-справки, QR, публичная проверка</p>
+  <article class="op" id="post--api-report">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/report</code>
+    
+  </div>
+  <h3>Сгенерировать PDF из клиентских данных</h3>
+  <p>Публичный эндпоинт без авторизации.</p>
+  <p class="auth"><strong>Доступ:</strong> без авторизации</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — PDF</li><li><code>400</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/report&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;filename&quot;: &quot;lab.docx&quot;,
+  &quot;uniquenessPercent&quot;: 81.7,
+  &quot;documentId&quot;: 42,
+  &quot;status&quot;: &quot;final&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-report-qr">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/report/qr</code>
+    
+  </div>
+  <h3>PNG QR-код</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> без авторизации</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — PNG</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/report/qr&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200 (не JSON)</p>
+  <pre><code>(бинарное тело: PDF, PNG или исходный файл)</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-report-verify">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/report/verify</code>
+    
+  </div>
+  <h3>Проверка QR (query)</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> подпись QR (query sig)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — JSON при raw=1</li><li><code>302</code> — Редирект на report.html</li><li><code>403</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/report/verify?sig=e3b0c44298&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 403</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Недостаточно прав&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-report-verify-documentId-sig-">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/report/verify/{documentId}/{sig}</code>
+    <span class="badge">устарел</span>
+  </div>
+  <h3>Проверка QR (legacy path)</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> без авторизации</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — JSON</li><li><code>302</code> — Редирект</li><li><code>403</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/report/verify/42/e3b0c44298&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-report-v-documentId-sig-">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/report/v/{documentId}/{sig}</code>
+    
+  </div>
+  <h3>Проверка QR (актуальный path)</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> без авторизации</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — JSON</li><li><code>302</code> — Редирект</li><li><code>403</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/report/v/42/e3b0c44298&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-report-documentId-download">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/report/{documentId}/download</code>
+    
+  </div>
+  <h3>Скачать PDF-справку</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> подпись QR (query sig)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — PDF</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/report/42/download?sig=e3b0c44298&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200 (не JSON)</p>
+  <pre><code>(бинарное тело: PDF, PNG или исходный файл)</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-report-documentId-view">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/report/{documentId}/view</code>
+    
+  </div>
+  <h3>Просмотр PDF-справки</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> подпись QR (query sig)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — PDF inline</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/report/42/view?sig=e3b0c44298&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200 (не JSON)</p>
+  <pre><code>(бинарное тело: PDF, PNG или исходный файл)</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-report-documentId-original">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/report/{documentId}/original</code>
+    
+  </div>
+  <h3>Исходный файл по QR</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> подпись QR (query sig)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Файл</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/report/42/original?sig=e3b0c44298&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200 (не JSON)</p>
+  <pre><code>(бинарное тело: PDF, PNG или исходный файл)</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-report-documentId-links">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/report/{documentId}/links</code>
+    
+  </div>
+  <h3>Подписанные URL и QR для справки</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session) или заголовок X-API-Key или Authorization: Bearer</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Ссылки</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/report/42/links?username=7123456&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;X-API-Key: &lt;MOODLE_API_KEY&gt;&quot; \
+  -H &quot;X-Moodle-Username: 7123456&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;verifyUrl&quot;: &quot;https://antiplagiat.example/report.html?documentId=42&amp;sig=…&quot;,
+  &quot;originalUrl&quot;: &quot;https://antiplagiat.example/api/report/42/original?sig=…&quot;,
+  &quot;reportPdfUrl&quot;: &quot;https://antiplagiat.example/api/report/42/download?sig=…&quot;
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-report-documentId-print-data">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/report/{documentId}/print-data</code>
+    
+  </div>
+  <h3>JSON для HTML-справки</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session) или подпись QR (query sig)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Данные печати</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/report/42/print-data?sig=e3b0c44298&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+</section>
+<section id="tag-profile">
+  <h2>profile</h2>
+  <p class="tag-desc">Профиль текущего пользователя</p>
+  <article class="op" id="get--api-users-me">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/users/me</code>
+    
+  </div>
+  <h3>Обновить профиль</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Пользователь</li><li><code>401</code> — </li><li><code>200</code> — Обновлено</li><li><code>403</code> — Поле нельзя менять</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/users/me&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+</section>
+<section id="tag-directories">
+  <h2>directories</h2>
+  <p class="tag-desc">Справочники УО, факультетов и типов работ</p>
+  <article class="op" id="get--api-directories">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/directories</code>
+    
+  </div>
+  <h3>Активные УО и факультеты</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> без авторизации</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Справочник</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/directories&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;institutions&quot;: [
+    {
+      &quot;id&quot;: &quot;bsuir&quot;,
+      &quot;name&quot;: &quot;БГУИР&quot;,
+      &quot;faculties&quot;: [
+        {
+          &quot;id&quot;: &quot;fksis&quot;,
+          &quot;name&quot;: &quot;ФКСиС&quot;
+        }
+      ]
+    }
+  ]
+}</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-document-types">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/document-types</code>
+    
+  </div>
+  <h3>Активные типы работ УО</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> без авторизации</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — types[]</li><li><code>400</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/document-types&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;types&quot;: [
+    {
+      &quot;id&quot;: 1,
+      &quot;name&quot;: &quot;lab&quot;,
+      &quot;displayName&quot;: &quot;Лабораторная работа&quot;,
+      &quot;isActive&quot;: true
+    }
+  ]
+}</code></pre>
+  <p class="resp-label">Пример ошибки 400</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Некорректный запрос&quot;
+}</code></pre>
+</div>
+</article>
+</section>
+<section id="tag-admin">
+  <h2>admin</h2>
+  <p class="tag-desc">Админ-панель (admin / superadmin)</p>
+  <article class="op" id="get--api-admin-directories">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/directories</code>
+    
+  </div>
+  <h3>Все УО и факультеты (включая неактивные)</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — institutions[]</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/directories&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="post--api-admin-directories">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/admin/directories</code>
+    
+  </div>
+  <h3>CRUD УО и факультетов</h3>
+  <p><code>action</code>: addInstitution, updateInstitution, deactivateInstitution,<br />activateInstitution, deleteInstitution, addFaculty, updateFaculty,<br />deactivateFaculty, deleteFaculty, activateFaculty.<br />Мутации УО — только superadmin.</p>
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — Результат действия</li><li><code>400</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/admin/directories&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;action&quot;: &quot;addFaculty&quot;,
+  &quot;institutionId&quot;: &quot;bsuir&quot;,
+  &quot;name&quot;: &quot;ФКСиС&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-document-types">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/document-types</code>
+    
+  </div>
+  <h3>Типы работ</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — types[]</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/document-types&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="post--api-admin-document-types">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/admin/document-types</code>
+    
+  </div>
+  <h3>Создать тип работы</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — type</li><li><code>400</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/admin/document-types&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;institutionId&quot;: &quot;bsuir&quot;,
+  &quot;displayName&quot;: &quot;Эссе&quot;,
+  &quot;name&quot;: &quot;essay&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="patch--api-admin-document-types-id-">
+  <div class="op__head">
+    <span class="method method--patch">PATCH</span>
+    <code class="op__path">/api/admin/document-types/{id}</code>
+    
+  </div>
+  <h3>Удалить тип работы</h3>
+  <p>Если есть активные (не archived) работы с этим типом — 400 с текстом и числом.<br />Иначе физическое удаление. Архивные документы отвязываются (<code>documentTypeId</code> → NULL).</p>
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — type</li><li><code>400</code> — </li><li><code>200</code> — Удалён</li><li><code>400</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X PATCH &quot;https://antiplagiat.example/api/admin/document-types/1&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;displayName&quot;: &quot;Лабораторная работа&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-users">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/users</code>
+    
+  </div>
+  <h3>Список пользователей</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — users[]</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/users&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="post--api-admin-users">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/admin/users</code>
+    
+  </div>
+  <h3>Создать пользователя</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — user</li><li><code>400</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/admin/users&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;username&quot;: &quot;teacher1&quot;,
+  &quot;password&quot;: &quot;secret12&quot;,
+  &quot;role&quot;: &quot;teacher&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="patch--api-admin-users-username-">
+  <div class="op__head">
+    <span class="method method--patch">PATCH</span>
+    <code class="op__path">/api/admin/users/{username}</code>
+    
+  </div>
+  <h3>Обновить пользователя</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — user</li><li><code>403</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X PATCH &quot;https://antiplagiat.example/api/admin/users/7123456&quot; \
+  -H &quot;Cookie: guard_session=…&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d'{
+  &quot;role&quot;: &quot;teacher&quot;,
+  &quot;fullName&quot;: &quot;Петров П. П.&quot;
+}'</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="delete--api-admin-users-username-">
+  <div class="op__head">
+    <span class="method method--delete">DELETE</span>
+    <code class="op__path">/api/admin/users/{username}</code>
+    
+  </div>
+  <h3>Удалить пользователя</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X DELETE &quot;https://antiplagiat.example/api/admin/users/7123456&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-statistics">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/statistics</code>
+    
+  </div>
+  <h3>Дашборд статистики</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — statistics</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/statistics&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;statistics&quot;: {
+    &quot;totalDocuments&quot;: 120,
+    &quot;averageUniqueness&quot;: 78.4,
+    &quot;finalsByCategory&quot;: [
+      {
+        &quot;category&quot;: &quot;lab&quot;,
+        &quot;count&quot;: 40
+      }
+    ]
+  }
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-statistics-checks-by-category">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/statistics/checks-by-category</code>
+    
+  </div>
+  <h3>Проверки по категориям</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — checksByCategory</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/statistics/checks-by-category&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-statistics-heatmap">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/statistics/heatmap</code>
+    
+  </div>
+  <h3>Тепловая карта загрузок</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — dailyCounts</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/statistics/heatmap&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-statistics-monthly-uploads">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/statistics/monthly-uploads</code>
+    
+  </div>
+  <h3>Загрузки по месяцам</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — monthly</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/statistics/monthly-uploads&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-statistics-originality-by-date">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/statistics/originality-by-date</code>
+    
+  </div>
+  <h3>Оригинальность по датам</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — ranges</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/statistics/originality-by-date&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-statistics-originality-ranges">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/statistics/originality-ranges</code>
+    
+  </div>
+  <h3>Оригинальность по диапазонам</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — ranges</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/statistics/originality-ranges&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-statistics-processing-time-ranges">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/statistics/processing-time-ranges</code>
+    
+  </div>
+  <h3>Время обработки по диапазонам</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — ranges</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/statistics/processing-time-ranges&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-logs">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/logs</code>
+    
+  </div>
+  <h3>Журнал аудита</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — logs[]</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/logs&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="get--api-admin-storage-stats">
+  <div class="op__head">
+    <span class="method method--get">GET</span>
+    <code class="op__path">/api/admin/storage/stats</code>
+    
+  </div>
+  <h3>Использование хранилища</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — stats</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X GET &quot;https://antiplagiat.example/api/admin/storage/stats&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+<article class="op" id="post--api-admin-cleanup">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/admin/cleanup</code>
+    
+  </div>
+  <h3>Очистить архивные файлы вручную</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> сессия admin/пользователя (cookie guard_session)</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — purged / filesDeleted</li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/admin/cleanup&quot; \
+  -H &quot;Cookie: guard_session=…&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+</section>
+<section id="tag-cron">
+  <h2>cron</h2>
+  <p class="tag-desc">Фоновые задачи</p>
+  <article class="op" id="post--api-cron-purge-archived">
+  <div class="op__head">
+    <span class="method method--post">POST</span>
+    <code class="op__path">/api/cron/purge-archived</code>
+    
+  </div>
+  <h3>Ночная очистка архива</h3>
+  
+  <p class="auth"><strong>Доступ:</strong> заголовок X-Cron-Secret</p>
+  <p class="resp-label">Коды ответов</p><ul class="resp"><li><code>200</code> — purged</li><li><code>401</code> — </li></ul>
+  <div class="ex">
+  <p class="resp-label">Пример запроса</p>
+  <pre><code>curl -X POST &quot;https://antiplagiat.example/api/cron/purge-archived&quot; \
+  -H &quot;X-Cron-Secret: &lt;CLEANUP_CRON_SECRET&gt;&quot;</code></pre>
+  <p class="resp-label">Пример ответа 200</p>
+  <pre><code>{
+  &quot;success&quot;: true,
+  &quot;purged&quot;: 12,
+  &quot;filesDeleted&quot;: 12
+}</code></pre>
+  <p class="resp-label">Пример ошибки 401</p>
+  <pre><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: &quot;Требуется вход&quot;
+}</code></pre>
+</div>
+</article>
+</section>
+  </div>
+</body>
+</html>

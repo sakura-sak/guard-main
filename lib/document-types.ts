@@ -125,6 +125,14 @@ async function documentTypeUsage(id: number): Promise<number> {
   return prisma.document.count({ where: { documentTypeId: id } })
 }
 
+async function documentTypeUsageByStatus(id: number): Promise<{ active: number; archived: number }> {
+  const [active, archived] = await Promise.all([
+    prisma.document.count({ where: { documentTypeId: id, NOT: { status: "archived" } } }),
+    prisma.document.count({ where: { documentTypeId: id, status: "archived" } }),
+  ])
+  return { active, archived }
+}
+
 /** Seed default types for one institution when it has none. */
 export async function ensureDocumentTypesForInstitution(institutionId: string): Promise<void> {
   const count = await prisma.documentType.count({ where: { institutionId } })
@@ -301,34 +309,39 @@ export async function updateDocumentType(
   return { success: true, type: mapRow(row) }
 }
 
-export async function deactivateDocumentType(
+export async function removeDocumentType(
   id: number,
   actorUsername?: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; unlinkedArchived?: number }> {
   const existing = await prisma.documentType.findUnique({ where: { id } })
   if (!existing) return { success: false, error: "Тип работы не найден" }
-  if (!existing.isActive) return { success: true }
 
-  const docs = await documentTypeUsage(id)
-  if (docs > 0) {
+  const { active, archived } = await documentTypeUsageByStatus(id)
+  if (active > 0) {
+    const archivedHint = archived > 0 ? ` (ещё ${archived} в архиве)` : ""
     return {
       success: false,
-      error: `Нельзя деактивировать «${existing.displayName}»: используется в ${docs} докум.`,
+      error: `Тип «${existing.displayName}» используется в ${active} работах${archivedHint}. Сначала удалите или архивируйте эти работы.`,
     }
   }
 
-  await prisma.documentType.update({ where: { id }, data: { isActive: false } })
+  await prisma.documentType.delete({ where: { id } })
   await writeAuditLog({
     userId: actorUsername,
-    action: "admin_deactivate_document_type",
-    message: `Тип работы деактивирован: ${existing.displayName}`,
+    action: "admin_delete_document_type",
+    message: `Тип работы удалён: ${existing.displayName}`,
     entityType: "document_type",
     entityId: id,
   })
-  return { success: true }
+  return { success: true, unlinkedArchived: archived }
 }
 
-/** @deprecated Use deactivateDocumentType */
+/** @deprecated Use removeDocumentType */
+export async function deactivateDocumentType(id: number, actorUsername?: string) {
+  return removeDocumentType(id, actorUsername)
+}
+
+/** @deprecated Use removeDocumentType */
 export async function deleteDocumentType(id: number, actorUsername?: string) {
-  return deactivateDocumentType(id, actorUsername)
+  return removeDocumentType(id, actorUsername)
 }

@@ -1,0 +1,1089 @@
+openapi: 3.1.0
+info:
+  title: Guard API — Антиплагиат БГУИР
+  version: "1.0.0"
+  description: |
+    REST API веб-приложения Guard (антиплагиат БГУИР).
+
+    **Аудитории**
+    - Браузерный UI (`index.html` / `app.html` / `admin.html`) — cookie `guard_session`.
+    - Плагин Moodle СЭО — заголовок `X-API-Key` (= `MOODLE_API_KEY`, ≥16 символов)
+      или `Authorization: Bearer`. Логин студента: поле `username`, query `username`
+      или заголовок `X-Moodle-Username`.
+    - QR-справки — HMAC-подпись `sig` (`REPORT_ACCESS_SECRET`).
+    - Ночной cron — `X-Cron-Secret` (= `CLEANUP_CRON_SECRET`).
+
+    **Эндпоинты плагина Moodle:** `POST /api/upload`, `GET /api/documents/{documentId}/analysis`,
+    `GET /api/report/{documentId}/links`.
+
+    **Особенности**
+    - `POST /api/auth/register` и `POST /api/report` в текущей сборке без авторизации.
+    - `GET /api/analysis/health` требует секрет только если задан `CLEANUP_CRON_SECRET`.
+  contact:
+    name: БГУИР
+servers:
+  - url: /
+    description: Тот же хост, что и сайт Guard
+tags:
+  - name: auth
+    description: Вход, сессия, регистрация
+  - name: documents
+    description: Загрузка, список, статусы, файлы
+  - name: analysis
+    description: Очередь анализа и состояние проверки
+  - name: reports
+    description: PDF-справки, QR, публичная проверка
+  - name: profile
+    description: Профиль текущего пользователя
+  - name: directories
+    description: Справочники УО, факультетов и типов работ
+  - name: admin
+    description: Админ-панель (admin / superadmin)
+  - name: cron
+    description: Фоновые задачи
+  - name: moodle
+    description: Контракт плагина Moodle (X-API-Key)
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Вход
+      description: LDAP (если включён), иначе локальная база. Устанавливает cookie `guard_session`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Успех
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  user: { $ref: "#/components/schemas/SessionUser" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Выход
+      security: []
+      responses:
+        "200":
+          description: Cookie очищена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ok" }
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Текущий пользователь
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Сессия
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  user: { $ref: "#/components/schemas/SessionUser" }
+                  idleTimeoutSec: { type: integer }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/auth/register:
+    post:
+      tags: [auth]
+      summary: Саморегистрация
+      description: Публичный эндпоинт без авторизации.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+                role: { type: string }
+                email: { type: string }
+                fullName: { type: string }
+                institution: { type: string }
+      responses:
+        "200": { description: Пользователь создан }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/upload:
+    post:
+      tags: [documents, moodle]
+      summary: Загрузка файла и постановка в очередь анализа
+      description: |
+        Возвращает `202` сразу. ML выполняет `analysis-worker`.
+        Плагин Moodle передаёт `X-API-Key` и `username` (LDAP uid).
+      security:
+        - cookieAuth: []
+        - moodleApiKey: []
+        - moodleBearer: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, title, content]
+              properties:
+                file: { type: string, format: binary }
+                title: { type: string }
+                content: { type: string, description: Извлечённый текст ≥50 символов }
+                category: { type: string, example: lab }
+                username: { type: string }
+                fullName: { type: string }
+                institution: { type: string }
+                institutionId: { type: string }
+                document_type: { type: string, enum: [word, pdf] }
+      responses:
+        "202":
+          description: Поставлено в очередь
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  status: { type: string, example: processing }
+                  jobId: { type: integer }
+                  document:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      title: { type: string }
+                      filename: { type: string }
+                      wordCount: { type: integer }
+                      category: { type: string }
+                      status: { type: string }
+                      localPlagiarismPercent: { type: number }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409":
+          description: У пользователя уже есть активная задача
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: false }
+                  error: { type: string }
+                  code: { type: string, example: ACTIVE_JOB_EXISTS }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /api/check:
+    post:
+      tags: [documents]
+      summary: Синхронная проверка (legacy)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+                filename: { type: string }
+                category: { type: string }
+                status: { type: string, enum: [draft, final] }
+                institution: { type: string }
+                institutionId: { type: string }
+      responses:
+        "200": { description: Результат проверки }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { description: ML недоступен }
+
+  /api/documents:
+    get:
+      tags: [documents, admin]
+      summary: Список документов (админ)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string }
+      responses:
+        "200": { description: Список }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [documents, admin]
+      summary: Удалить документ
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/documents/{documentId}:
+    patch:
+      tags: [documents]
+      summary: Изменить название или категорию
+      security: [{ cookieAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/documentId" }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                category: { type: string }
+      responses:
+        "200": { description: Обновлено }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/documents/user/{username}:
+    get:
+      tags: [documents]
+      summary: Работы пользователя
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Список }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/documents/user/{username}/documents/{documentId}:
+    delete:
+      tags: [documents]
+      summary: Удалить свою работу
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema: { type: string }
+        - { $ref: "#/components/parameters/documentId" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/documents/{documentId}/analysis:
+    get:
+      tags: [analysis, moodle]
+      summary: Статус анализа документа
+      security:
+        - cookieAuth: []
+        - moodleApiKey: []
+        - moodleBearer: []
+      parameters:
+        - { $ref: "#/components/parameters/documentId" }
+        - in: query
+          name: username
+          schema: { type: string }
+          description: LDAP uid (для Moodle)
+      responses:
+        "200":
+          description: Статус
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalysisStatus" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/documents/{documentId}/analysis/viewed:
+    post:
+      tags: [analysis]
+      summary: Отметить результат просмотренным
+      security: [{ cookieAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/documentId" }]
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/documents/{documentId}/file:
+    get:
+      tags: [documents]
+      summary: Скачать исходный файл
+      security: [{ cookieAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/documentId" }]
+      responses:
+        "200":
+          description: Файл
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/documents/{documentId}/matches:
+    get:
+      tags: [documents]
+      summary: Заимствования для отчёта
+      security: [{ cookieAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/documentId" }]
+      responses:
+        "200": { description: Совпадения }
+        "409": { description: Документ ещё обрабатывается }
+
+  /api/documents/{documentId}/status:
+    patch:
+      tags: [documents]
+      summary: Сменить статус draft → final
+      security: [{ cookieAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/documentId" }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [draft, final] }
+      responses:
+        "200": { description: Обновлено }
+        "409": { description: processing / failed }
+
+  /api/analysis/state:
+    get:
+      tags: [analysis]
+      summary: Активная задача или непросмотренный результат
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: kind = active | unviewed_result | none
+        "401": { $ref: "#/components/responses/Error" }
+
+  /api/analysis/health:
+    get:
+      tags: [analysis, cron]
+      summary: Очередь analysis-worker
+      description: Если задан `CLEANUP_CRON_SECRET`, нужен заголовок `X-Cron-Secret` или `?secret=`.
+      security: [{ cronSecret: [] }]
+      parameters:
+        - in: query
+          name: secret
+          schema: { type: string }
+      responses:
+        "200": { description: queued / processing / failed24h }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /api/report:
+    post:
+      tags: [reports]
+      summary: Сгенерировать PDF из клиентских данных
+      description: Публичный эндпоинт без авторизации.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, uniquenessPercent]
+              properties:
+                filename: { type: string }
+                uniquenessPercent: { type: number }
+                documentId: { type: integer }
+                status: { type: string }
+                userId: { type: string }
+      responses:
+        "200":
+          description: PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /api/report/qr:
+    get:
+      tags: [reports]
+      summary: PNG QR-код
+      security: []
+      parameters:
+        - in: query
+          name: data
+          required: true
+          schema: { type: string }
+          description: URL для кодирования
+      responses:
+        "200":
+          description: PNG
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+
+  /api/report/verify:
+    get:
+      tags: [reports]
+      summary: Проверка QR (query)
+      security: [{ qrSignature: [] }]
+      parameters:
+        - in: query
+          name: documentId
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: sig
+          required: true
+          schema: { type: string }
+        - in: query
+          name: raw
+          schema: { type: string, example: "1" }
+      responses:
+        "200": { description: JSON при raw=1 }
+        "302": { description: Редирект на report.html }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/report/verify/{documentId}/{sig}:
+    get:
+      tags: [reports]
+      summary: Проверка QR (legacy path)
+      deprecated: true
+      security: []
+      parameters:
+        - { $ref: "#/components/parameters/documentId" }
+        - { $ref: "#/components/parameters/sigPath" }
+        - in: query
+          name: raw
+          schema: { type: string }
+      responses:
+        "200": { description: JSON }
+        "302": { description: Редирект }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/report/v/{documentId}/{sig}:
+    get:
+      tags: [reports]
+      summary: Проверка QR (актуальный path)
+      security: []
+      parameters:
+        - { $ref: "#/components/parameters/documentId" }
+        - { $ref: "#/components/parameters/sigPath" }
+        - in: query
+          name: raw
+          schema: { type: string }
+      responses:
+        "200": { description: JSON }
+        "302": { description: Редирект }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/report/{documentId}/download:
+    get:
+      tags: [reports]
+      summary: Скачать PDF-справку
+      security: [{ qrSignature: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/documentId" }
+        - { $ref: "#/components/parameters/sigQuery" }
+      responses:
+        "200":
+          description: PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+
+  /api/report/{documentId}/view:
+    get:
+      tags: [reports]
+      summary: Просмотр PDF-справки
+      security: [{ qrSignature: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/documentId" }
+        - { $ref: "#/components/parameters/sigQuery" }
+      responses:
+        "200":
+          description: PDF inline
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+
+  /api/report/{documentId}/original:
+    get:
+      tags: [reports]
+      summary: Исходный файл по QR
+      security: [{ qrSignature: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/documentId" }
+        - { $ref: "#/components/parameters/sigQuery" }
+      responses:
+        "200":
+          description: Файл
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+
+  /api/report/{documentId}/links:
+    get:
+      tags: [reports, moodle]
+      summary: Подписанные URL и QR для справки
+      security:
+        - cookieAuth: []
+        - moodleApiKey: []
+        - moodleBearer: []
+      parameters:
+        - { $ref: "#/components/parameters/documentId" }
+        - in: query
+          name: username
+          schema: { type: string }
+      responses:
+        "200":
+          description: Ссылки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  verifyUrl: { type: string }
+                  originalUrl: { type: string }
+                  reportPdfUrl: { type: string }
+                  verifyQrImage: { type: string }
+                  originalQrImage: { type: string }
+
+  /api/report/{documentId}/print-data:
+    get:
+      tags: [reports]
+      summary: JSON для HTML-справки
+      security:
+        - cookieAuth: []
+        - qrSignature: []
+      parameters:
+        - { $ref: "#/components/parameters/documentId" }
+        - { $ref: "#/components/parameters/sigQueryOptional" }
+      responses:
+        "200": { description: Данные печати }
+
+  /api/users/me:
+    get:
+      tags: [profile]
+      summary: Профиль
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200": { description: Пользователь }
+        "401": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [profile]
+      summary: Обновить профиль
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName: { type: string }
+                institution: { type: string }
+                faculty: { type: string }
+                facultyId: { type: string }
+                group: { type: string }
+                email: { type: string }
+      responses:
+        "200": { description: Обновлено }
+        "403": { description: Поле нельзя менять }
+
+  /api/directories:
+    get:
+      tags: [directories]
+      summary: Активные УО и факультеты
+      security: []
+      responses:
+        "200": { description: Справочник }
+
+  /api/document-types:
+    get:
+      tags: [directories]
+      summary: Активные типы работ УО
+      security: []
+      parameters:
+        - in: query
+          name: institutionId
+          schema: { type: string }
+        - in: query
+          name: institution
+          schema: { type: string }
+          description: Название УО
+      responses:
+        "200": { description: "types[]" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /api/admin/directories:
+    get:
+      tags: [admin, directories]
+      summary: Все УО и факультеты (включая неактивные)
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200": { description: "institutions[]" }
+    post:
+      tags: [admin, directories]
+      summary: CRUD УО и факультетов
+      description: |
+        `action`: addInstitution, updateInstitution, deactivateInstitution,
+        activateInstitution, deleteInstitution, addFaculty, updateFaculty,
+        deactivateFaculty, deleteFaculty, activateFaculty.
+        Мутации УО — только superadmin.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string }
+                institutionId: { type: string }
+                facultyId: { type: string }
+                name: { type: string }
+      responses:
+        "200": { description: Результат действия }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/admin/document-types:
+    get:
+      tags: [admin, directories]
+      summary: Типы работ
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: institutionId
+          schema: { type: string }
+      responses:
+        "200": { description: "types[]" }
+    post:
+      tags: [admin, directories]
+      summary: Создать тип работы
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [institutionId]
+              properties:
+                institutionId: { type: string }
+                displayName: { type: string }
+                name: { type: string }
+                description: { type: string }
+                isActive: { type: boolean }
+      responses:
+        "200": { description: type }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /api/admin/document-types/{id}:
+    patch:
+      tags: [admin, directories]
+      summary: Обновить тип работы
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+                name: { type: string }
+                description: { type: string }
+                isActive: { type: boolean }
+      responses:
+        "200": { description: type }
+        "400": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin, directories]
+      summary: Удалить тип работы
+      description: |
+        Если есть активные (не archived) работы с этим типом — 400 с текстом и числом.
+        Иначе физическое удаление. Архивные документы отвязываются (`documentTypeId` → NULL).
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Удалён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  unlinkedArchived: { type: integer }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /api/admin/users:
+    get:
+      tags: [admin]
+      summary: Список пользователей
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        "200": { description: "users[]" }
+    post:
+      tags: [admin]
+      summary: Создать пользователя
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+                role: { type: string }
+                email: { type: string }
+                fullName: { type: string }
+                institution: { type: string }
+                faculty: { type: string }
+                group: { type: string }
+      responses:
+        "200": { description: user }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /api/admin/users/{username}:
+    patch:
+      tags: [admin]
+      summary: Обновить пользователя
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password: { type: string }
+                role: { type: string }
+                additionalRoles:
+                  type: array
+                  items: { type: string }
+                email: { type: string }
+                fullName: { type: string }
+                institution: { type: string }
+                faculty: { type: string }
+                group: { type: string }
+      responses:
+        "200": { description: user }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Удалить пользователя
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { description: Нельзя удалить себя }
+
+  /api/admin/statistics:
+    get:
+      tags: [admin]
+      summary: Дашборд статистики
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/startDate" }
+        - { $ref: "#/components/parameters/endDate" }
+        - in: query
+          name: from
+          schema: { type: string }
+        - in: query
+          name: to
+          schema: { type: string }
+        - in: query
+          name: category
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: minUniqueness
+          schema: { type: integer }
+        - in: query
+          name: maxUniqueness
+          schema: { type: integer }
+        - in: query
+          name: minPlagiarism
+          schema: { type: integer }
+        - in: query
+          name: maxPlagiarism
+          schema: { type: integer }
+      responses:
+        "200": { description: statistics }
+
+  /api/admin/statistics/checks-by-category:
+    get:
+      tags: [admin]
+      summary: Проверки по категориям
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/startDate" }
+        - { $ref: "#/components/parameters/endDate" }
+      responses:
+        "200": { description: checksByCategory }
+
+  /api/admin/statistics/heatmap:
+    get:
+      tags: [admin]
+      summary: Тепловая карта загрузок
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/year" }
+        - { $ref: "#/components/parameters/status" }
+        - { $ref: "#/components/parameters/category" }
+      responses:
+        "200": { description: dailyCounts }
+
+  /api/admin/statistics/monthly-uploads:
+    get:
+      tags: [admin]
+      summary: Загрузки по месяцам
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/year" }
+        - { $ref: "#/components/parameters/status" }
+        - { $ref: "#/components/parameters/category" }
+      responses:
+        "200": { description: monthly }
+
+  /api/admin/statistics/originality-by-date:
+    get:
+      tags: [admin]
+      summary: Оригинальность по датам
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/startDate" }
+        - { $ref: "#/components/parameters/endDate" }
+        - { $ref: "#/components/parameters/status" }
+        - { $ref: "#/components/parameters/category" }
+      responses:
+        "200": { description: ranges }
+
+  /api/admin/statistics/originality-ranges:
+    get:
+      tags: [admin]
+      summary: Оригинальность по диапазонам
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/year" }
+        - { $ref: "#/components/parameters/status" }
+        - { $ref: "#/components/parameters/category" }
+      responses:
+        "200": { description: ranges }
+
+  /api/admin/statistics/processing-time-ranges:
+    get:
+      tags: [admin]
+      summary: Время обработки по диапазонам
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/year" }
+        - { $ref: "#/components/parameters/status" }
+        - { $ref: "#/components/parameters/category" }
+      responses:
+        "200": { description: ranges }
+
+  /api/admin/logs:
+    get:
+      tags: [admin]
+      summary: Журнал аудита
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: level
+          schema: { type: string, enum: [info, warning, error, debug] }
+      responses:
+        "200": { description: "logs[]" }
+
+  /api/admin/storage/stats:
+    get:
+      tags: [admin]
+      summary: Использование хранилища
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200": { description: stats }
+
+  /api/admin/cleanup:
+    post:
+      tags: [admin]
+      summary: Очистить архивные файлы вручную
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200": { description: purged / filesDeleted }
+
+  /api/cron/purge-archived:
+    post:
+      tags: [cron]
+      summary: Ночная очистка архива
+      security: [{ cronSecret: [] }]
+      responses:
+        "200": { description: purged }
+        "401": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: guard_session
+      description: HMAC-сессия после POST /api/auth/login
+    moodleApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Равен MOODLE_API_KEY (≥16 символов)
+    moodleBearer:
+      type: http
+      scheme: bearer
+      description: Тот же секрет, что MOODLE_API_KEY
+    cronSecret:
+      type: apiKey
+      in: header
+      name: X-Cron-Secret
+      description: Равен CLEANUP_CRON_SECRET
+    qrSignature:
+      type: apiKey
+      in: query
+      name: sig
+      description: HMAC подпись REPORT_ACCESS_SECRET
+
+  parameters:
+    documentId:
+      in: path
+      name: documentId
+      required: true
+      schema: { type: integer }
+    sigPath:
+      in: path
+      name: sig
+      required: true
+      schema: { type: string }
+    sigQuery:
+      in: query
+      name: sig
+      required: true
+      schema: { type: string }
+    sigQueryOptional:
+      in: query
+      name: sig
+      schema: { type: string }
+    startDate:
+      in: query
+      name: startDate
+      schema: { type: string, format: date }
+    endDate:
+      in: query
+      name: endDate
+      schema: { type: string, format: date }
+    year:
+      in: query
+      name: year
+      schema: { type: integer }
+    status:
+      in: query
+      name: status
+      schema: { type: string }
+    category:
+      in: query
+      name: category
+      schema: { type: string }
+
+  schemas:
+    Ok:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+    ErrorBody:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }
+        code: { type: string }
+    SessionUser:
+      type: object
+      properties:
+        username: { type: string }
+        role: { type: string, enum: [student, teacher, admin, superadmin] }
+        additionalRoles:
+          type: array
+          items: { type: string }
+        email: { type: string }
+        fullName: { type: string }
+        institution: { type: string }
+        institutionId: { type: string }
+        faculty: { type: string }
+        group: { type: string }
+        idleTimeoutSec: { type: integer }
+    AnalysisStatus:
+      type: object
+      properties:
+        success: { type: boolean }
+        documentId: { type: integer }
+        jobId: { type: integer }
+        jobStatus: { type: string }
+        documentStatus: { type: string }
+        title: { type: string }
+        filename: { type: string }
+        category: { type: string }
+        wordCount: { type: integer }
+        localPlagiarismPercent: { type: number }
+        originalityPercent: { type: number }
+        plagiarismPercent: { type: number }
+        plagiarismPercentMl: { type: number }
+        aiPercentMl: { type: number }
+        processingTimeMs: { type: integer }
+        lastError: { type: string, nullable: true }
+
+  responses:
+    Ok:
+      description: Успех
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Ok" }
+    Error:
+      description: Ошибка
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorBody" }

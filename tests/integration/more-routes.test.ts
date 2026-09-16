@@ -111,6 +111,29 @@ describe("upload / check / stats / reports", () => {
     }
   })
 
+  it("does not duplicate finalsByCategory slugs for superadmin across institutions", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      ...sampleUserRow,
+      username: "super1",
+      role: "superadmin",
+    })
+    prismaMock.documentType.findMany.mockResolvedValue([
+      { id: 1, institutionId: "bsuir", name: "lab", displayName: "Лабораторная работа", description: null, isActive: true },
+      { id: 2, institutionId: "bntu", name: "lab", displayName: "Лабораторная работа", description: null, isActive: true },
+      { id: 3, institutionId: "bsuir", name: "diploma", displayName: "Дипломная работа / проект", description: null, isActive: true },
+      { id: 4, institutionId: "bntu", name: "diploma", displayName: "Дипломная работа / проект", description: null, isActive: true },
+    ])
+    prismaMock.document.findMany.mockResolvedValue([
+      { ...sampleDocumentRow, status: "final", category: "lab" },
+    ])
+    const res = await adminStats(getRequest("http://x/api/admin/statistics", sessionCookie("super1", "superadmin")))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    const cats = (body.statistics?.finalsByCategory || []).map((row: { category: string }) => row.category)
+    expect(cats.length).toBeGreaterThan(0)
+    expect(new Set(cats).size).toBe(cats.length)
+  })
+
   it("lists documents and print-data", async () => {
     const list = await documentsIndex(getRequest("http://x/api/documents", admin()))
     expect([200, 401, 403]).toContain(list.status)

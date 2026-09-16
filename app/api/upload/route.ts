@@ -9,7 +9,7 @@ import { resolveCheckInstitutionScope } from "@/lib/check-institution-scope"
 import { resolveFacultyId } from "@/lib/directories"
 import { logInfo, logError } from "@/lib/logger"
 import { formatApiUploadError } from "@/lib/prisma-error-message"
-import { requireSessionApi } from "@/lib/require-session-api"
+import { requireSessionOrMoodleApi } from "@/lib/require-moodle-api"
 import { getUserByUsername } from "@/lib/user-storage"
 
 function deleteSavedUpload(category: string, savedFilename: string) {
@@ -31,10 +31,14 @@ export async function POST(request: NextRequest) {
   let normCategory = "uncategorized"
 
   try {
-    const gate = await requireSessionApi(request)
+    const formData = await request.formData()
+    const gate = await requireSessionOrMoodleApi(request, {
+      username: formData.get("username") as string | null,
+      fullName: formData.get("fullName") as string | null,
+      institution: formData.get("institution") as string | null,
+    })
     if (!gate.ok) return gate.response
 
-    const formData = await request.formData()
     const file = formData.get("file") as File | null
     const title = formData.get("title") as string
     const category = formData.get("category") as string | null

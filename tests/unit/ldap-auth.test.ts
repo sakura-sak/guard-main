@@ -6,6 +6,12 @@ const ldapMocks = vi.hoisted(() => ({
   unbind: vi.fn(),
 }))
 
+const loggerMocks = vi.hoisted(() => ({
+  logInfo: vi.fn(),
+  logError: vi.fn(),
+  logWarning: vi.fn(),
+}))
+
 vi.mock("ldapts", () => ({
   Client: class {
     bind = ldapMocks.bind
@@ -13,6 +19,8 @@ vi.mock("ldapts", () => ({
     unbind = ldapMocks.unbind
   },
 }))
+
+vi.mock("@/lib/logger", () => loggerMocks)
 
 import { authenticateLDAP, getUserInfoLDAP } from "@/lib/ldap"
 
@@ -38,6 +46,9 @@ describe("LDAP bind and search", () => {
         },
       ],
     })
+    loggerMocks.logInfo.mockReset()
+    loggerMocks.logError.mockReset()
+    loggerMocks.logWarning.mockReset()
   })
 
   afterEach(() => {
@@ -55,6 +66,13 @@ describe("LDAP bind and search", () => {
   it("rejects unknown users and bad passwords", async () => {
     ldapMocks.search.mockResolvedValueOnce({ searchEntries: [] })
     expect((await authenticateLDAP("nobody", "x")).success).toBe(false)
+    expect(loggerMocks.logInfo).toHaveBeenCalledWith(
+      "Пользователь не найден в LDAP, проверяем локальную базу",
+      "nobody",
+      undefined,
+      "ldap",
+    )
+    expect(loggerMocks.logError).not.toHaveBeenCalled()
 
     ldapMocks.search.mockResolvedValueOnce({
       searchEntries: [{ dn: "uid=x,ou=stud,dc=bsuir,dc=by", uid: "x" }],
@@ -63,6 +81,12 @@ describe("LDAP bind and search", () => {
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error("invalid creds"))
     expect((await authenticateLDAP("x", "wrong")).success).toBe(false)
+    expect(loggerMocks.logInfo).toHaveBeenCalledWith(
+      "LDAP неверный пароль, проверяем локальную базу",
+      "x",
+      undefined,
+      "ldap",
+    )
   })
 
   it("loads user info without password check", async () => {

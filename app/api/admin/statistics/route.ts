@@ -170,7 +170,18 @@ export async function GET(request: NextRequest) {
       totalChecks,
     }
 
-    const finalsByCategory = docTypes.map((t) => ({
+    const uniqueDocTypes = (() => {
+      const seen = new Set<string>()
+      const out: typeof docTypes = []
+      for (const t of docTypes) {
+        if (seen.has(t.name)) continue
+        seen.add(t.name)
+        out.push(t)
+      }
+      return out
+    })()
+
+    const finalsByCategory = uniqueDocTypes.map((t) => ({
       category: t.name,
       categoryLabel: t.displayName,
       count: finals.filter((d) => d.category === t.name).length,
@@ -218,7 +229,7 @@ export async function GET(request: NextRequest) {
     })
 
     const sortedDates = [...byDateCategory.keys()].sort()
-    const categoryKeys = docTypes.map((t) => t.name)
+    const categoryKeys = uniqueDocTypes.map((t) => t.name)
     const originalityByDateByCategory = sortedDates.map((dateStr) => {
       const [y, m, d] = dateStr.split("-").map(Number)
       const formattedDate = `${d}.${m < 10 ? "0" + m : m}`

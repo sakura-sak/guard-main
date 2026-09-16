@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getDocumentByIdFromDb } from "@/lib/local-storage"
 import { buildReportQrLinks, resolvePublicBaseUrl } from "@/lib/report-qr-links"
 import { qrPngDataUrl } from "@/lib/report-qr-images"
-import { requireSessionApi } from "@/lib/require-session-api"
+import { requireSessionOrMoodleApi } from "@/lib/require-moodle-api"
 
 function resolveBaseUrlForLinks(request: NextRequest): string {
   const fromHelper = resolvePublicBaseUrl(request)
@@ -23,7 +23,7 @@ export async function GET(
   { params }: { params: Promise<{ documentId: string }> },
 ) {
   try {
-    const gate = await requireSessionApi(request)
+    const gate = await requireSessionOrMoodleApi(request)
     if (!gate.ok) return gate.response
 
     const { documentId } = await params

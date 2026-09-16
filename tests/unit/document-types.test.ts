@@ -10,6 +10,7 @@ import {
   resolveDocumentTypeId,
   slugifyDocumentTypeName,
   updateDocumentType,
+  removeDocumentType,
   deactivateDocumentType,
   deleteDocumentType,
 } from "@/lib/document-types"
@@ -74,7 +75,7 @@ describe("document-types", () => {
     expect((await createDocumentType({ institutionId: "", displayName: "X" })).success).toBe(false)
   })
 
-  it("updates and deactivates a type", async () => {
+  it("updates a type", async () => {
     prismaMock.document.count.mockResolvedValue(0)
     prismaMock.documentType.update.mockResolvedValue({ ...typeRow, displayName: "Лаб." })
     const updated = await updateDocumentType(3, { displayName: "Лаб.", description: "x", isActive: true }, "super")
@@ -82,11 +83,25 @@ describe("document-types", () => {
     expect((await updateDocumentType(3, { displayName: "" })).success).toBe(false)
     prismaMock.documentType.findUnique.mockResolvedValueOnce(null)
     expect((await updateDocumentType(99, { displayName: "X" })).success).toBe(false)
+  })
 
-    const deactivated = await deactivateDocumentType(3, "super")
-    expect(deactivated.success).toBe(true)
-    prismaMock.document.count.mockResolvedValueOnce(4)
-    expect((await deactivateDocumentType(3)).success).toBe(false)
+  it("refuses to delete a type used by active documents", async () => {
+    prismaMock.document.count.mockResolvedValueOnce(3).mockResolvedValueOnce(1)
+    const blocked = await removeDocumentType(3, "super")
+    expect(blocked.success).toBe(false)
+    expect(blocked.error).toMatch(/используется в 3 работах/)
+    expect(blocked.error).toMatch(/ещё 1 в архиве/)
+    expect(prismaMock.documentType.delete).not.toHaveBeenCalled()
+  })
+
+  it("hard-deletes a type used only by archived documents", async () => {
+    prismaMock.document.count.mockResolvedValueOnce(0).mockResolvedValueOnce(2)
+    prismaMock.documentType.delete.mockResolvedValue({ ...typeRow })
+    const removed = await removeDocumentType(3, "super")
+    expect(removed.success).toBe(true)
+    expect(removed.unlinkedArchived).toBe(2)
+    expect(prismaMock.documentType.delete).toHaveBeenCalledWith({ where: { id: 3 } })
+    expect((await deactivateDocumentType(3)).success).toBe(true)
     expect((await deleteDocumentType(3)).success).toBe(true)
   })
 })

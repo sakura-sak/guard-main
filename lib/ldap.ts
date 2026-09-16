@@ -3,7 +3,7 @@
  */
 
 import { Client, SearchEntry } from "ldapts"
-import { logInfo, logError } from "./logger"
+import { logInfo, logError, logWarning } from "./logger"
 import type { User, UserRole } from "./auth"
 
 export interface LDAPConfig {
@@ -246,12 +246,18 @@ export async function authenticateLDAP(
         }
       } catch (searchError) {
         // Продолжаем поиск в следующей базе
-        logError(`Ошибка поиска в базе ${searchBase}`, searchError instanceof Error ? searchError.message : String(searchError), username, undefined, "ldap")
+        logWarning(
+          `Ошибка поиска в базе ${searchBase}`,
+          username,
+          undefined,
+          "ldap",
+          { error: searchError instanceof Error ? searchError.message : String(searchError) },
+        )
       }
     }
 
     if (!searchResult || !userEntry) {
-      logError("LDAP пользователь не найден", `User not found in any search base: ${username}`, username, undefined, "ldap")
+      logInfo("Пользователь не найден в LDAP, проверяем локальную базу", username, undefined, "ldap")
       return { success: false, error: "Пользователь не найден в LDAP" }
     }
 
@@ -312,7 +318,7 @@ export async function authenticateLDAP(
       logInfo("LDAP аутентификация успешна", username, undefined, "ldap")
       return { success: true, user: ldapUser }
     } catch (bindError) {
-      logError("LDAP неверный пароль", `Invalid password for ${username}`, username, undefined, "ldap")
+      logInfo("LDAP неверный пароль, проверяем локальную базу", username, undefined, "ldap")
       return { success: false, error: "Неверный пароль" }
     } finally {
       await client.unbind()

@@ -119,6 +119,7 @@ a { color: inherit; text-decoration: none; }
   width: 100%; padding: 10px 12px; border: none; cursor: pointer;
   background: transparent; color: var(--ink); border-radius: 10px;
   font-size: 14px; font-weight: 500; font-family: inherit; text-align: left;
+  text-decoration: none; box-sizing: border-box;
 }
 .user-menu__item:hover { background: var(--bg-2); color: var(--primary); }
 
@@ -2318,7 +2319,9 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     }
     if (typesRes.ok && typesRes.data.types) {
       __docTypes = typesRes.data.types;
-      appConfig.types = __docTypes.filter((t) => t.isActive !== false).map((t) => t.displayName || t.name);
+      appConfig.types = [...new Set(
+        __docTypes.filter((t) => t.isActive !== false).map((t) => t.displayName || t.name),
+      )];
       if (ApApi.setCategoryLabelsFromTypes) ApApi.setCategoryLabelsFromTypes(__docTypes);
     }
     populateUeSelectorsFromDb();
@@ -2539,7 +2542,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         const c = (appConfig.typeColors && appConfig.typeColors[v]) || typeColorBase[v] || fallbackPalette[i % fallbackPalette.length];
         const actions = inactive
           ? `<button class="settings-list__restore" type="button" data-activate="type" data-id="${dt.id}" data-value="${escapeHtml(v)}" title="Активировать">Включить</button>`
-          : `<button class="settings-list__remove" type="button" data-remove="type" data-id="${dt.id}" data-value="${escapeHtml(v)}" title="Деактивировать" aria-label="Деактивировать">
+          : `<button class="settings-list__remove" type="button" data-remove="type" data-id="${dt.id}" data-value="${escapeHtml(v)}" title="Удалить" aria-label="Удалить">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
           </button>`;
         return `<div class="settings-list__item ${inactive ? 'is-inactive' : ''}">
@@ -2683,9 +2686,11 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         const id = Number(rmBtn.dataset.id);
         const dt = Number.isFinite(id) ? __docTypes.find((t) => t.id === id) : __docTypes.find((t) => (t.displayName || t.name) === v);
         if (!dt) return;
+        const label = dt.displayName || dt.name;
+        if (!confirm(`Удалить тип «${label}»?`)) return;
         const { ok, data } = await ApApi.deleteAdminDocumentType(dt.id);
         if (!ok || !data.success) {
-          alert(data.error || 'Не удалось деактивировать тип работы');
+          alert(data.error || 'Не удалось удалить тип работы');
           return;
         }
         await loadAppConfigFromApi();
@@ -4876,7 +4881,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   const typeShort = {}, typePlural = {}, typeColor = {};
   function refreshDashboardTypes() {
     if (appConfig.types && appConfig.types.length) {
-      typesAll = appConfig.types.slice();
+      typesAll = [...new Set(appConfig.types)];
     } else {
       const fromDocs = [...new Set(documents.map((d) => d.type).filter((t) => t && t !== '—'))];
       typesAll = fromDocs.length ? fromDocs : ['Прочее'];

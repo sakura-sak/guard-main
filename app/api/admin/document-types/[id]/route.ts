@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { deactivateDocumentType, updateDocumentType } from "@/lib/document-types"
+import { removeDocumentType, updateDocumentType } from "@/lib/document-types"
 import { logError, logInfo } from "@/lib/logger"
 import { requireSuperAdminApi } from "@/lib/require-admin-api"
 
@@ -44,7 +44,7 @@ export async function PATCH(
   }
 }
 
-/** Soft delete: sets isActive=false (blocked if type is referenced by documents). */
+/** Hard delete when no active documents use the type. */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -59,21 +59,24 @@ export async function DELETE(
   }
 
   try {
-    const result = await deactivateDocumentType(id, gate.username)
+    const result = await removeDocumentType(id, gate.username)
     if (!result.success) {
       return NextResponse.json({ success: false, error: result.error }, { status: 400 })
     }
 
-    logInfo("Тип работы деактивирован", gate.username, "admin", "deactivate_document_type", { typeId: id })
-    return NextResponse.json({ success: true })
+    logInfo("Тип работы удалён", gate.username, "admin", "delete_document_type", {
+      typeId: id,
+      unlinkedArchived: result.unlinkedArchived ?? 0,
+    })
+    return NextResponse.json({ success: true, unlinkedArchived: result.unlinkedArchived ?? 0 })
   } catch (error) {
     logError(
-      "Ошибка при деактивации типа работы",
+      "Ошибка при удалении типа работы",
       error instanceof Error ? error : String(error),
       gate.username,
       "admin",
-      "deactivate_document_type",
+      "delete_document_type",
     )
-    return NextResponse.json({ success: false, error: "Ошибка при деактивации типа работы" }, { status: 500 })
+    return NextResponse.json({ success: false, error: "Ошибка при удалении типа работы" }, { status: 500 })
   }
 }

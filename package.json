@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "start": "next start",
+    "api:docs": "tsx scripts/build-api-docs.ts",
     "analysis-worker": "tsx scripts/analysis-worker.ts",
     "db:backfill-document-types": "tsx scripts/backfill-document-type-ids.ts",
     "db:backfill-reports": "tsx scripts/backfill-reports.ts"

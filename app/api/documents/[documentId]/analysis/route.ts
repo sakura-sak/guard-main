@@ -1,12 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDocumentAnalysisState } from "@/lib/analysis-jobs"
-import { requireSessionApi } from "@/lib/require-session-api"
+import { requireSessionOrMoodleApi } from "@/lib/require-moodle-api"
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ documentId: string }> },
 ) {
-  const gate = await requireSessionApi(request)
+  const gate = await requireSessionOrMoodleApi(request)
   if (!gate.ok) return gate.response
 
   const { documentId } = await params
