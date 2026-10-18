@@ -1392,7 +1392,7 @@ a { color: inherit; text-decoration: none; }
       if (__isSuperAdmin) resetWorkTypeSelect();
       return;
     }
-    __docTypeOptions = types.map(normalizeTypeOption);
+    __docTypeOptions = types.map(normalizeTypeOption).filter((t) => t.name !== 'seo');
     menu.innerHTML = __docTypeOptions.map((t) => {
       const slug = String(t.name || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
       const label = String(t.displayName || t.name || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');

@@ -76,14 +76,15 @@ describe("directories", () => {
   })
 
   it("adds a faculty and deactivates it", async () => {
-    prismaMock.faculty.findUnique.mockResolvedValueOnce(null)
+    prismaMock.faculty.findFirst.mockResolvedValueOnce(null)
     prismaMock.faculty.create.mockResolvedValueOnce({
-      id: "novyi-fakultet",
+      id: "bsuir__новый-факультет",
       name: "Новый факультет",
       isActive: true,
     })
     const added = await addFaculty("bsuir", "Новый факультет", "admin")
     expect(added.success).toBe(true)
+    expect(added.faculty?.id).toBe("bsuir__новый-факультет")
     prismaMock.faculty.findFirst.mockResolvedValue({
       id: "fksis",
       name: "ФКСиС",
@@ -91,6 +92,32 @@ describe("directories", () => {
       institutionId: "bsuir",
     })
     expect((await deactivateFaculty("bsuir", "fksis", "admin")).success).toBe(true)
+  })
+
+  it("allows the same faculty name in another institution", async () => {
+    prismaMock.institution.findUnique.mockResolvedValue({ id: "bntu", name: "БНТУ", isActive: true })
+    prismaMock.faculty.findFirst.mockResolvedValueOnce(null)
+    prismaMock.faculty.create.mockResolvedValueOnce({
+      id: "bntu__фксис",
+      name: "ФКСиС",
+      isActive: true,
+      institutionId: "bntu",
+    })
+    const added = await addFaculty("bntu", "ФКСиС", "admin")
+    expect(added.success).toBe(true)
+    expect(added.faculty?.id).toBe("bntu__фксис")
+  })
+
+  it("rejects a duplicate faculty name in the same institution", async () => {
+    prismaMock.faculty.findFirst.mockResolvedValueOnce({
+      id: "fksis",
+      name: "ФКСиС",
+      isActive: true,
+      institutionId: "bsuir",
+    })
+    const added = await addFaculty("bsuir", "ФКСиС", "admin")
+    expect(added.success).toBe(false)
+    expect(added.error).toMatch(/уже существует/)
   })
 
   it("returns institution by id", async () => {

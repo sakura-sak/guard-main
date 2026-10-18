@@ -379,16 +379,18 @@ export async function getDocumentsForComparison(
 
   const excludeUser = excludeUserId?.trim()
   const where: {
-    category: { in: string[] }
+    category?: { in: string[] }
     status: { in: DocumentStatus[] }
     institutionId: string
     id?: { not: number }
     OR?: Array<{ userId: null } | { userId: { not: string } }>
   } = {
-    category: { in: categories },
     status: { in: ["draft", "final"] },
     institutionId: instId,
   }
+  // SEO works are compared with every category of this institution.
+  // Site works keep their own pool, so `seo` never enters it.
+  if (categories) where.category = { in: categories }
   if (typeof excludeDocumentId === "number") where.id = { not: excludeDocumentId }
   if (excludeUser) {
     where.OR = [{ userId: null }, { userId: { not: excludeUser } }]

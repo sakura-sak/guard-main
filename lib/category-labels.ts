@@ -10,6 +10,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   lab: "Лабораторная работа",
   practice: "Практическая работа",
   article: "Статьи",
+  seo: "СЭО",
   uncategorized: "Не указано",
 }
 

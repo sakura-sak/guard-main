@@ -9,6 +9,7 @@ import { resolveCheckInstitutionScope } from "@/lib/check-institution-scope"
 import { resolveFacultyId } from "@/lib/directories"
 import { logInfo, logError } from "@/lib/logger"
 import { formatApiUploadError } from "@/lib/prisma-error-message"
+import { SEO_CATEGORY } from "@/lib/comparison-scope"
 import { requireSessionOrMoodleApi } from "@/lib/require-moodle-api"
 import { getUserByUsername } from "@/lib/user-storage"
 
@@ -72,6 +73,14 @@ export async function POST(request: NextRequest) {
 
     normCategory =
       (category || "uncategorized").replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_").trim() || "uncategorized"
+    if (gate.viaMoodle) {
+      normCategory = SEO_CATEGORY
+    } else if (normCategory === SEO_CATEGORY) {
+      return NextResponse.json(
+        { success: false, error: "Тип «СЭО» назначается только работам, загруженным из СЭО" },
+        { status: 400 },
+      )
+    }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer())
     savedFilename = saveFileToDisk(fileBuffer, file.name, normCategory)

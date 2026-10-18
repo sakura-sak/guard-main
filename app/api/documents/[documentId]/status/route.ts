@@ -1,12 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDocumentByIdFromDb, updateDocumentStatus, saveReportPdf, deleteReportPdf } from "@/lib/local-storage"
-import { generatePDFReport } from "@/lib/pdf-report"
-import { buildReportPayloadForDocument } from "@/lib/report-payload-for-document"
+import { getDocumentByIdFromDb, updateDocumentStatus } from "@/lib/local-storage"
+import { generateAndSaveFinalReport } from "@/lib/finalize-report"
 import { logInfo, logError } from "@/lib/logger"
 import type { DocumentStatus } from "@/lib/local-storage"
 import { requireSessionApi } from "@/lib/require-session-api"
-
-import { resolvePublicBaseUrl } from "@/lib/report-qr-links"
 
 /**
  * PATCH /api/documents/:documentId/status
@@ -75,24 +72,7 @@ export async function PATCH(
 
     if (updated) {
       if (status === "final") {
-        try {
-          await deleteReportPdf(id)
-          const payload = await buildReportPayloadForDocument(id, resolvePublicBaseUrl(request))
-          if (!payload) {
-            throw new Error(`Документ ${id} не найден при сборке PDF`)
-          }
-          const pdfBytes = await generatePDFReport(payload)
-          await saveReportPdf(id, Buffer.from(pdfBytes), { generatedById: userId })
-        } catch (e) {
-          // Не блокируем смену статуса, если генерация отчета не удалась
-          logError(
-            "Не удалось сгенерировать отчет при финализации из профиля",
-            e instanceof Error ? e.message : String(e),
-            userId,
-            undefined,
-            "document_update",
-          )
-        }
+        await generateAndSaveFinalReport({ documentId: id, generatedById: userId, request })
       }
 
       logInfo(

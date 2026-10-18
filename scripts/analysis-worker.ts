@@ -18,7 +18,9 @@ import {
   renewAnalysisJobLease,
   type ClaimedAnalysisJob,
 } from "@/lib/analysis-jobs"
-import { getMlJob, MlAnalysisError, submitMlJob } from "@/lib/analysis-client"
+import { analyzeWithMlServiceOrThrow, getMlJob, MlAnalysisError, submitMlJob } from "@/lib/analysis-client"
+import { isSeoCategory } from "@/lib/comparison-scope"
+import { generateAndSaveFinalReport } from "@/lib/finalize-report"
 import { logError, logInfo } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
 
@@ -100,6 +102,44 @@ async function ensureMlJob(job: ClaimedAnalysisJob, startedAt: number): Promise<
   throw new MlAnalysisError("Worker shutting down before ML submit", true)
 }
 
+async function completeViaSyncAnalyze(job: ClaimedAnalysisJob, startedAt: number): Promise<void> {
+  const excludeDocumentIds = await siblingDocumentIds(job.userId, job.documentId)
+  const result = await analyzeWithMlServiceOrThrow(job.content, {
+    filename: job.filename || "document.txt",
+    documentId: job.documentId,
+    institutionId: job.institutionId || undefined,
+    category: job.category,
+    userId: job.userId,
+    excludeDocumentIds,
+  })
+  await completeAnalysisJob({
+    jobId: job.id,
+    documentId: job.documentId,
+    plagiarismPercentMl: result.plagiarismPercent,
+    aiPercentMl: result.aiPercent,
+    localPlagiarismPercent: job.localPlagiarismPercent,
+    processingTimeMs: Date.now() - startedAt,
+    semanticMatches: result.semanticMatches,
+    category: job.category,
+  })
+  if (isSeoCategory(job.category)) {
+    await generateAndSaveFinalReport({
+      documentId: job.documentId,
+      generatedById: job.userId,
+    })
+  }
+  logInfo("Analysis job completed via /v1/analyze", job.userId, undefined, "analysis_worker", {
+    workerId: WORKER_ID,
+    jobId: job.id,
+    documentId: job.documentId,
+    durationMs: Date.now() - startedAt,
+    plagiarismPercent: result.plagiarismPercent,
+    aiPercent: result.aiPercent,
+    semanticMatchCount: result.semanticMatches.length,
+    byType: result.byType,
+  })
+}
+
 async function runClaimedJob(job: ClaimedAnalysisJob): Promise<void> {
   const startedAt = Date.now()
   logInfo("Analysis job claimed", job.userId, undefined, "analysis_worker", {
@@ -112,7 +152,21 @@ async function runClaimedJob(job: ClaimedAnalysisJob): Promise<void> {
   })
 
   try {
-    let mlJobId = await ensureMlJob(job, startedAt)
+    let mlJobId: string
+    try {
+      mlJobId = await ensureMlJob(job, startedAt)
+    } catch (e) {
+      // Старый образ analysis: есть /health и /v1/analyze, нет очереди /v1/jobs.
+      if (e instanceof MlAnalysisError && e.statusCode === 404) {
+        logInfo("ML /v1/jobs missing — falling back to /v1/analyze", job.userId, undefined, "analysis_worker", {
+          jobId: job.id,
+          documentId: job.documentId,
+        })
+        await completeViaSyncAnalyze(job, startedAt)
+        return
+      }
+      throw e
+    }
 
     while (!shuttingDown) {
       if (Date.now() - startedAt > JOB_WAIT_MS) {
@@ -173,7 +227,14 @@ async function runClaimedJob(job: ClaimedAnalysisJob): Promise<void> {
           localPlagiarismPercent: job.localPlagiarismPercent,
           processingTimeMs: Date.now() - startedAt,
           semanticMatches: status.result.semanticMatches,
+          category: job.category,
         })
+        if (isSeoCategory(job.category)) {
+          await generateAndSaveFinalReport({
+            documentId: job.documentId,
+            generatedById: job.userId,
+          })
+        }
         logInfo("Analysis job completed", job.userId, undefined, "analysis_worker", {
           workerId: WORKER_ID,
           jobId: job.id,

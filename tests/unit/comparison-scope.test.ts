@@ -16,4 +16,8 @@ describe("comparisonCategories", () => {
   it("normalizes dirty slugs the same way as upload", () => {
     expect(comparisonCategories("lab!!!")).toEqual(["lab___"])
   })
+
+  it("compares a SEO work with every category of the institution", () => {
+    expect(comparisonCategories("seo")).toBeNull()
+  })
 })

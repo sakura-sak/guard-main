@@ -74,6 +74,7 @@ export async function resolveDocumentTypeId(
   if (!slug || slug === "uncategorized") return null
 
   await ensureDocumentTypesForInstitution(instId)
+  if (slug === "seo") await ensureSeoDocumentType(instId)
 
   const row = await prisma.documentType.findUnique({
     where: { institutionId_name: { institutionId: instId, name: slug } },
@@ -131,6 +132,25 @@ async function documentTypeUsageByStatus(id: number): Promise<{ active: number; 
     prisma.document.count({ where: { documentTypeId: id, status: "archived" } }),
   ])
   return { active, archived }
+}
+
+/** Moodle submissions use this type even when the institution already has a catalog. */
+export async function ensureSeoDocumentType(institutionId: string): Promise<void> {
+  const instId = institutionId.trim()
+  if (!instId) return
+  const existing = await prisma.documentType.findUnique({
+    where: { institutionId_name: { institutionId: instId, name: "seo" } },
+    select: { id: true },
+  })
+  if (existing) return
+  await prisma.documentType.create({
+    data: {
+      institutionId: instId,
+      name: "seo",
+      displayName: "СЭО",
+      isActive: true,
+    },
+  })
 }
 
 /** Seed default types for one institution when it has none. */

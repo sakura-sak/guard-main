@@ -95,8 +95,8 @@
       throw new Error(`Неподдерживаемый формат: ${ext}`);
     }
 
-    // Basic cleanup (mirrors lib/file-parser.ts)
-    text = text.replace(/\s+/g, ' ').replace(/\n\s*\n/g, '\n\n').trim();
+    // Basic cleanup (mirrors lib/file-parser.ts). Keep newlines for title/TOC stripping.
+    text = text.replace(/[^\S\n]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     const wordCount = text.split(/\s+/).filter((w) => w.length > 0).length;
 
     return { text, wordCount, filename: file.name, fileType: ext === 'pdf' ? 'pdf' : 'word' };

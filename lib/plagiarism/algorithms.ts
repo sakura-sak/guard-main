@@ -27,20 +27,24 @@ export function preprocessText(text: string): string {
     .trim()
 }
 
+// \b в JS без флага u не видит кириллицу, поэтому границы слов — через \p{L}.
+const WORD_BEFORE = "(?<![\\p{L}\\p{N}_])"
+const WORD_AFTER = "(?![\\p{L}\\p{N}_])"
+
 const COVER_LINE_PATTERNS = [
-  /министерств[оа]\s+образования/i,
-  /республики\s+беларусь/i,
-  /учреждение\s+образования/i,
-  /белорусск(?:ий|ого)\s+государственн(?:ый|ого)\s+университет/i,
-  /информатики\s+и\s+радиоэлектроники/i,
-  /\bбгуир\b/i,
-  /^кафедр[аы]\b/i,
-  /учебная\s+дисциплина/i,
-  /отч[её]т\s+по\s+лабораторной\s+работе/i,
-  /\bлабораторная\s+работа\s*№?\s*\d*/i,
-  /\bвыполнил\b/i,
-  /\bпроверил\b/i,
-  /^минск\b/i,
+  /министерств[оа]\s+образования/iu,
+  /республики\s+беларусь/iu,
+  /учреждение\s+образования/iu,
+  /белорусск(?:ий|ого)\s+государственн(?:ый|ого)\s+университет/iu,
+  /информатики\s+и\s+радиоэлектроники/iu,
+  new RegExp(`${WORD_BEFORE}бгуир${WORD_AFTER}`, "iu"),
+  new RegExp(`${WORD_BEFORE}кафедр[аы]${WORD_AFTER}`, "iu"),
+  /учебная\s+дисциплина/iu,
+  /отч[её]т\s+по\s+лабораторной\s+работе/iu,
+  new RegExp(`${WORD_BEFORE}лабораторная\\s+работа\\s*№?\\s*\\d*`, "iu"),
+  new RegExp(`${WORD_BEFORE}выполнил(?:а|и)?${WORD_AFTER}`, "iu"),
+  new RegExp(`${WORD_BEFORE}проверил(?:а)?${WORD_AFTER}`, "iu"),
+  new RegExp(`${WORD_BEFORE}минск${WORD_AFTER}`, "iu"),
 ]
 
 const CONTENT_START_MARKERS = [
@@ -68,7 +72,59 @@ const FIGURE_REFERENCE_PATTERNS = [
 ]
 
 function countCoverMarkers(text: string): number {
-  return COVER_LINE_PATTERNS.reduce((count, pattern) => count + (pattern.test(text) ? 1 : 0), 0)
+  return COVER_LINE_PATTERNS.reduce((count, pattern) => {
+    pattern.lastIndex = 0
+    return count + (pattern.test(text) ? 1 : 0)
+  }, 0)
+}
+
+/** Один вид пробелов для PDF и Word: без переносов строк и лишних пробелов. */
+export function canonicalizeForStorage(text: string): string {
+  return text
+    .replace(/\u00ad/g, "")
+    .replace(/[\u200b-\u200d\ufeff]/g, "")
+    .replace(/(\p{L})-\s*\n\s*(\p{L})/gu, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function isWordBoundStart(text: string, index: number): boolean {
+  if (index <= 0) return true
+  return !/[\p{L}\p{N}_]/u.test(text[index - 1] || "")
+}
+
+function isWordBoundEnd(text: string, index: number): boolean {
+  if (index >= text.length) return true
+  return !/[\p{L}\p{N}_]/u.test(text[index] || "")
+}
+
+/** Пункт оглавления сразу после заголовка: «Введение ........ 3». */
+function isTocStyleMatch(text: string, index: number, markerLength: number): boolean {
+  const after = text.slice(index + markerLength)
+  return /^\s*[\.…]{2,}\s*\d{1,4}(?:\s|$)/u.test(after)
+}
+
+function findContentStartIndex(text: string): number | null {
+  const window = text.slice(0, 16000)
+  const lower = window.toLowerCase()
+  if (countCoverMarkers(lower) < 3) return null
+
+  let best = -1
+  for (const marker of CONTENT_START_MARKERS) {
+    let from = 0
+    while (from < lower.length) {
+      const index = lower.indexOf(marker, from)
+      if (index < 0) break
+      const end = index + marker.length
+      if (!isWordBoundStart(window, index) || !isWordBoundEnd(window, end) || isTocStyleMatch(window, index, marker.length)) {
+        from = end
+        continue
+      }
+      if (best < 0 || index < best) best = index
+      break
+    }
+  }
+  return best >= 0 ? best : null
 }
 
 function stripFigureReferences(text: string): string {
@@ -93,24 +149,52 @@ export function isLikelyBoilerplateText(text: string): boolean {
 }
 
 function stripLeadingCoverBlock(text: string): string {
-  const normalizedForSearch = text.toLowerCase().replace(/\s+/g, " ")
-  const firstWindow = normalizedForSearch.slice(0, 5000)
-  const hasCover = countCoverMarkers(firstWindow) >= 3
-  if (!hasCover) return text
+  const start = findContentStartIndex(text)
+  if (start == null || start < 1) return text
+  return text.slice(start)
+}
 
-  const marker = CONTENT_START_MARKERS
-    .map((m) => ({ marker: m, index: firstWindow.indexOf(m) }))
-    .filter((m) => m.index >= 0)
-    .sort((a, b) => a.index - b.index)[0]
+function stripFlatContentsBlock(text: string): string {
+  return text.replace(
+    /(?:^|\s)(?:содержание|оглавление)(?:\s+\S.{0,100}?(?:\.{2,}|\s)\d{1,4})+/giu,
+    " ",
+  )
+}
 
-  if (!marker || marker.index < 100 || marker.index > 4500) return text
+function stripTrailingAppendix(text: string): string {
+  const halfway = Math.floor(text.length / 2)
+  const tail = text.slice(halfway)
+  const match = tail.match(/\sприложени[ея]\s+(?:№\s*)?(?:[\p{L}](?![\p{L}])|\d{1,3}(?!\d))/iu)
+  if (!match || match.index == null) return text
+  return text.slice(0, halfway + match.index).trim()
+}
 
-  const flexibleMarker = marker.marker
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/\s+/g, "\\s+")
-  const originalMarkerMatch = new RegExp(flexibleMarker, "i").exec(text.slice(0, 6000))
-  if (!originalMarkerMatch?.index) return text
-  return text.slice(originalMarkerMatch.index)
+function isContentsHeading(line: string): boolean {
+  return /^\s*(?:содержание|оглавление)\s*$/iu.test(line)
+}
+
+/** Пункт оглавления: «Введение ........ 3» или «1. Теория 5». */
+function isContentsEntry(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed) return true
+  return /(?:\.{2,}|\s)\d{1,4}\s*$/.test(trimmed)
+}
+
+function isContentHeading(line: string): boolean {
+  const lower = line.trim().toLowerCase()
+  return CONTENT_START_MARKERS.some(
+    (marker) => lower === marker || lower.startsWith(`${marker} `) || lower.startsWith(`${marker}.`),
+  )
+}
+
+/**
+ * Заголовок приложения: «Приложение А», «ПРИЛОЖЕНИЕ 1», «Приложение № 2».
+ * «приложение Microsoft Excel» не подходит: после слова идёт длинное слово, не буква/номер.
+ */
+function isAppendixHeading(line: string): boolean {
+  const trimmed = line.trim()
+  if (/^приложени[ея]$/iu.test(trimmed)) return true
+  return /^приложени[ея]\s+(?:№\s*)?(?:[\p{L}](?![\p{L}])|\d{1,3}(?!\d))/iu.test(trimmed)
 }
 
 /**
@@ -118,32 +202,40 @@ function stripLeadingCoverBlock(text: string): string {
  * (титульный лист, содержание/оглавление, приложения)
  * перед расчётом оригинальности.
  *
- * Предполагается, что приложения находятся в конце документа:
- * всё, что идёт после заголовка «Приложение», исключается.
+ * Приложение отрезается только заголовком во второй половине текста,
+ * чтобы пункт оглавления и фраза «приложение Microsoft Excel» не съели работу.
  */
 export function stripNonContentSections(rawText: string): string {
   const withoutCoverBlock = stripFigureReferences(stripLeadingCoverBlock(rawText))
   const lines = withoutCoverBlock.split(/\r?\n/)
   const result: string[] = []
+  const halfway = withoutCoverBlock.length / 2
 
   let inAppendix = false
+  let inContents = false
+  let offset = 0
 
   for (const line of lines) {
+    const lineStart = offset
+    offset += line.length + 1
     const trimmed = line.trim()
     const lower = trimmed.toLowerCase()
 
-    // Если начались приложения — всё, что дальше, игнорируем
-    if (!inAppendix && /^приложение\b/i.test(trimmed)) {
+    if (inAppendix) continue
+
+    if (!inContents && lineStart >= halfway && isAppendixHeading(trimmed)) {
       inAppendix = true
       continue
     }
-    if (inAppendix) {
+
+    if (isContentsHeading(line)) {
+      inContents = true
       continue
     }
 
-    // Удаляем строки‑заголовки «Содержание» / «Оглавление»
-    if (/^\s*содержание\s*$/i.test(line) || /^\s*оглавление\s*$/i.test(line)) {
-      continue
+    if (inContents) {
+      if (isContentsEntry(trimmed)) continue
+      inContents = false
     }
 
     // Удаляем явные упоминания титульного листа
@@ -151,25 +243,31 @@ export function stripNonContentSections(rawText: string): string {
       continue
     }
 
-    if (trimmed.length < 250 && COVER_LINE_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+    if (
+      trimmed.length < 250 &&
+      COVER_LINE_PATTERNS.some((pattern) => {
+        pattern.lastIndex = 0
+        return pattern.test(trimmed)
+      })
+    ) {
       continue
     }
 
     result.push(line)
   }
 
-  const joined = result.join("\n").trim()
+  const joined = stripTrailingAppendix(stripFlatContentsBlock(result.join("\n").trim()))
   // На всякий случай: если после очистки текста почти нет, возвращаем исходный
   if (joined.length < 50) {
-    return rawText
+    return canonicalizeForStorage(rawText)
   }
 
-  return joined
+  return canonicalizeForStorage(joined)
 }
 
 /**
  * Нормализация текста для проверки на плагиат.
- * Здесь можно добавлять более сложные правила предобработки.
+ * PDF и Word после этой функции должны давать один и тот же канонический текст.
  */
 export function normalizeContentForCheck(text: string): string {
   return stripNonContentSections(text)

@@ -90,6 +90,20 @@ describe("analysis-jobs", () => {
       processingTimeMs: 1000,
       semanticMatches: [],
     })
+    expect(prismaMock.document.update.mock.calls[0][0].data.status).toBe("draft")
+    await completeAnalysisJob({
+      jobId: 1,
+      documentId: 42,
+      plagiarismPercentMl: 20,
+      aiPercentMl: 5,
+      localPlagiarismPercent: 10,
+      processingTimeMs: 1000,
+      semanticMatches: [],
+      category: "seo",
+    })
+    const seoUpdate = prismaMock.document.update.mock.calls.at(-1)?.[0]
+    expect(seoUpdate.data.status).toBe("final")
+    expect(seoUpdate.data.expiresAt).toBeNull()
     expect(await failOrRetryAnalysisJob({ jobId: 1, documentId: 42, error: "boom", attempts: 5 })).toBe("failed")
     expect(await failOrRetryAnalysisJob({ jobId: 1, documentId: 42, error: "boom", attempts: 1 })).toBe("retry")
     await renewAnalysisJobLease(1)

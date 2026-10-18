@@ -315,7 +315,7 @@
         docId: String(m.sourceId),
         docType: typeLabel && typeLabel !== 'Локальное' ? `${cat} · ${typeLabel}` : cat,
         percent: pct,
-        percentLabel: typeLabel ? `${pct}% · ${typeLabel}` : `${pct}%`,
+        percentLabel: `${pct}%`,
         matchType: m.matchType || null,
         matchTypeLabel: typeLabel || null,
         kind: m.matchType && m.matchType !== 'local' ? 'ml' : 'local',

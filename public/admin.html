@@ -4074,7 +4074,8 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   function populateSubTypeOptions() {
     const menu = document.getElementById('sub-edit-type-menu');
     if (!menu) return;
-    const types = appConfig.types && appConfig.types.length ? appConfig.types : ['Дипломная работа / проект', 'Курсовая работа / проект'];
+    const types = (appConfig.types && appConfig.types.length ? appConfig.types : ['Дипломная работа / проект', 'Курсовая работа / проект'])
+      .filter((t) => t !== 'СЭО' && t !== 'seo');
     menu.innerHTML = types.map((t) => `
       <li class="custom-select__option" role="option" data-value="${escapeHtml(t)}">${escapeHtml(t)}<i data-lucide="check" class="icon-16 custom-select__option-check"></i></li>
     `).join('');

@@ -46,6 +46,27 @@ describe("document-types", () => {
     expect(await resolveDocumentTypeId("bsuir", "lab")).toBe(3)
   })
 
+  it("creates the SEO type for an institution that already has a catalog", async () => {
+    prismaMock.documentType.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 9, isActive: true })
+    prismaMock.documentType.create.mockResolvedValue({
+      ...typeRow,
+      id: 9,
+      name: "seo",
+      displayName: "СЭО",
+    })
+    expect(await resolveDocumentTypeId("bsuir", "seo")).toBe(9)
+    expect(prismaMock.documentType.create).toHaveBeenCalledWith({
+      data: {
+        institutionId: "bsuir",
+        name: "seo",
+        displayName: "СЭО",
+        isActive: true,
+      },
+    })
+  })
+
   it("lists and fetches types", async () => {
     const all = await getAllDocumentTypes(false, "bsuir")
     expect(all[0].name).toBe("lab")

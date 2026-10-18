@@ -44,6 +44,17 @@ function slugFromLabel(label: string): string {
   return label.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9а-яё_-]/gi, "").slice(0, 50) || "unknown"
 }
 
+async function uniqueFacultyId(institutionId: string, label: string): Promise<string> {
+  const slug = slugFromLabel(label)
+  let id = `${institutionId}__${slug}`
+  let n = 1
+  while (await prisma.faculty.findUnique({ where: { id } })) {
+    n += 1
+    id = `${institutionId}__${slug}_${n}`
+  }
+  return id
+}
+
 async function ensureSeeded(): Promise<void> {
   const count = await prisma.institution.count()
   if (count > 0) return
@@ -291,26 +302,29 @@ export async function addFaculty(
 
   const label = name.trim()
   if (!label) return { success: false, error: "Название обязательно" }
-  const id = slugFromLabel(label)
-  const existing = await prisma.faculty.findUnique({ where: { id } })
-  if (existing) {
-    if (existing.institutionId !== institutionId) {
-      return { success: false, error: "Факультет с таким идентификатором уже существует в другом УО" }
-    }
-    if (!existing.isActive) {
-      await prisma.faculty.update({ where: { id }, data: { name: label, isActive: true } })
+
+  const existingSameUo = await prisma.faculty.findFirst({
+    where: { institutionId, name: label },
+  })
+  if (existingSameUo) {
+    if (!existingSameUo.isActive) {
+      await prisma.faculty.update({
+        where: { id: existingSameUo.id },
+        data: { name: label, isActive: true },
+      })
       await writeAuditLog({
         userId: actorUsername,
         action: "admin_activate_faculty",
         message: `Факультет активирован: ${label}`,
         entityType: "faculty",
-        entityId: id,
+        entityId: existingSameUo.id,
       })
-      return { success: true, faculty: { id, name: label, isActive: true } }
+      return { success: true, faculty: { id: existingSameUo.id, name: label, isActive: true } }
     }
-    return { success: false, error: "Факультет уже существует" }
+    return { success: false, error: "Факультет уже существует в этом УО" }
   }
 
+  const id = await uniqueFacultyId(institutionId, label)
   const fac = await prisma.faculty.create({ data: { id, name: label, institutionId } })
   await writeAuditLog({
     userId: actorUsername,

@@ -83,10 +83,11 @@ export async function parseFile(file: File): Promise<ParsedFile> {
     throw new Error(`Unsupported file type: ${extension}. Please upload PDF or DOCX files.`)
   }
 
-  // Clean up text
+  // Keep paragraph breaks so the server can drop title/TOC the same way for PDF and Word.
+  // Final single-space form is applied in normalizeContentForCheck.
   text = text
-    .replace(/\s+/g, " ")
-    .replace(/\n\s*\n/g, "\n\n")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
     .trim()
 
   const wordCount = text.split(/\s+/).filter((w) => w.length > 0).length
