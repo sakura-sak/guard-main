@@ -19,9 +19,10 @@ import {
   type ClaimedAnalysisJob,
 } from "@/lib/analysis-jobs"
 import { analyzeWithMlServiceOrThrow, getMlJob, MlAnalysisError, submitMlJob } from "@/lib/analysis-client"
-import { isSeoCategory } from "@/lib/comparison-scope"
+import { shouldFinalizeImmediately } from "@/lib/comparison-scope"
 import { generateAndSaveFinalReport } from "@/lib/finalize-report"
 import { logError, logInfo } from "@/lib/logger"
+import { formatStoredError, inferErrorCode } from "@/lib/stored-error"
 import { prisma } from "@/lib/prisma"
 
 const HEARTBEAT_FILE = process.env.ANALYSIS_WORKER_HEARTBEAT_FILE?.trim()
@@ -122,7 +123,7 @@ async function completeViaSyncAnalyze(job: ClaimedAnalysisJob, startedAt: number
     semanticMatches: result.semanticMatches,
     category: job.category,
   })
-  if (isSeoCategory(job.category)) {
+  if (shouldFinalizeImmediately(job.category, job.submittedVia)) {
     await generateAndSaveFinalReport({
       documentId: job.documentId,
       generatedById: job.userId,
@@ -229,7 +230,7 @@ async function runClaimedJob(job: ClaimedAnalysisJob): Promise<void> {
           semanticMatches: status.result.semanticMatches,
           category: job.category,
         })
-        if (isSeoCategory(job.category)) {
+        if (shouldFinalizeImmediately(job.category, job.submittedVia)) {
           await generateAndSaveFinalReport({
             documentId: job.documentId,
             generatedById: job.userId,
@@ -275,7 +276,7 @@ async function runClaimedJob(job: ClaimedAnalysisJob): Promise<void> {
       jobId: job.id,
       documentId: job.documentId,
       attempts: retryable ? Math.max(job.attempts, 1) : Number.MAX_SAFE_INTEGER,
-      error: msg,
+      error: formatStoredError(inferErrorCode(msg), msg),
     })
 
     logError("Analysis job failed", msg, job.userId, undefined, "analysis_worker", {

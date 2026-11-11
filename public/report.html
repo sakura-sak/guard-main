@@ -18,6 +18,7 @@
       const params = new URLSearchParams(location.search);
       const documentId = params.get('documentId');
       const sig = params.get('sig') || '';
+      const mode = params.get('mode') || '';
       const loading = document.getElementById('reportLoading');
       const errorEl = document.getElementById('reportError');
       const root = document.getElementById('reportRoot');
@@ -33,7 +34,10 @@
         return;
       }
 
-      const qs = sig ? ('?sig=' + encodeURIComponent(sig)) : '';
+      const query = new URLSearchParams();
+      if (sig) query.set('sig', sig);
+      if (mode === 'full') query.set('mode', 'full');
+      const qs = query.toString() ? ('?' + query.toString()) : '';
       try {
         const res = await fetch('/api/report/' + encodeURIComponent(documentId) + '/print-data' + qs, {
           credentials: 'include',

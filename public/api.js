@@ -483,10 +483,11 @@
   const runAdminCleanup = () => POST('/api/admin/cleanup', {});
 
   /** Open unified HTML report in a new tab (same view as QR scan). */
-  function openPrintableReportById(documentId) {
+  function openPrintableReportById(documentId, mode) {
     const id = documentId != null ? String(documentId).trim() : '';
     if (!id) return false;
-    window.open('report.html?documentId=' + encodeURIComponent(id), '_blank', 'noopener,noreferrer');
+    const full = mode === 'full' ? '&mode=full' : '';
+    window.open('report.html?documentId=' + encodeURIComponent(id) + full, '_blank', 'noopener,noreferrer');
     return true;
   }
 

@@ -107,6 +107,10 @@ model Document {
   expiresAt              DateTime? @map("expires_at")
   analysisCompletedAt    DateTime? @map("analysis_completed_at")
   resultViewedAt         DateTime? @map("result_viewed_at")
+  /** moodle — работа пришла из СЭО и сразу становится финальной. */
+  submittedVia           String?   @map("submitted_via")
+  /** Код вида занятия ИИС, например ЛР, ПЗ, ИПР, КуР, ДиР. */
+  lessonType             String?   @map("lesson_type")
 
   user             User?              @relation(fields: [userId], references: [username], onDelete: SetNull)
   institution      Institution?       @relation(fields: [institutionId], references: [id], onDelete: SetNull)

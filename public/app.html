@@ -2306,7 +2306,9 @@ a { color: inherit; text-decoration: none; }
     scanAnimating = false;
     const percent = Math.round(state.originalityPercent ?? Math.max(0, 100 - (state.plagiarismPercent ?? 0)));
     const matches = Math.round(state.plagiarismPercent ?? 0);
-    const ai = Math.round(state.aiPercentMl ?? 0);
+    const ai = typeof state.aiPercentMl === 'number' && Number.isFinite(state.aiPercentMl)
+      ? Math.round(state.aiPercentMl)
+      : 0;
     const inst = getCheckInstitutionParams();
     currentResult = {
       id: state.documentId,
@@ -2810,7 +2812,7 @@ a { color: inherit; text-decoration: none; }
     document.getElementById('finalSavedAt').textContent = formatDate(item.savedAt);
     document.getElementById('finalPercent').textContent = item.percent + '%';
     document.getElementById('finalMatches').textContent = (item.matches != null ? item.matches : Math.max(0, 100 - (item.percent || 0))) + '%';
-    document.getElementById('finalAi').textContent = (item.ai != null ? item.ai : 0) + '%';
+    document.getElementById('finalAi').textContent = item.ai != null ? item.ai + '%' : '—';
     const qr = item.id && ApApi.resolveReportQrUrls
       ? await ApApi.resolveReportQrUrls(item.id)
       : { verifyUrl: '', docUrl: '', verifyQrImage: '', originalQrImage: '' };
@@ -2871,7 +2873,7 @@ a { color: inherit; text-decoration: none; }
             type:    doc.categoryLabel || doc.category || '',
             percent: isProcessing || isFailed ? null : Math.round(doc.originalityPercent ?? Math.max(0, 100 - plag)),
             matches: isProcessing || isFailed ? null : Math.round(plag),
-            ai:      isProcessing || isFailed ? null : Math.round(doc.aiPercentMl ?? 0),
+            ai:      isProcessing || isFailed || doc.aiPercentMl == null ? null : Math.round(doc.aiPercentMl),
             status:  doc.status,
             savedAt: doc.uploadDate,
             expiresAt: doc.expiresAt,

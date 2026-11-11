@@ -66,18 +66,20 @@ export async function POST(request: NextRequest) {
     const normalizedContent = normalizeContentForCheck(content)
     if (normalizedContent.length < 50) {
       return NextResponse.json(
-        { success: false, error: "Документ слишком короткий для проверки (менее 50 символов)" },
+        { success: false, error: "В документе не обнаружен текст для проверки.", errorCode: "no_text" },
         { status: 400 },
       )
     }
 
+    const allowedMoodle = new Set(["lab", "practice", "ipr", "coursework", "diploma"])
     normCategory =
       (category || "uncategorized").replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_").trim() || "uncategorized"
+    const lessonTypeRaw = String(formData.get("lessonType") || "").trim().slice(0, 16)
     if (gate.viaMoodle) {
-      normCategory = SEO_CATEGORY
+      if (!allowedMoodle.has(normCategory)) normCategory = "lab"
     } else if (normCategory === SEO_CATEGORY) {
       return NextResponse.json(
-        { success: false, error: "Тип «СЭО» назначается только работам, загруженным из СЭО" },
+        { success: false, error: "Тип «СЭО» назначается только работам, загруженным из СЭО", errorCode: "unsupported_format" },
         { status: 400 },
       )
     }
@@ -105,8 +107,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Не удалось обработать текст документа (слишком объёмный или некорректный). Попробуйте разбить файл или сократить текст.",
+          error: "Не удалось извлечь текст из документа.",
+          errorCode: "extraction_failed",
         },
         { status: 400 },
       )
@@ -133,6 +135,8 @@ export async function POST(request: NextRequest) {
       facultyId,
       documentType,
       localPlagiarismPercent,
+      submittedVia: gate.viaMoodle ? "moodle" : null,
+      lessonType: gate.viaMoodle ? lessonTypeRaw || null : null,
     })
 
     if (!created.ok) {

@@ -58,6 +58,8 @@ export type ReportQrLinks = {
   verifyUrl: string
   originalUrl: string
   reportPdfUrl: string
+  /** Полный отчёт: текст работы и фрагменты. Подпись вида `full`, не открывается краткой ссылкой. */
+  fullUrl: string
 }
 
 /**
@@ -68,10 +70,12 @@ export function buildReportQrLinks(documentId: number, baseUrl: string): ReportQ
   const base = baseUrl.replace(/\/$/, "")
   const sigReport = signDocumentAccess("report", documentId)
   const sigOriginal = signDocumentAccess("original", documentId)
+  const sigFull = signDocumentAccess("full", documentId)
   const reportQuery = `documentId=${documentId}&sig=${encodeURIComponent(sigReport)}`
   return {
     verifyUrl: `${base}/report.html?${reportQuery}`,
     originalUrl: `${base}/api/report/${documentId}/original?sig=${encodeURIComponent(sigOriginal)}`,
     reportPdfUrl: `${base}/report.html?${reportQuery}`,
+    fullUrl: `${base}/report.html?documentId=${documentId}&mode=full&sig=${encodeURIComponent(sigFull)}`,
   }
 }

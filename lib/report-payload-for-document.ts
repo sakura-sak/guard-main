@@ -22,12 +22,15 @@ export function resolveDocumentCheckScores(
 ): {
   originalityPercent: number
   plagiarismPercentMl: number
-  aiPercentMl: number
+  aiPercentMl: number | null
   localPlagiarismPercent: number
 } {
   const localPlagiarismPercent = roundPercent(similarDocuments[0]?.similarity ?? 0)
   const plagiarismPercentMl = roundPercent(doc.plagiarismPercentMl ?? 0)
-  const aiPercentMl = roundPercent(doc.aiPercentMl ?? 0)
+  const aiPercentMl =
+    typeof doc.aiPercentMl === "number" && Number.isFinite(doc.aiPercentMl)
+      ? roundPercent(doc.aiPercentMl)
+      : null
   const plagiarismPercent = Math.max(localPlagiarismPercent, plagiarismPercentMl)
   const originalityPercent =
     typeof doc.originalityPercent === "number" && Number.isFinite(doc.originalityPercent)

@@ -45,6 +45,8 @@ export type CreateProcessingDocumentInput = {
   facultyId?: string | null
   documentType?: "word" | "pdf"
   localPlagiarismPercent: number
+  submittedVia?: string | null
+  lessonType?: string | null
 }
 
 export type CreateProcessingDocumentResult =
@@ -86,6 +88,8 @@ export async function createProcessingDocumentWithJob(
           facultyId: input.facultyId ?? null,
           documentTypeId,
           localPlagiarismPercent: localPlag,
+          submittedVia: input.submittedVia ?? null,
+          lessonType: input.lessonType ?? null,
           contentPayload: { create: { text: input.content } },
           signaturePayload: {
             create: {
@@ -371,6 +375,7 @@ export type ClaimedAnalysisJob = {
   content: string
   filename: string | null
   localPlagiarismPercent: number
+  submittedVia: string | null
 }
 
 /**
@@ -472,6 +477,7 @@ export async function claimNextAnalysisJob(workerId: string): Promise<ClaimedAna
     content: job.document.contentPayload?.text ?? "",
     filename: job.document.filename,
     localPlagiarismPercent: job.document.localPlagiarismPercent ?? 0,
+    submittedVia: job.document.submittedVia ?? null,
   }
 }
 
@@ -509,14 +515,17 @@ export async function completeAnalysisJob(params: {
   jobId: number
   documentId: number
   plagiarismPercentMl: number
-  aiPercentMl: number
+  aiPercentMl: number | null
   localPlagiarismPercent: number
   processingTimeMs: number
   semanticMatches: MlSemanticMatch[]
   category?: string | null
 }): Promise<void> {
   const mlPlag = roundPercent(params.plagiarismPercentMl)
-  const ai = roundPercent(params.aiPercentMl)
+  const ai =
+    params.aiPercentMl == null || !Number.isFinite(params.aiPercentMl)
+      ? null
+      : roundPercent(params.aiPercentMl)
   const local = roundPercent(params.localPlagiarismPercent)
   const plag = Math.max(local, mlPlag)
   const originality = roundPercent(100 - plag)

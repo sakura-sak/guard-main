@@ -4,6 +4,13 @@
 
 import { prisma } from "./prisma"
 
+export type MlMatchFragment = {
+  queryText: string
+  sourceText: string
+  score: number
+  matchType: "exact" | "paraphrase" | "semantic"
+}
+
 export type MlSemanticMatch = {
   documentId: number | null
   filename: string | null
@@ -13,6 +20,7 @@ export type MlSemanticMatch = {
   paraphraseScore: number
   matchType: "exact" | "paraphrase" | "semantic"
   sample: string
+  fragments: MlMatchFragment[]
 }
 
 export type StoredMlMatchMeta = {
@@ -23,6 +31,7 @@ export type StoredMlMatchMeta = {
   paraphraseScore: number
   matchedChunks: number
   filename: string | null
+  fragments: MlMatchFragment[]
 }
 
 function clampPercent(n: number): number {
@@ -33,6 +42,25 @@ function clampPercent(n: number): number {
 function similarityFromMatch(m: MlSemanticMatch): number {
   const score = Math.max(m.maxScore || 0, m.maxLexicalScore || 0)
   return clampPercent(score * 100)
+}
+
+function parseFragments(raw: unknown): MlMatchFragment[] {
+  if (!Array.isArray(raw)) return []
+  const out: MlMatchFragment[] = []
+  for (const item of raw.slice(0, 20)) {
+    if (!item || typeof item !== "object") continue
+    const row = item as Record<string, unknown>
+    const queryText = typeof row.query_text === "string" ? row.query_text : typeof row.queryText === "string" ? row.queryText : ""
+    const sourceText = typeof row.source_text === "string" ? row.source_text : typeof row.sourceText === "string" ? row.sourceText : ""
+    if (!queryText.trim()) continue
+    out.push({
+      queryText: queryText.slice(0, 400),
+      sourceText: sourceText.slice(0, 400),
+      score: Number(row.score) || 0,
+      matchType: parseMatchType(row.match_type ?? row.matchType),
+    })
+  }
+  return out
 }
 
 function parseMatchType(raw: unknown): "exact" | "paraphrase" | "semantic" {
@@ -63,6 +91,7 @@ export function normalizeMlSemanticMatches(raw: unknown): MlSemanticMatch[] {
       paraphraseScore: Number(row.paraphrase_score ?? row.paraphraseScore ?? 0) || 0,
       matchType: parseMatchType(row.match_type ?? row.matchType),
       sample: typeof row.sample === "string" ? row.sample : "",
+      fragments: parseFragments(row.fragments),
     })
   }
   return out
@@ -116,6 +145,7 @@ export async function replaceMlMatchesForDocument(
       paraphraseScore: m.paraphraseScore,
       matchedChunks: m.matchedChunks,
       filename: m.filename,
+      fragments: m.fragments.slice(0, 20),
     }
     try {
       await prisma.plagiarismMatch.upsert({
@@ -156,6 +186,8 @@ export type LoadedMlBorrowMatch = {
   type: "borrow"
   matchType: "exact" | "paraphrase" | "semantic"
   category?: string
+  fragments: MlMatchFragment[]
+  sourceDate?: string | null
 }
 
 export async function loadMlBorrowMatches(targetDocumentId: number): Promise<LoadedMlBorrowMatch[]> {
@@ -173,6 +205,7 @@ export async function loadMlBorrowMatches(targetDocumentId: number): Promise<Loa
           id: true,
           title: true,
           category: true,
+          uploadDate: true,
           userId: true,
           user: { select: { fullName: true } },
         },
@@ -212,6 +245,8 @@ export async function loadMlBorrowMatches(targetDocumentId: number): Promise<Loa
       type: "borrow" as const,
       matchType: parseMatchType(meta.matchType),
       category: row.sourceDocument.category,
+      fragments: Array.isArray(meta.fragments) ? meta.fragments : [],
+      sourceDate: row.sourceDocument.uploadDate ? new Date(row.sourceDocument.uploadDate).toISOString() : null,
     }
   })
 }

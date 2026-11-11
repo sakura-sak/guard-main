@@ -192,7 +192,7 @@ export async function GET(request: NextRequest) {
       const percent =
         typeof doc.originalityPercent === "number" ? roundPercent(doc.originalityPercent) : 0
       const matches = plagiarismFromDoc(doc.originalityPercent, doc.plagiarismPercentMl, doc.status)
-      const ai = typeof doc.aiPercentMl === "number" ? roundPercent(doc.aiPercentMl) : 0
+      const ai = typeof doc.aiPercentMl === "number" ? roundPercent(doc.aiPercentMl) : null
       return {
         id: doc.id,
         docId: String(doc.id),

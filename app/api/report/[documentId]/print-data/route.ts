@@ -26,18 +26,30 @@ export async function GET(
     }
 
     const sig = getQrSignature(request.nextUrl.searchParams)
-    let allowed = !!(sig && verifyDocumentAccess("report", id, sig))
+    const wantFull = request.nextUrl.searchParams.get("mode") === "full"
+    const fullSigOk = !!(sig && verifyDocumentAccess("full", id, sig))
+    let allowed = !!(sig && verifyDocumentAccess("report", id, sig)) || fullSigOk
+    let isAdmin = false
 
-    if (!allowed) {
+    if (!allowed || wantFull) {
       const gate = await requireSessionApi(request)
-      if (!gate.ok) return gate.response
-      const isOwner = doc.userId === gate.user.username
-      const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin"
-      allowed = isOwner || isAdmin
+      if (gate.ok) {
+        const isOwner = doc.userId === gate.user.username
+        isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin"
+        if (isOwner || isAdmin) allowed = true
+      } else if (!allowed) {
+        return gate.response
+      }
     }
 
     if (!allowed) {
       return NextResponse.json({ success: false, error: "Нет доступа" }, { status: 403 })
+    }
+    if (wantFull && !fullSigOk && !isAdmin) {
+      return NextResponse.json(
+        { success: false, error: "Полный отчёт доступен преподавателю и администратору" },
+        { status: 403 },
+      )
     }
 
     const baseUrl = resolveBaseUrlForReport(request)
@@ -48,7 +60,7 @@ export async function GET(
       )
     }
 
-    const payload = await buildReportPrintPayload(id, baseUrl)
+    const payload = await buildReportPrintPayload(id, baseUrl, { full: wantFull })
     if (!payload) {
       return NextResponse.json({ success: false, error: "Не удалось собрать отчёт" }, { status: 500 })
     }

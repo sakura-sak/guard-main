@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
       similarDocuments,
       localPlagiarismPercent,
       mlPlagiarismPercent,
-      mlAiPercent: roundPercent(ml.aiPercent),
+      mlAiPercent: ml.aiPercent == null ? null : roundPercent(ml.aiPercent),
       semanticMatches: ml.semanticMatches,
       byType: ml.byType,
     })

@@ -140,6 +140,9 @@
     padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
     display: inline-block;
   }
+  .src-table__frag { font-size: 11px; line-height: 1.45; min-width: 180px; }
+  .src-table__frag p { margin: 0 0 8px; }
+  .src-table__frag p:last-child { margin: 0; }
   .qrs { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 18px 0; }
   .qr {
     background: #fff; border: 1px solid var(--border); border-radius: 18px;
@@ -171,18 +174,19 @@
     const id = data.reportId ?? data.id ?? '—';
     const orig = data.orig ?? 0;
     const matches = data.matches ?? 0;
-    const ai = data.ai ?? 0;
-    const sources = Array.isArray(data.sources) ? data.sources : [];
+    const ai = data.ai != null && !Number.isNaN(Number(data.ai)) ? Number(data.ai) : 0;
     const logoPath = data.logoUrl || '/bsuir-logo.jpg';
     const logoUrl = logoPath.startsWith('http') ? logoPath : new URL(logoPath, location.href).href;
     const qrVerify = qrSrc(data.verifyQrImage, data.verifyUrl);
     const qrDoc = qrSrc(data.originalQrImage, data.originalUrl);
+    const showFragments = !!data.fullReport;
+    const tableRows = reportTableRows(data);
 
-    const sourcesHtml = sources.map((m, i) => `
+    const sourcesHtml = tableRows.map((m, i) => `
       <tr>
         <td class="src-table__num">${String(i + 1).padStart(2, '0')}</td>
         <td class="src-table__title">${escapeHtml(m.title || '—')}</td>
-        <td>${escapeHtml(m.docType || '—')}</td>
+        ${showFragments ? `<td class="src-table__frag">${m.fragmentHtml}</td>` : ''}
         <td><code>${escapeHtml(m.docId)}</code></td>
         <td class="src-table__pct"><span>${escapeHtml(m.percentLabel != null ? m.percentLabel : (m.percent != null ? `${m.percent}%` : '—'))}</span></td>
       </tr>
@@ -249,7 +253,7 @@
         <tr>
           <th>№</th>
           <th>Название работы</th>
-          <th>Тип работы</th>
+          ${showFragments ? '<th>Фрагмент работы</th>' : ''}
           <th>ID документа</th>
           <th style="text-align: right;">Схожесть</th>
         </tr>
@@ -272,6 +276,37 @@
     <span>${escapeHtml(data.verifyUrl || '')}</span>
   </footer>
 </div>`;
+  }
+
+  function borrowedFragmentHtml(fragments) {
+    const parts = (Array.isArray(fragments) ? fragments : [])
+      .map((fragment) => String((fragment && (fragment.sourceText || fragment.queryText)) || '').trim())
+      .filter(Boolean);
+    if (!parts.length) return 'Совпадение по смыслу, дословного куска нет.';
+    return parts.map((text) => `<p>${escapeHtml(text)}</p>`).join('');
+  }
+
+  function reportTableRows(data) {
+    const brief = Array.isArray(data.sources) ? data.sources : [];
+    const fullSources = data.fullReport && Array.isArray(data.fullReport.sources)
+      ? data.fullReport.sources
+      : null;
+    if (fullSources && fullSources.length) {
+      return fullSources.map((source) => ({
+        title: source.title,
+        docId: source.docId || '—',
+        percent: source.percent,
+        percentLabel: source.percent != null ? `${source.percent}%` : '—',
+        fragmentHtml: borrowedFragmentHtml(source.fragments),
+      }));
+    }
+    return brief.map((row) => ({
+      title: row.title,
+      docId: row.docId,
+      percent: row.percent,
+      percentLabel: row.percentLabel,
+      fragmentHtml: data.fullReport ? 'Совпадение по смыслу, дословного куска нет.' : '',
+    }));
   }
 
   function waitForImages(root) {

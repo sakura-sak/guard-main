@@ -20,6 +20,7 @@ const DEFAULT_TYPES: Array<{ name: string; displayName: string }> = [
   { name: "coursework", displayName: "Курсовая работа / проект" },
   { name: "lab", displayName: "Лабораторная работа" },
   { name: "practice", displayName: "Практическая работа" },
+  { name: "ipr", displayName: "Индивидуальная практическая работа" },
   { name: "article", displayName: "Статьи" },
 ]
 

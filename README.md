@@ -2,7 +2,7 @@
 
 Веб-платформа для проверки текстовых документов на плагиат с использованием научно обоснованных алгоритмов.
 
-**Документация:** см. [../DOCUMENTATION.md](../DOCUMENTATION.md) (техническая) и [../BUSINESS_OVERVIEW.md](../BUSINESS_OVERVIEW.md) (предметная область).
+**Документация:** см. [../docs/DOCUMENTATION.md](../docs/DOCUMENTATION.md) (техническая) и [../docs/BUSINESS_OVERVIEW.md](../docs/BUSINESS_OVERVIEW.md) (предметная область).
 
 ## Алгоритмы
 

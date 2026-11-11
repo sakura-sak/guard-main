@@ -14,7 +14,8 @@ import {
 
 export type MlAnalysisResult = {
   plagiarismPercent: number
-  aiPercent: number
+  /** null — детектор не дал сигнала. Это не «0 % — текст человека». */
+  aiPercent: number | null
   semanticMatches: MlSemanticMatch[]
   byType: { exact: number; paraphrase: number; semantic: number }
 }
@@ -32,6 +33,13 @@ function getApiKey(): string | undefined {
 }
 
 const DEFAULT_TIMEOUT_MS = 300_000
+
+/** null остаётся null. Отсутствие поля или нечисло — ошибка формы ответа. */
+function parseAiPercent(value: unknown): number | null | undefined {
+  if (value === null) return null
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  return undefined
+}
 
 function emptyByType() {
   return { exact: 0, paraphrase: 0, semantic: 0 }
@@ -191,11 +199,12 @@ export async function analyzeWithMlServiceOrThrow(
 
     const data = (await res.json()) as {
       plagiarism_percent?: number
-      ai_percent?: number
+      ai_percent?: number | null
       semantic_matches?: unknown
       by_type?: unknown
     }
-    if (typeof data.plagiarism_percent !== "number" || typeof data.ai_percent !== "number") {
+    const aiPercent = parseAiPercent(data.ai_percent)
+    if (typeof data.plagiarism_percent !== "number" || aiPercent === undefined) {
       logError("ML-сервис вернул неожиданный ответ", JSON.stringify(data).slice(0, 500), undefined, undefined, "analysis_request", {
         durationMs: Date.now() - startedAt,
       })
@@ -210,14 +219,14 @@ export async function analyzeWithMlServiceOrThrow(
       documentId: options?.documentId ?? null,
       durationMs: Date.now() - startedAt,
       plagiarismPercent: data.plagiarism_percent,
-      aiPercent: data.ai_percent,
+      aiPercent,
       semanticMatchCount: semanticMatches.length,
       byType,
     })
 
     return {
       plagiarismPercent: data.plagiarism_percent,
-      aiPercent: data.ai_percent,
+      aiPercent,
       semanticMatches,
       byType,
     }
@@ -265,7 +274,7 @@ function authHeaders(): Record<string, string> {
 }
 
 function requestJson(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "DELETE",
   url: string,
   body: string | null,
   timeoutMs: number,
@@ -384,7 +393,7 @@ export async function getMlJob(mlJobId: string): Promise<MlJobStatus> {
     error?: string | null
     result?: {
       plagiarism_percent?: number
-      ai_percent?: number
+      ai_percent?: number | null
       semantic_matches?: unknown
       by_type?: unknown
     } | null
@@ -392,12 +401,13 @@ export async function getMlJob(mlJobId: string): Promise<MlJobStatus> {
 
   let result: MlAnalysisResult | undefined
   if (data.status === "completed" && data.result) {
-    if (typeof data.result.plagiarism_percent !== "number" || typeof data.result.ai_percent !== "number") {
+    const aiPercent = parseAiPercent(data.result.ai_percent)
+    if (typeof data.result.plagiarism_percent !== "number" || aiPercent === undefined) {
       throw new MlAnalysisError("Unexpected ML job result shape", true)
     }
     result = {
       plagiarismPercent: data.result.plagiarism_percent,
-      aiPercent: data.result.ai_percent,
+      aiPercent,
       semanticMatches: normalizeMlSemanticMatches(data.result.semantic_matches),
       byType: parseByType(data.result.by_type),
     }
@@ -409,5 +419,15 @@ export async function getMlJob(mlJobId: string): Promise<MlJobStatus> {
     result,
     error: data.error ?? null,
   }
+}
+
+/** Drop one document's vectors from Qdrant. Missing points are not an error. */
+export async function deleteMlDocument(documentId: number): Promise<void> {
+  const base = getServiceUrl()
+  if (!base || !Number.isFinite(documentId) || documentId <= 0) return
+  const res = await requestJson("DELETE", `${base}/v1/documents/${documentId}`, null, 30_000)
+  if (res.ok || res.status === 404 || res.status === 204) return
+  const text = await res.text().catch(() => "")
+  throw new MlAnalysisError(`ML delete HTTP ${res.status}: ${text.slice(0, 200)}`, res.status >= 500, res.status)
 }
 

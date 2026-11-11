@@ -25,3 +25,11 @@ export function comparisonCategories(category: string): string[] | null {
   if (GRADUATION_TYPES.has(slug)) return ["coursework", "diploma"]
   return [slug]
 }
+
+/** Moodle submissions and legacy seo works are stored as final as soon as analysis ends. */
+export function shouldFinalizeImmediately(
+  category: string | null | undefined,
+  submittedVia: string | null | undefined,
+): boolean {
+  return submittedVia === "moodle" || isSeoCategory(category)
+}

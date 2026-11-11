@@ -53,7 +53,7 @@ export interface CheckResultForReport {
   similarDocuments: SimilarDocumentForReport[]
   processingTimeMs: number
   plagiarismPercentMl?: number
-  aiPercentMl?: number
+  aiPercentMl?: number | null
   uploadDate?: string
   status?: "draft" | "final"
   documentId?: number
@@ -373,7 +373,8 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
     storedUniq != null ? storedUniq : Math.round((100 - Math.max(localPlag, mlPlag)) * 100) / 100
   const matchesPercent = Math.round((100 - origPercent) * 100) / 100
 
-  const aiPercent = Math.round((result.aiPercentMl ?? 0) * 100) / 100
+  const aiKnown = typeof result.aiPercentMl === "number" && Number.isFinite(result.aiPercentMl)
+  const aiPercent = aiKnown ? Math.round(result.aiPercentMl * 100) / 100 : 0
 
   // Небольшой отступ сверху перед блоком результатов (подвинули ближе к верхней линии)
   
@@ -436,11 +437,13 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
 
   doc.setFillColor(...barGray)
   doc.rect(barX, rowY - barHeight / 2, barWidth, barHeight, "F")
-  doc.setFillColor(128, 82, 255) // фиолетовый
-  doc.rect(barX, rowY - barHeight / 2, (barWidth * aiPercent) / 100, barHeight, "F")
+  if (aiKnown) {
+    doc.setFillColor(128, 82, 255) // фиолетовый
+    doc.rect(barX, rowY - barHeight / 2, (barWidth * aiPercent) / 100, barHeight, "F")
+  }
 
   doc.setTextColor(...grayText)
-  doc.text(`${formatPercent(aiPercent)}%`, valueX, rowY, { align: "right" })
+  doc.text(aiKnown ? `${formatPercent(aiPercent)}%` : "—", valueX, rowY, { align: "right" })
 
   // Нижняя граница блока результатов
   y = rowY + 4
@@ -586,10 +589,9 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
   y += 8
 
   const colNo = 10
-  const colType = 38
   const colId = 22
   const colShare = 22
-  const colTitle = pageWidth - margin - colNo - colType - colId - colShare - 8
+  const colTitle = pageWidth - margin - colNo - colId - colShare - 8
   const rowH = 7
   const headY = y
 
@@ -605,9 +607,8 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
   const headerTextY = headY + 0.1
   doc.text("№", margin + colNo / 2, headerTextY, { align: "center" })
   doc.text("Название", margin + colNo + colTitle / 2, headerTextY, { align: "center" })
-  doc.text("Тип", margin + colNo + colTitle + colType / 2, headerTextY, { align: "center" })
-  doc.text("ID", margin + colNo + colTitle + colType + colId / 2, headerTextY, { align: "center" })
-  doc.text("Схожесть", margin + colNo + colTitle + colType + colId + colShare / 2, headerTextY, {
+  doc.text("ID", margin + colNo + colTitle + colId / 2, headerTextY, { align: "center" })
+  doc.text("Схожесть", margin + colNo + colTitle + colId + colShare / 2, headerTextY, {
     align: "center",
   })
   y += rowH + 2
@@ -622,15 +623,12 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
         y = margin
       }
       doc.text(String(idx + 1), margin + colNo / 2, y + 0.5, { align: "center" })
-      const title = (s.title || "—").slice(0, 48)
+      const title = (s.title || "—").slice(0, 70)
       doc.text(title, margin + colNo + 2, y + 0.5, { maxWidth: colTitle - 4 })
-      doc.text(categoryLabel(s.category).slice(0, 22), margin + colNo + colTitle + 2, y + 0.5, {
-        maxWidth: colType - 4,
-      })
-      doc.text(String(s.id), margin + colNo + colTitle + colType + 2, y + 0.5)
+      doc.text(String(s.id), margin + colNo + colTitle + 2, y + 0.5)
       doc.text(
         `${formatPercent(s.similarity)}%`,
-        margin + colNo + colTitle + colType + colId + colShare / 2,
+        margin + colNo + colTitle + colId + colShare / 2,
         y + 0.5,
         { align: "center" },
       )
@@ -652,9 +650,8 @@ export async function generatePDFReport(result: CheckResultForReport): Promise<U
   } else {
     doc.text("1", margin + colNo / 2, y + 0.5, { align: "center" })
     doc.text("Совпадений не найдено", margin + colNo + 2, y + 0.5)
-    doc.text("—", margin + colNo + colTitle + colType / 2, y + 0.5, { align: "center" })
-    doc.text("—", margin + colNo + colTitle + colType + 2, y + 0.5)
-    doc.text("—", margin + colNo + colTitle + colType + colId + colShare / 2, y + 0.5, { align: "center" })
+    doc.text("—", margin + colNo + colTitle + 2, y + 0.5)
+    doc.text("—", margin + colNo + colTitle + colId + colShare / 2, y + 0.5, { align: "center" })
     y += rowH + 2
   }
   y += 6

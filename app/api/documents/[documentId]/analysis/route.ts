@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDocumentAnalysisState } from "@/lib/analysis-jobs"
 import { requireSessionOrMoodleApi } from "@/lib/require-moodle-api"
+import { parseStoredError } from "@/lib/stored-error"
 
 export async function GET(
   request: NextRequest,
@@ -54,5 +55,11 @@ export async function GET(
     })
   }
 
-  return NextResponse.json({ success: true, ...state })
+  const parsed = parseStoredError(typeof state?.lastError === "string" ? state.lastError : null)
+  return NextResponse.json({
+    success: true,
+    ...state,
+    errorCode: state?.jobStatus === "failed" || state?.documentStatus === "failed" ? parsed.errorCode : null,
+    lastError: parsed.error || state?.lastError || null,
+  })
 }

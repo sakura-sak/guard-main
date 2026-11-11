@@ -442,6 +442,15 @@ export async function getDocumentByIdFromDb(id: number): Promise<StoredDocument 
   return row ? mapRowToStoredDocument(row) : null
 }
 
+async function forgetDocumentVectors(documentId: number): Promise<void> {
+  try {
+    const { deleteMlDocument } = await import("./analysis-client")
+    await deleteMlDocument(documentId)
+  } catch (err) {
+    console.error(`Qdrant delete failed for document ${documentId}:`, err)
+  }
+}
+
 export async function deleteDocumentFromDb(id: number): Promise<boolean> {
   const doc = await getDocumentByIdFromDb(id)
   if (!doc) return false
@@ -450,6 +459,7 @@ export async function deleteDocumentFromDb(id: number): Promise<boolean> {
     const fullPath = path.join(process.cwd(), doc.filePath)
     if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath)
   }
+  await forgetDocumentVectors(id)
   const db = await initDb()
   const info = await db.document.deleteMany({ where: { id } })
   return info.count > 0
@@ -535,6 +545,21 @@ export async function updateDocumentCategory(documentId: number, category: strin
   return info.count > 0
 }
 
+/**
+ * Помечает финальные работы старше FINAL_RETENTION_DAYS как архив.
+ * 0 или пусто — хранить бессрочно. Ночная очистка затем снимет файл и векторы.
+ */
+export async function archiveFinalsPastRetention(retentionDays: number): Promise<number> {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) return 0
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000)
+  const db = await initDb()
+  const info = await db.document.updateMany({
+    where: { status: "final", uploadDate: { lt: cutoff } },
+    data: { status: "archived" },
+  })
+  return info.count
+}
+
 /** Удаляет с диска файлы архивных работ и текст/minhash из БД; метаданные и проценты остаются для статистики. */
 export async function purgeArchivedDocumentStorage(): Promise<{
   purged: number
@@ -581,6 +606,7 @@ export async function purgeArchivedDocumentStorage(): Promise<{
       data: { filePath: null },
     })
     await clearDocumentPayload(row.id)
+    await forgetDocumentVectors(row.id)
     purged++
   }
 

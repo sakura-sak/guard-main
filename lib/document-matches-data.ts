@@ -5,7 +5,8 @@ import {
   findMatchingFragments,
   normalizeContentForCheck,
 } from "@/lib/plagiarism/algorithms"
-import { loadMlBorrowMatches, MATCH_TYPE_LABELS } from "@/lib/ml-matches-storage"
+import { loadMlBorrowMatches, MATCH_TYPE_LABELS, type MlMatchFragment } from "@/lib/ml-matches-storage"
+import { locateHighlightSpans, type HighlightSpan } from "@/lib/report-highlight"
 
 const NUM_HASHES = 128
 const LOCAL_SIMILARITY_THRESHOLD = 10
@@ -26,6 +27,8 @@ export type BorrowMatchRow = {
   matchType: "exact" | "paraphrase" | "semantic" | "local"
   matchTypeLabel: string
   category?: string
+  fragments: MlMatchFragment[]
+  sourceDate?: string | null
 }
 
 export type DocumentMatchesPayload = {
@@ -55,12 +58,13 @@ export type DocumentMatchesPayload = {
     quote: string
     type: "ai"
   }>
-  aiPercent: number
+  aiPercent: number | null
   localPlagiarismPercent: number
   mlPlagiarismPercent: number
   plagiarismPercent: number
   originalityPercent: number
   byType: { exact: number; paraphrase: number; semantic: number; local: number }
+  highlight: { text: string; spans: HighlightSpan[] }
 }
 
 function emptyByType(): DocumentMatchesPayload["byType"] {
@@ -109,6 +113,7 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
       matchType: "local",
       matchTypeLabel: MATCH_TYPE_LABELS.local,
       category: sim.category,
+      fragments: [],
     })
     for (const m of matches.slice(0, 3)) {
       fragments.push({
@@ -135,6 +140,7 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
         matchType: "local",
         matchTypeLabel: MATCH_TYPE_LABELS.local,
         category: sim.category,
+        fragments: [],
       })
     }
   }
@@ -157,6 +163,8 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
       matchType: m.matchType,
       matchTypeLabel: MATCH_TYPE_LABELS[m.matchType] || m.matchType,
       category: m.category,
+      fragments: m.fragments || [],
+      sourceDate: m.sourceDate ?? null,
     }
     const prev = bySource.get(m.sourceId)
     if (!prev || row.similarity >= prev.similarity) {
@@ -166,6 +174,7 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
         quote: row.quote?.trim() ? row.quote : prev?.quote || row.quote,
         wordCount: row.wordCount || prev?.wordCount || 0,
         similarity: Math.max(row.similarity, prev?.similarity ?? 0),
+        fragments: row.fragments.length ? row.fragments : prev?.fragments || [],
       })
     } else if (prev) {
       // Keep higher local similarity but attach cascade type from ML.
@@ -173,6 +182,8 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
         ...prev,
         matchType: m.matchType,
         matchTypeLabel: MATCH_TYPE_LABELS[m.matchType] || m.matchType,
+        fragments: prev.fragments.length ? prev.fragments : m.fragments || [],
+        sourceDate: prev.sourceDate || m.sourceDate || null,
       })
     }
     if (m.quote?.trim()) {
@@ -243,9 +254,9 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
     }
   }
 
-  const aiPercent = doc.aiPercentMl ?? 0
+  const aiPercent = typeof doc.aiPercentMl === "number" ? doc.aiPercentMl : null
   const aiMatches: DocumentMatchesPayload["aiMatches"] = []
-  if (aiPercent > 0 && doc.content.length > 200) {
+  if (aiPercent != null && aiPercent > 0 && doc.content.length > 200) {
     const chunk = doc.content.slice(0, 500)
     const aiRow = {
       text: chunk,
@@ -266,6 +277,21 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
     })
   }
 
+  const highlightQueries = borrowMatches.flatMap((match) => {
+    const fromMl = (match.fragments || [])
+      .filter((fragment) => fragment.queryText.trim().length >= 12)
+      .map((fragment) => ({
+        queryText: fragment.queryText,
+        sourceId: match.sourceId,
+        matchType: fragment.matchType,
+      }))
+    if (fromMl.length) return fromMl
+    if (match.quote.trim().length >= 12 && match.wordCount > 0) {
+      return [{ queryText: match.quote, sourceId: match.sourceId, matchType: match.matchType }]
+    }
+    return []
+  })
+
   return {
     similarDocuments: [...similarById.values()]
       .map(({ content: _c, ...sim }) => sim)
@@ -279,6 +305,10 @@ export async function getDocumentMatchesData(documentId: number): Promise<Docume
     plagiarismPercent,
     originalityPercent: doc.originalityPercent ?? roundPercent(100 - plagiarismPercent),
     byType,
+    highlight: {
+      text: normalizedDocContent,
+      spans: locateHighlightSpans(normalizedDocContent, highlightQueries),
+    },
   }
 }
 

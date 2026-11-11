@@ -1,5 +1,5 @@
 import { purgeOldAuditLogs } from "@/lib/audit-log"
-import { purgeArchivedDocumentStorage } from "@/lib/local-storage"
+import { archiveFinalsPastRetention, purgeArchivedDocumentStorage } from "@/lib/local-storage"
 
 function msUntilNextLocalTime(hour: number, minute: number): number {
   const now = new Date()
@@ -25,6 +25,15 @@ export function startNightlyArchivePurgeScheduler(): void {
   const safeMinute = Number.isFinite(minute) ? Math.min(59, Math.max(0, minute)) : 0
 
   const run = async () => {
+    const retentionDays = Number.parseInt(process.env.FINAL_RETENTION_DAYS || "0", 10)
+    try {
+      const archived = await archiveFinalsPastRetention(retentionDays)
+      if (archived > 0) {
+        console.log(`[nightly-cleanup] finals older than ${retentionDays} days archived: ${archived}`)
+      }
+    } catch (err) {
+      console.error("[nightly-cleanup] final retention failed:", err)
+    }
     try {
       const result = await purgeArchivedDocumentStorage()
       console.log(

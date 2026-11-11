@@ -3101,14 +3101,15 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   }
 
   // ===== Printable PDF report =====
-  const openPrintableReport = async (item, _currentUser) => {
+  const openPrintableReport = async (item, _currentUser, mode) => {
     const reportDocumentId = item?.dbId || item?.documentId || item?.realId || item?.id;
     if (!reportDocumentId) {
       alert('Не удалось определить документ для отчёта');
       return;
     }
-    if (ApApi.openPrintableReportById && ApApi.openPrintableReportById(reportDocumentId)) return;
-    window.open('report.html?documentId=' + encodeURIComponent(reportDocumentId), '_blank', 'noopener,noreferrer');
+    if (ApApi.openPrintableReportById && ApApi.openPrintableReportById(reportDocumentId, mode)) return;
+    const full = mode === 'full' ? '&mode=full' : '';
+    window.open('report.html?documentId=' + encodeURIComponent(reportDocumentId) + full, '_blank', 'noopener,noreferrer');
   };
 
   // User card modal
@@ -3182,7 +3183,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
             <div class="uc-row__meta">${escapeHtml(s.type)} · ${fmtDate(s.date)}</div>
           </div>
           <span class="uc-row__percent">${s.percent}%</span>
-          <span class="uc-row__ai">ИИ ${s.ai}%</span>
+          <span class="uc-row__ai">ИИ ${s.ai == null ? '—' : s.ai + '%'}</span>
           <span class="uc-row__status">
             <span class="status-pill status-pill--${eff}">${statusLabel(eff)}</span>
             ${draftTimer}
@@ -3657,7 +3658,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           type:           normalizeDocType(d.category || d.categoryLabel || '—'),
           category:       d.category || 'uncategorized',
           percent:        busy ? null : Math.round(d.originalityPercent ?? 0),
-          ai:             busy ? null : Math.round(d.aiPercentMl ?? 0),
+          ai:             busy || d.aiPercentMl == null ? null : Math.round(d.aiPercentMl),
           wordCount:      d.wordCount ?? null,
           date:           d.uploadDate ? d.uploadDate.slice(0, 10) : '—',
           status:         d.status,
@@ -4162,7 +4163,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   }
   function renderSubmissions() {
     const q = subQuery.toLowerCase().trim();
-    const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
+    const inRange = (v, lo, hi) => v == null ? (lo == null && hi == null) : (lo == null || v >= lo) && (hi == null || v <= hi);
     const filtered = submissions.filter((s) => {
       if (!(!q || s.title.toLowerCase().includes(q) || s.author.toLowerCase().includes(q))) return false;
       if (subFilter.type.length && !subFilter.type.includes(s.type)) return false;
@@ -4194,7 +4195,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
              </span>` : '';
         const { uo, faculty } = resolveSubmissionOrg(s);
         const percentCell = isBusy ? '—' : `<b style="color: var(--primary);">${s.percent}%</b>`;
-        const aiCell = isBusy ? '—' : `<b style="color: #8b5cf6;">${s.ai}%</b>`;
+        const aiCell = isBusy || s.ai == null ? '—' : `<b style="color: #8b5cf6;">${s.ai}%</b>`;
         const actions = isBusy
           ? `<div class="sub-actions">
               <button class="uc-icon-btn uc-icon-btn--danger" type="button" data-sub-action="delete" data-id="${s.id}" title="Удалить" aria-label="Удалить">
@@ -4207,6 +4208,9 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
               </button>
               <button class="uc-icon-btn" type="button" data-sub-action="download" data-id="${s.id}" title="Скачать отчёт" aria-label="Скачать отчёт">
                 <i data-lucide="download" class="icon-16"></i>
+              </button>
+              <button class="uc-icon-btn" type="button" data-sub-action="download-full" data-id="${s.id}" title="Скачать полный отчёт" aria-label="Скачать полный отчёт">
+                <i data-lucide="file-search" class="icon-16"></i>
               </button>
               <button class="uc-icon-btn" type="button" data-sub-action="edit" data-id="${s.id}" title="Редактировать" aria-label="Редактировать">
                 <i data-lucide="pencil" class="icon-16"></i>
@@ -4242,7 +4246,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           if (!item) return;
           const action = btn.dataset.subAction;
           const eff = getEffectiveStatus(item);
-          if ((action === 'matches' || action === 'download') && (eff === 'processing' || eff === 'failed')) {
+          if ((action === 'matches' || action === 'download' || action === 'download-full') && (eff === 'processing' || eff === 'failed')) {
             alert(eff === 'processing'
               ? 'Документ ещё обрабатывается.'
               : 'Проверка документа завершилась с ошибкой.');
@@ -4250,8 +4254,9 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           }
           if (action === 'matches') {
             const matchPct = Math.max(0, 100 - (item.percent || 0));
-            openAdminMatches(item.id, matchPct, item.ai ?? 0);
+            openAdminMatches(item.id, matchPct, item.ai);
           } else if (action === 'download') openPrintableReport(item, null);
+          else if (action === 'download-full') openPrintableReport(item, null, 'full');
           else if (action === 'edit') openSubEdit(item);
           else if (action === 'delete') {
             confirmAction(`Удалить работу «${item.title}»?`, async () => {
@@ -4483,7 +4488,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
 
   function filterSubmissionsList() {
     const q = subQuery.toLowerCase().trim();
-    const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
+    const inRange = (v, lo, hi) => v == null ? (lo == null && hi == null) : (lo == null || v >= lo) && (hi == null || v <= hi);
     return submissions.filter((s) => {
       if (!(!q || s.title.toLowerCase().includes(q) || s.author.toLowerCase().includes(q))) return false;
       if (subFilter.type.length && !subFilter.type.includes(s.type)) return false;
@@ -4513,7 +4518,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         'Факультет': faculty,
         'Тип': s.type,
         'Оригинальность, %': s.percent,
-        'ИИ, %': s.ai,
+        'ИИ, %': s.ai == null ? '—' : s.ai,
         'Время ОФ, сек': s.processingTime || 0,
         'Дата': fmtDate(s.date),
         'Статус': statusLabel(getEffectiveStatus(s)),
@@ -4547,12 +4552,12 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   }
   function renderRepo() {
     const q = repoQuery.toLowerCase().trim();
-    const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
+    const inRange = (v, lo, hi) => v == null ? (lo == null && hi == null) : (lo == null || v >= lo) && (hi == null || v <= hi);
     const filtered = repository.filter((r) => {
       if (!(!q || r.title.toLowerCase().includes(q) || r.author.toLowerCase().includes(q))) return false;
       if (repoFilter.type.length && !repoFilter.type.includes(r.type)) return false;
       if (!inRange(r.percent, repoFilter.origMin, repoFilter.origMax)) return false;
-      if (!inRange(r.ai ?? 0, repoFilter.aiMin, repoFilter.aiMax)) return false;
+      if (!inRange(r.ai, repoFilter.aiMin, repoFilter.aiMax)) return false;
       if (repoFilter.dateFrom && (r.indexed || '') < repoFilter.dateFrom) return false;
       if (repoFilter.dateTo && (r.indexed || '') > repoFilter.dateTo) return false;
       return true;
@@ -4573,7 +4578,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           <code>${r.id}</code>
           <span class="repo-row__percents">
             <span style="color: var(--primary); font-weight: 700; font-size: 13px;">${r.percent}%</span>
-            <span style="color: #8b5cf6; font-weight: 700; font-size: 13px;">ИИ ${r.ai ?? 0}%</span>
+            <span style="color: #8b5cf6; font-weight: 700; font-size: 13px;">ИИ ${r.ai == null ? '—' : r.ai + '%'}</span>
           </span>
           <div class="repo-row__actions">
             <button class="uc-icon-btn" type="button" data-repo-action="download" data-id="${r.id}" title="Скачать PDF отчёт" aria-label="Скачать PDF отчёт">
@@ -4673,12 +4678,12 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
 
   function filterRepositoryList() {
     const q = repoQuery.toLowerCase().trim();
-    const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
+    const inRange = (v, lo, hi) => v == null ? (lo == null && hi == null) : (lo == null || v >= lo) && (hi == null || v <= hi);
     return repository.filter((r) => {
       if (!(!q || r.title.toLowerCase().includes(q) || r.author.toLowerCase().includes(q))) return false;
       if (repoFilter.type.length && !repoFilter.type.includes(r.type)) return false;
       if (!inRange(r.percent, repoFilter.origMin, repoFilter.origMax)) return false;
-      if (!inRange(r.ai ?? 0, repoFilter.aiMin, repoFilter.aiMax)) return false;
+      if (!inRange(r.ai, repoFilter.aiMin, repoFilter.aiMax)) return false;
       if (repoFilter.dateFrom && (r.indexed || '') < repoFilter.dateFrom) return false;
       if (repoFilter.dateTo && (r.indexed || '') > repoFilter.dateTo) return false;
       return true;
@@ -4696,7 +4701,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
         'Факультет': faculty,
         'Тип': r.type,
         'Оригинальность, %': r.percent,
-        'ИИ, %': r.ai ?? 0,
+        'ИИ, %': r.ai == null ? '—' : r.ai,
         'Дата индексации': fmtDate(r.indexed),
       };
       if (__isSuperAdmin) row['УО'] = uo;
@@ -4864,7 +4869,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
       type: normalizeDocType(d.type || d.categoryLabel || d.category || '—'),
       status: d.status,
       percent: Math.round(d.percent ?? d.originalityPercent ?? 0),
-      ai: Math.round(d.ai ?? d.aiPercent ?? 0),
+      ai: d.ai == null && d.aiPercent == null ? null : Math.round(d.ai ?? d.aiPercent),
       matches: Math.round(d.matches ?? d.plagiarismPercent ?? 0),
       date: d.date || (d.uploadDate ? d.uploadDate.slice(0, 10) : ''),
       uo: d.uo || d.institution || '—',
@@ -5560,7 +5565,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
   let docPage = 1;
   const renderDocs = () => {
     const f = dashFilter.doc;
-    const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
+    const inRange = (v, lo, hi) => v == null ? (lo == null && hi == null) : (lo == null || v >= lo) && (hi == null || v <= hi);
     const filtered = applyGlobal(documents).filter((d) => {
       if (f.type.length && !f.type.includes(d.type)) return false;
       if (f.status.length && !f.status.includes(d.status)) return false;
@@ -5595,7 +5600,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
 
   document.getElementById('docExportBtn').addEventListener('click', () => {
     const f = dashFilter.doc;
-    const inRange = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
+    const inRange = (v, lo, hi) => v == null ? (lo == null && hi == null) : (lo == null || v >= lo) && (hi == null || v <= hi);
     const filtered = applyGlobal(documents).filter((d) => {
       if (f.type.length && !f.type.includes(d.type)) return false;
       if (f.status.length && !f.status.includes(d.status)) return false;
@@ -5632,12 +5637,13 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
     const archived = filtered.filter((d) => d.status === 'archived').length;
     const finals = filtered.filter((d) => d.status === 'final');
     const avgOrig = finals.length ? Math.round(finals.reduce((s, d) => s + d.percent, 0) / finals.length) : 0;
-    const avgAi = finals.length ? Math.round(finals.reduce((s, d) => s + d.ai, 0) / finals.length) : 0;
+    const aiKnown = finals.filter((d) => typeof d.ai === 'number');
+    const avgAi = aiKnown.length ? Math.round(aiKnown.reduce((s, d) => s + d.ai, 0) / aiKnown.length) : null;
     setText('stat-total', total);
     setText('stat-users', uniqUsers);
     setText('stat-drafts', drafts);
     setText('stat-avg', avgOrig + '%');
-    setText('stat-ai', avgAi + '%');
+    setText('stat-ai', avgAi == null ? '—' : avgAi + '%');
     setText('stat-archived', archived);
 
     // Repository summary — finals only, by type (dynamic from appConfig.types)
