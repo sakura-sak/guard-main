@@ -5,7 +5,7 @@
 
 import { Prisma } from "@prisma/client"
 import { prisma } from "./prisma"
-import { isSeoCategory } from "./comparison-scope"
+import { shouldFinalizeImmediately } from "./comparison-scope"
 import { replaceMlMatchesForDocument, type MlSemanticMatch } from "./ml-matches-storage"
 import { resolveDocumentTypeId } from "./document-types"
 
@@ -520,6 +520,7 @@ export async function completeAnalysisJob(params: {
   processingTimeMs: number
   semanticMatches: MlSemanticMatch[]
   category?: string | null
+  submittedVia?: string | null
 }): Promise<void> {
   const mlPlag = roundPercent(params.plagiarismPercentMl)
   const ai =
@@ -530,8 +531,8 @@ export async function completeAnalysisJob(params: {
   const plag = Math.max(local, mlPlag)
   const originality = roundPercent(100 - plag)
   const now = new Date()
-  const seoFinal = isSeoCategory(params.category)
-  const expiresAt = seoFinal ? null : new Date(now.getTime() + DRAFT_TTL_MS)
+  const makeFinal = shouldFinalizeImmediately(params.category, params.submittedVia)
+  const expiresAt = makeFinal ? null : new Date(now.getTime() + DRAFT_TTL_MS)
 
   await prisma.$transaction(async (tx) => {
     await tx.analysisJob.update({
@@ -547,7 +548,7 @@ export async function completeAnalysisJob(params: {
     await tx.document.update({
       where: { id: params.documentId },
       data: {
-        status: seoFinal ? "final" : "draft",
+        status: makeFinal ? "final" : "draft",
         plagiarismPercentMl: mlPlag,
         aiPercentMl: ai,
         localPlagiarismPercent: local,

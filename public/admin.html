@@ -371,18 +371,33 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
 
 /* Table */
-.table-wrap { overflow-x: auto; border-radius: 14px; border: 1px solid var(--border); }
-.adm-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.table-wrap { overflow-x: hidden; border-radius: 14px; border: 1px solid var(--border); }
+.adm-table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .adm-table thead th {
   text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
-  padding: 14px 16px; background: var(--bg-2);
+  padding: 10px 8px; background: var(--bg-2);
   border-bottom: 1px solid var(--border);
-  text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
+  text-transform: uppercase; letter-spacing: 0.3px;
+  overflow-wrap: anywhere; word-break: break-word;
 }
 .adm-table tbody td {
-  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  padding: 10px 8px; border-bottom: 1px solid var(--border);
   vertical-align: middle; color: var(--ink-2);
+  overflow-wrap: anywhere; word-break: break-word;
 }
+.adm-table .col-narrow { width: 52px; padding-left: 4px; padding-right: 4px; text-align: center; }
+.adm-table--checks .col-work { width: 16%; }
+.adm-table--checks .col-author { width: 12%; }
+.adm-table--checks .col-uo { width: 6%; }
+.adm-table--checks .col-faculty { width: 11%; text-align: center; }
+.adm-table--checks .col-type { width: 10%; }
+.adm-table--checks .col-narrow { width: 5%; padding-left: 4px; padding-right: 4px; text-align: center; }
+.adm-table--checks .col-ai { width: 4%; padding-left: 4px; padding-right: 4px; text-align: center; }
+.adm-table--checks .col-time { width: 6%; padding-left: 4px; padding-right: 4px; text-align: center; }
+.adm-table--checks .col-date { width: 7%; }
+.adm-table--checks .col-status { width: 9%; }
+.adm-table--checks .col-actions { width: 14%; padding-left: 4px; padding-right: 4px; }
+.adm-table--checks .status-pill { white-space: normal; line-height: 1.25; text-align: center; }
 .adm-table tbody tr:last-child td { border-bottom: none; }
 .adm-table tbody tr:hover td { background: var(--bg-2); }
 .adm-table__row { cursor: pointer; transition: background .15s; }
@@ -956,7 +971,8 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
 }
 .uc-timer strong { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .sub-status { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.sub-actions { display: inline-flex; gap: 6px; }
+.sub-actions { display: flex; flex-wrap: nowrap; gap: 4px; }
+.adm-table .uc-icon-btn { width: 28px; height: 28px; }
 
 .custom-select { position: relative; }
 .custom-select__trigger {
@@ -1567,8 +1583,8 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
                 <th>Факультет</th>
                 <th>Тип работы</th>
                 <th>Статус</th>
-                <th>Ориг., %</th>
-                <th>Совп., %</th>
+                <th class="col-narrow">Ориг., %</th>
+                <th class="col-narrow">Совп., %</th>
                 <th>Дата загрузки</th>
               </tr>
             </thead>
@@ -1728,20 +1744,20 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           </div>
         </div>
         <div class="table-wrap">
-          <table class="adm-table">
+          <table class="adm-table adm-table--checks">
             <thead>
               <tr>
-                <th>Работа</th>
-                <th>Автор</th>
-                <th class="admin-col-uo">УО</th>
-                <th>Факультет</th>
-                <th>Тип</th>
-                <th title="Оригинальность">Ориг.</th>
-                <th>ИИ</th>
-                <th title="Время обработки файла">Время ОФ</th>
-                <th>Дата</th>
-                <th>Статус</th>
-                <th></th>
+                <th class="col-work">Работа</th>
+                <th class="col-author">Автор</th>
+                <th class="admin-col-uo col-uo">УО</th>
+                <th class="col-faculty">Факультет</th>
+                <th class="col-type">Тип</th>
+                <th class="col-narrow" title="Оригинальность">Ориг.</th>
+                <th class="col-narrow col-ai">ИИ</th>
+                <th class="col-time" title="Время обработки файла">Время ОФ</th>
+                <th class="col-date">Дата</th>
+                <th class="col-status">Статус</th>
+                <th class="col-actions"></th>
               </tr>
             </thead>
             <tbody id="submissionsTbody"></tbody>
@@ -4221,22 +4237,22 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
             </div>`;
         return `
         <tr>
-          <td><div class="adm-table__name">${escapeHtml(s.title)}</div></td>
-          <td>${escapeHtml(s.author)}</td>
-          <td class="admin-col-uo">${escapeHtml(uo)}</td>
-          <td>${escapeHtml(faculty)}</td>
-          <td>${escapeHtml(s.type)}</td>
-          <td>${percentCell}</td>
-          <td>${aiCell}</td>
-          <td>${fmtProcTime(s.processingTime)}</td>
-          <td>${fmtDate(s.date)}</td>
-          <td>
+          <td class="col-work"><div class="adm-table__name">${escapeHtml(s.title)}</div></td>
+          <td class="col-author">${escapeHtml(s.author)}</td>
+          <td class="admin-col-uo col-uo">${escapeHtml(uo)}</td>
+          <td class="col-faculty">${escapeHtml(faculty)}</td>
+          <td class="col-type">${escapeHtml(s.type)}</td>
+          <td class="col-narrow">${percentCell}</td>
+          <td class="col-narrow col-ai">${aiCell}</td>
+          <td class="col-time">${fmtProcTime(s.processingTime)}</td>
+          <td class="col-date">${fmtDate(s.date)}</td>
+          <td class="col-status">
             <div class="sub-status">
               <span class="status-pill status-pill--${eff}">${statusLabel(eff)}</span>
               ${timer}
             </div>
           </td>
-          <td>${actions}</td>
+          <td class="col-actions">${actions}</td>
         </tr>
       `;
       }).join('');

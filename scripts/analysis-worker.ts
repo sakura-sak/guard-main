@@ -122,6 +122,7 @@ async function completeViaSyncAnalyze(job: ClaimedAnalysisJob, startedAt: number
     processingTimeMs: Date.now() - startedAt,
     semanticMatches: result.semanticMatches,
     category: job.category,
+    submittedVia: job.submittedVia,
   })
   if (shouldFinalizeImmediately(job.category, job.submittedVia)) {
     await generateAndSaveFinalReport({
@@ -229,6 +230,7 @@ async function runClaimedJob(job: ClaimedAnalysisJob): Promise<void> {
           processingTimeMs: Date.now() - startedAt,
           semanticMatches: status.result.semanticMatches,
           category: job.category,
+          submittedVia: job.submittedVia,
         })
         if (shouldFinalizeImmediately(job.category, job.submittedVia)) {
           await generateAndSaveFinalReport({
