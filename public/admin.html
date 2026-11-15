@@ -3674,7 +3674,7 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
           type:           normalizeDocType(d.category || d.categoryLabel || '—'),
           category:       d.category || 'uncategorized',
           percent:        busy ? null : Math.round(d.originalityPercent ?? 0),
-          ai:             busy || d.aiPercentMl == null ? null : Math.round(d.aiPercentMl),
+          ai:             busy ? null : Math.round(d.aiPercentMl ?? 0),
           wordCount:      d.wordCount ?? null,
           date:           d.uploadDate ? d.uploadDate.slice(0, 10) : '—',
           status:         d.status,
@@ -4210,8 +4210,8 @@ body.is-uni-admin #settingsModal .settings-grid { grid-template-columns: minmax(
                <span>Хранится <strong>${formatRemaining(s._expiresAt - Date.now())}</strong></span>
              </span>` : '';
         const { uo, faculty } = resolveSubmissionOrg(s);
-        const percentCell = isBusy ? '—' : `<b style="color: var(--primary);">${s.percent}%</b>`;
-        const aiCell = isBusy || s.ai == null ? '—' : `<b style="color: #8b5cf6;">${s.ai}%</b>`;
+        const percentCell = isBusy ? '—' : `<b style="color: var(--primary);">${s.percent ?? 0}%</b>`;
+        const aiCell = isBusy ? '—' : `<b style="color: #8b5cf6;">${s.ai ?? 0}%</b>`;
         const actions = isBusy
           ? `<div class="sub-actions">
               <button class="uc-icon-btn uc-icon-btn--danger" type="button" data-sub-action="delete" data-id="${s.id}" title="Удалить" aria-label="Удалить">
