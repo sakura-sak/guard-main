@@ -88,45 +88,6 @@ export function canonicalizeForStorage(text: string): string {
     .trim()
 }
 
-function isWordBoundStart(text: string, index: number): boolean {
-  if (index <= 0) return true
-  return !/[\p{L}\p{N}_]/u.test(text[index - 1] || "")
-}
-
-function isWordBoundEnd(text: string, index: number): boolean {
-  if (index >= text.length) return true
-  return !/[\p{L}\p{N}_]/u.test(text[index] || "")
-}
-
-/** Пункт оглавления сразу после заголовка: «Введение ........ 3». */
-function isTocStyleMatch(text: string, index: number, markerLength: number): boolean {
-  const after = text.slice(index + markerLength)
-  return /^\s*[\.…]{2,}\s*\d{1,4}(?:\s|$)/u.test(after)
-}
-
-function findContentStartIndex(text: string): number | null {
-  const window = text.slice(0, 16000)
-  const lower = window.toLowerCase()
-  if (countCoverMarkers(lower) < 3) return null
-
-  let best = -1
-  for (const marker of CONTENT_START_MARKERS) {
-    let from = 0
-    while (from < lower.length) {
-      const index = lower.indexOf(marker, from)
-      if (index < 0) break
-      const end = index + marker.length
-      if (!isWordBoundStart(window, index) || !isWordBoundEnd(window, end) || isTocStyleMatch(window, index, marker.length)) {
-        from = end
-        continue
-      }
-      if (best < 0 || index < best) best = index
-      break
-    }
-  }
-  return best >= 0 ? best : null
-}
-
 function stripFigureReferences(text: string): string {
   return FIGURE_REFERENCE_PATTERNS.reduce((out, pattern) => out.replace(pattern, " "), text)
 }
@@ -148,82 +109,74 @@ export function isLikelyBoilerplateText(text: string): boolean {
   return coverMarkers >= 3 && !hasContentMarker
 }
 
-function stripLeadingCoverBlock(text: string): string {
-  const start = findContentStartIndex(text)
-  if (start == null || start < 1) return text
-  return text.slice(start)
-}
+const TITLE_BLOCK_WINDOW = 4000
 
-function stripFlatContentsBlock(text: string): string {
-  return text.replace(
-    /(?:^|\s)(?:содержание|оглавление)(?:\s+\S.{0,100}?(?:\.{2,}|\s)\d{1,4})+/giu,
-    " ",
-  )
-}
+/**
+ * Титул одним куском: от «Министерство образования» до «Минск» и года.
+ * Если такой пары нет, начало текста не трогаем.
+ */
+const CONTENTS_WORD =
+  "с\\s{0,2}о\\s{0,2}д\\s{0,2}е\\s{0,2}р\\s{0,2}ж\\s{0,2}а\\s{0,2}н\\s{0,2}и\\s{0,2}е|о\\s{0,2}г\\s{0,2}л\\s{0,2}а\\s{0,2}в\\s{0,2}л\\s{0,2}е\\s{0,2}н\\s{0,2}и\\s{0,2}е"
 
-function stripTrailingAppendix(text: string): string {
-  const halfway = Math.floor(text.length / 2)
-  const tail = text.slice(halfway)
-  const match = tail.match(/\sприложени[ея]\s+(?:№\s*)?(?:[\p{L}](?![\p{L}])|\d{1,3}(?!\d))/iu)
-  if (!match || match.index == null) return text
-  return text.slice(0, halfway + match.index).trim()
+function stripTitleBlock(text: string): string {
+  const start = /министерств[оа]\s+образования/iu.exec(text)
+  if (!start || start.index == null) return text
+  const tail = text.slice(start.index)
+  // PDF часто рвёт год пробелом: «Минск, 202 6».
+  const end = /минск\s*,?\s*(?:19|20)(?:\s*\d){2}(?!\d)/iu.exec(tail)
+  if (!end || end.index == null || end.index > TITLE_BLOCK_WINDOW) return text
+  return text.slice(start.index + end.index + end[0].length)
 }
 
 function isContentsHeading(line: string): boolean {
-  return /^\s*(?:содержание|оглавление)\s*$/iu.test(line)
+  return new RegExp(String.raw`^\s*(?:\d{1,4}\s+)?(?:${CONTENTS_WORD})\s*$`, "iu").test(line)
 }
 
-/** Пункт оглавления: «Введение ........ 3» или «1. Теория 5». */
+/** Пункт оглавления: длинные точки, «Вывод ...... 19», «Введение3», «1. Теория 5». */
+function hasTrailingPageNumber(line: string): boolean {
+  if (/(?:\.\s*){2,}\d{1,4}\s*$/u.test(line) || /…+\s*\d{1,4}\s*$/u.test(line)) return true
+  if (/[\p{L}]\d{1,4}\s*$/u.test(line) && line.length <= 80) return true
+  const spaced = line.match(/^(.*\S)\s+(\d{1,4})\s*$/u)
+  if (!spaced || line.length > 120) return false
+  const title = spaced[1]
+  if (/^глава$/iu.test(title)) return false
+  if (/^(?:глава\s+)?\d+(?:\.\d+)*$/iu.test(title)) return false
+  return true
+}
+
 function isContentsEntry(line: string): boolean {
   const trimmed = line.trim()
   if (!trimmed) return true
-  return /(?:\.{2,}|\s)\d{1,4}\s*$/.test(trimmed)
-}
-
-function isContentHeading(line: string): boolean {
-  const lower = line.trim().toLowerCase()
-  return CONTENT_START_MARKERS.some(
-    (marker) => lower === marker || lower.startsWith(`${marker} `) || lower.startsWith(`${marker}.`),
-  )
+  return hasTrailingPageNumber(trimmed)
 }
 
 /**
  * Заголовок приложения: «Приложение А», «ПРИЛОЖЕНИЕ 1», «Приложение № 2».
- * «приложение Microsoft Excel» не подходит: после слова идёт длинное слово, не буква/номер.
+ * Пункт оглавления и «приложение Microsoft Excel» сюда не входят.
  */
-function isAppendixHeading(line: string): boolean {
-  const trimmed = line.trim()
-  if (/^приложени[ея]$/iu.test(trimmed)) return true
-  return /^приложени[ея]\s+(?:№\s*)?(?:[\p{L}](?![\p{L}])|\d{1,3}(?!\d))/iu.test(trimmed)
+/** Буква приложения только прописная: «А», «Б». Строчные «к», «в», «с» — это текст работы. */
+function isAppendixMarker(marker: string): boolean {
+  if (/^\d{1,3}$/u.test(marker)) return true
+  return /^\p{L}$/u.test(marker) && marker === marker.toUpperCase()
 }
 
-/**
- * Черновое удаление служебных разделов документа
- * (титульный лист, содержание/оглавление, приложения)
- * перед расчётом оригинальности.
- *
- * Приложение отрезается только заголовком во второй половине текста,
- * чтобы пункт оглавления и фраза «приложение Microsoft Excel» не съели работу.
- */
-export function stripNonContentSections(rawText: string): string {
-  const withoutCoverBlock = stripFigureReferences(stripLeadingCoverBlock(rawText))
-  const lines = withoutCoverBlock.split(/\r?\n/)
-  const result: string[] = []
-  const halfway = withoutCoverBlock.length / 2
+function isAppendixHeading(line: string): boolean {
+  const trimmed = line.trim()
+  if (hasTrailingPageNumber(trimmed)) return false
+  const match = /^(?:\d{1,4}\s+)?приложени[ея]\s+(?:№\s*)?([\p{L}](?![\p{L}])|\d{1,3}(?!\d))/iu.exec(trimmed)
+  return match != null && isAppendixMarker(match[1] || "")
+}
 
-  let inAppendix = false
+function stripContentsAndAppendix(text: string): string {
+  const lines = text.split(/\r?\n/)
+  const result: string[] = []
   let inContents = false
-  let offset = 0
+  let inAppendix = false
 
   for (const line of lines) {
-    const lineStart = offset
-    offset += line.length + 1
-    const trimmed = line.trim()
-    const lower = trimmed.toLowerCase()
-
     if (inAppendix) continue
 
-    if (!inContents && lineStart >= halfway && isAppendixHeading(trimmed)) {
+    if (!inContents && isAppendixHeading(line)) {
       inAppendix = true
       continue
     }
@@ -234,30 +187,158 @@ export function stripNonContentSections(rawText: string): string {
     }
 
     if (inContents) {
-      if (isContentsEntry(trimmed)) continue
+      if (isContentsEntry(line)) continue
       inContents = false
-    }
-
-    // Удаляем явные упоминания титульного листа
-    if (lower.includes("титульный лист")) {
-      continue
-    }
-
-    if (
-      trimmed.length < 250 &&
-      COVER_LINE_PATTERNS.some((pattern) => {
-        pattern.lastIndex = 0
-        return pattern.test(trimmed)
-      })
-    ) {
-      continue
     }
 
     result.push(line)
   }
 
-  const joined = stripTrailingAppendix(stripFlatContentsBlock(result.join("\n").trim()))
-  // На всякий случай: если после очистки текста почти нет, возвращаем исходный
+  return result.join("\n")
+}
+
+/** Содержание одной полосой: «СОДЕРЖА Н ИЕ», группы точек и «Введение3». */
+function stripFlatContentsBlock(text: string): string {
+  const headingRe = new RegExp(String.raw`(^|[^\p{L}\p{N}])(?:${CONTENTS_WORD})(?![\p{L}])`, "giu")
+  let result = ""
+  let cursor = 0
+  for (const match of text.matchAll(headingRe)) {
+    if (match.index == null) continue
+    const prefixLen = match[1]?.length ?? 0
+    const wordAt = match.index + prefixLen
+    if (wordAt < cursor) continue
+    const end = consumeFlatContentsEntries(text, match.index + match[0].length)
+    if (end == null) continue
+    result += text.slice(cursor, expandHeadingCut(text, wordAt))
+    cursor = end
+  }
+  result += text.slice(cursor)
+  return result
+}
+
+function expandHeadingCut(text: string, wordAt: number): number {
+  let i = wordAt
+  while (i > 0 && /\s/u.test(text[i - 1])) i--
+  let j = i
+  while (j > 0 && /\d/u.test(text[j - 1])) j--
+  if (j < i && i - j <= 4 && (j === 0 || /\s/u.test(text[j - 1]))) return j
+  return wordAt
+}
+
+function consumeFlatContentsEntries(text: string, from: number): number | null {
+  let i = from
+  let found = false
+  while (i < text.length) {
+    let j = i
+    while (j < text.length && /\s/u.test(text[j])) j++
+    if (j >= text.length) break
+    const next = matchOneFlatEntry(text, j)
+    if (next == null) break
+    i = next
+    found = true
+  }
+  return found ? i : null
+}
+
+function isPageNumber(value: string): boolean {
+  return /^\d{1,4}$/u.test(value) && !/^(?:19|20)\d{2}$/u.test(value)
+}
+
+function readDotLeader(text: string, from: number): { end: number; dots: number } | null {
+  let p = from
+  let dots = 0
+  while (p < text.length) {
+    const ch = text[p]
+    if (ch === "." || ch === "…") {
+      dots++
+      p++
+      continue
+    }
+    if (dots > 0 && /\s/u.test(ch)) {
+      let q = p
+      while (q < text.length && /\s/u.test(text[q])) q++
+      if (q < text.length && (text[q] === "." || text[q] === "…")) {
+        p = q
+        continue
+      }
+    }
+    break
+  }
+  if (dots < 2) return null
+  return { end: p, dots }
+}
+
+function matchOneFlatEntry(text: string, start: number): number | null {
+  if (start >= text.length || !/[\p{L}\p{N}]/u.test(text[start])) return null
+  const windowEnd = Math.min(text.length, start + 900)
+  let leaderEnd: number | null = null
+  for (let k = start + 1; k < windowEnd; k++) {
+    const ch = text[k]
+    if (ch !== "." && ch !== "…") continue
+    const leader = readDotLeader(text, k)
+    if (!leader) continue
+    let r = leader.end
+    while (r < text.length && /\s/u.test(text[r])) r++
+    const page = /^(\d{1,4})(?![\p{L}\p{N}])/u.exec(text.slice(r))
+    if (!page || !isPageNumber(page[1])) continue
+    const title = text.slice(start, k)
+    if (title.length > 300 || /[\p{L}][.!?]\s/u.test(title)) break
+    leaderEnd = r + page[1].length
+    break
+  }
+
+  const slice = text.slice(start, start + 80)
+  const glued = /^[\p{L}]{2,}\d{1,4}(?![\p{L}\p{N}])/u.exec(slice)
+  const gluedEnd = glued && isPageNumber(glued[0].match(/\d{1,4}$/u)?.[0] || "") ? start + glued[0].length : null
+  const spaced = /^[\p{L}\d][^\n]{0,70}?\s(\d{1,4})(?![\p{L}\p{N}])/u.exec(slice)
+  let spacedEnd: number | null = null
+  if (spaced && isPageNumber(spaced[1]) && !/[\p{L}][.!?…]\s/u.test(spaced[0]) && !/(?:\.\s*){4,}/u.test(spaced[0])) {
+    const title = spaced[0].replace(/\s\d{1,4}$/u, "").trim()
+    if (!/^глава$/iu.test(title) && !/^(?:глава\s+)?\d+(?:\.\d+)*$/iu.test(title)) {
+      spacedEnd = start + spaced[0].length
+    }
+  }
+  const shortEnd = gluedEnd ?? spacedEnd
+  if (shortEnd != null && (leaderEnd == null || shortEnd < leaderEnd)) return shortEnd
+  return leaderEnd
+}
+
+/**
+ * Первое настоящее приложение и всё после него: несколько приложений, листинги и код.
+ * Номер страницы перед заголовком («151 ПРИЛОЖЕНИЕ Б») тоже относится к приложению.
+ * Пункт оглавления «Приложение А .... 25» и «приложение Microsoft Excel» не подходят.
+ */
+function stripInlineAppendix(text: string): string {
+  const heading = /приложени[ея]\s+(?:№\s*)?([\p{L}](?![\p{L}])|\d{1,3}(?!\d))/giu
+  for (const match of text.matchAll(heading)) {
+    if (match.index == null || !isAppendixMarker(match[1] || "")) continue
+    const prev = match.index > 0 ? text[match.index - 1] : ""
+    if (prev && /[\p{L}\p{N}_]/u.test(prev)) continue
+    const after = text.slice(match.index + match[0].length)
+    if (/^\s*[\.…]{2,}/u.test(after)) continue
+    return text.slice(0, pageNumberBefore(text, match.index)).trim()
+  }
+  return text
+}
+
+function pageNumberBefore(text: string, index: number): number {
+  let i = index
+  while (i > 0 && /\s/u.test(text[i - 1])) i--
+  let j = i
+  while (j > 0 && /\d/u.test(text[j - 1])) j--
+  const digits = text.slice(j, i)
+  if (j < i && digits.length <= 4 && isPageNumber(digits) && (j === 0 || /\s/u.test(text[j - 1]))) return j
+  return index
+}
+
+/**
+ * Удаление служебных частей перед проверкой: титул, содержание, приложения,
+ * подписи рисунков и таблиц. Главы, введение, ход работы, вывод и заключение остаются.
+ */
+export function stripNonContentSections(rawText: string): string {
+  const withoutTitle = stripTitleBlock(rawText)
+  const withoutSections = stripInlineAppendix(stripFlatContentsBlock(stripContentsAndAppendix(withoutTitle)))
+  const joined = stripFigureReferences(withoutSections).trim()
   if (joined.length < 50) {
     return canonicalizeForStorage(rawText)
   }

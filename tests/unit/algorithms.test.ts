@@ -79,12 +79,142 @@ describe("plagiarism algorithms", () => {
     expect(normalized).not.toMatch(/приложение а/i)
   })
 
-  it("cuts a real appendix in the second half and keeps an excel mention", () => {
+  it("cuts a real appendix and keeps an excel mention", () => {
     const body = "Ход работы. ".repeat(40) + "Используя приложение Microsoft Excel, сгенерировать выборку."
     const raw = `${body}\nПриложение А\nЛистинг программы который не должен участвовать в проверке оригинальности.`
     const normalized = normalizeContentForCheck(raw)
     expect(normalized).toContain("приложение Microsoft Excel")
     expect(normalized).not.toContain("Листинг программы")
+  })
+
+  it("keeps prose about the application and cuts only a real appendix heading", () => {
+    const raw = [
+      "Готовность приложения к эксплуатации подтверждена испытаниями и покрытием тестов.",
+      "Стабильность работы приложения в условиях реальной нагрузки сохраняется до сдачи.",
+      "Заключение. Цели курсового проекта достигнуты, система готова к внедрению в магазине.",
+      "ПРИЛОЖЕНИЕ А",
+      "(обязательное)",
+      "Текст программы public class SupplyController { return ResponseEntity.ok(dto); }",
+      "ПРИЛОЖЕНИЕ Б",
+      "CREATE TABLE brands( id BIGSERIAL PRIMARY KEY );",
+    ].join("\n")
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("приложения к эксплуатации")
+    expect(normalized).toContain("приложения в условиях")
+    expect(normalized).toContain("Цели курсового проекта")
+    expect(normalized).not.toContain("SupplyController")
+    expect(normalized).not.toContain("CREATE TABLE")
+  })
+
+  it("cuts every appendix from the first heading, including later listings and a page number", () => {
+    const body = "В курсовом проекте описаны поставки, роли пользователей и структура таблиц базы."
+    const raw = [
+      body,
+      "ПРИЛОЖЕНИЕ А (обязательное) Отчет о проверке на заимствования в системе «Антиплагиат» Рисунок А.1 – Результаты проверки на оригинальность",
+      "84 ПРИЛОЖЕНИЕ Б (обязательное) Листинг кода алгоритмов @RestController @RequestMapping(\"/supplies\") public class SupplyController { private final SupplyService supplyService; }",
+      "90 ПРИЛОЖЕНИЕ В ( обязательно е ) Листинг скрипта генерации базы данных CREATE TABLE brands( id BIGSERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL UNIQUE);",
+      "92 ПРИЛОЖЕНИЕ Г ( обязательное ) Ведомость документов курсового проекта",
+    ].join(" ")
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("структура таблиц базы")
+    expect(normalized).not.toMatch(/приложение/i)
+    expect(normalized).not.toContain("SupplyController")
+    expect(normalized).not.toContain("CREATE TABLE")
+    expect(normalized).not.toContain("Ведомость документов")
+  })
+
+  it("cuts an appendix heading even when it is in the first half", () => {
+    const head = "Ход работы. Краткое описание алгоритма и полученных результатов эксперимента."
+    const raw = `${head}\nПриложение А\nЛистинг который не должен остаться в проверке оригинальности текста.`
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("Ход работы")
+    expect(normalized).not.toContain("Листинг который")
+  })
+
+  it("drops a long dotted contents line and glued page numbers, but keeps chapters before the conclusion", () => {
+    const dots = ".".repeat(80)
+    const raw = [
+      "Министерство образования Республики Беларусь",
+      "Учреждение образования БГУИР",
+      "Минск, 2026",
+      "Содержание",
+      `Вывод ${dots} 19`,
+      "Введение3",
+      "Вывод20",
+      "Глава 1. Постановка задачи и описание исходных данных для расчёта.",
+      "Глава 2. Проектирование модулей и сравнение полученных результатов.",
+      "Вывод. Оба предыдущих раздела остаются в тексте проверки.",
+    ].join("\n")
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("Глава 1")
+    expect(normalized).toContain("Глава 2")
+    expect(normalized).toContain("Оба предыдущих раздела")
+    expect(normalized).not.toMatch(/вывод\s+\.{2,}/i)
+    expect(normalized).not.toMatch(/введение3/i)
+    expect(normalized).not.toMatch(/вывод20/i)
+    expect(normalized).not.toMatch(/минск/i)
+  })
+
+  it("drops a pdf title with a split year and a contents line with spaced dot leaders", () => {
+    const leader = `${".".repeat(24)} ${".".repeat(24)} ${".".repeat(16)}`
+    const raw = [
+      "Министерство образования Республики Беларусь Учреждение образования БЕЛОРУССКИЙ ГОСУДАРСТВЕННЫЙ УНИВЕРСИТЕТ ИНФОРМАТИКИ И РАДИОЭЛЕКТРОНИКИ Факультет компьютерного проектирования Кафедра проектирования информационно - компьютерных систем ОТЧЕТ по лабораторной работ е на тему: РАЗРАБОТКА МОДЕЛИ ПРОЕКТА. КАЛЕНДАРНОЕ ПЛАНИРОВАНИЕ РАБОТ Выполнил Баразнов Д. Д . (подпись студента ) гр. 314301 Проверил Левченя Ж.Б. (подпись преподавателя ) Минск, 202 6",
+      `СОДЕРЖАНИЕ 1 С оздание нового плана проекта ${leader} 3 2 Н астройка нерабочих дней ${leader} 4 В ыводы ${leader} 16`,
+      "Создание календарного графика описано в первом разделе и включает длительность задач.",
+    ].join("\n\n")
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("календарного графика")
+    expect(normalized).not.toMatch(/министерство образования/i)
+    expect(normalized).not.toMatch(/подпись студента/i)
+    expect(normalized).not.toMatch(/содержание/i)
+    expect(normalized).not.toMatch(/с оздание нового плана/i)
+    expect(normalized).not.toMatch(/в ыводы/i)
+  })
+
+  it("drops a contents heading with spaces inside the word and numbered subsections", () => {
+    const leader = `${".".repeat(20)} ${".".repeat(20)} ${".".repeat(12)}`
+    const raw = `2 СОДЕРЖА Н ИЕ 1 П ланирование управления стоимостью ${leader} 3 1.1 План управления стоимостью StudyFlow ${leader} 3 6.4 Основные и прогнозные показатели EVM ${leader} 11 З аключение ${leader} 19 Заключение. В работе рассчитаны ROI и NPV для проекта и сделан вывод о целесообразности затрат.`
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("ROI и NPV")
+    expect(normalized).toContain("Заключение")
+    expect(normalized).not.toMatch(/содержа\s*н\s*ие/i)
+    expect(normalized).not.toMatch(/studyflow/i)
+    expect(normalized).not.toMatch(/з аключение/i)
+  })
+
+  it("drops a flat contents block with glued page numbers", () => {
+    const body = "Введение. Дальше идёт основной текст лабораторной работы про структуры данных."
+    const raw = `Содержание Введение3 Ход работы ${".".repeat(60)} 12 ${body}`
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("основной текст")
+    expect(normalized).toContain("Введение. Дальше")
+    expect(normalized).not.toMatch(/введение3/i)
+    expect(normalized).not.toMatch(/ход работы\s+\.{2,}/i)
+    expect(normalized).not.toMatch(/содержание/i)
+  })
+
+  it("does not cut the beginning when the title template is absent", () => {
+    const raw = [
+      "Кафедра информационных технологий",
+      "Минск",
+      "Глава 1. Постановка задачи без полного титульного шаблона министерства.",
+      "Реализация алгоритма остаётся в главе, даже если дальше идёт вывод.",
+      "Вывод. Начало работы не отбрасывается, потому что титул не найден.",
+    ].join("\n")
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("Кафедра")
+    expect(normalized).toContain("Глава 1")
+    expect(normalized).toContain("Реализация алгоритма")
+    expect(normalized).toContain("Вывод")
+  })
+
+  it("drops figure and table captions", () => {
+    const raw =
+      "Ход работы описывает алгоритм, результат показан на рисунке 1 и сведён в таблица 2 этого отчёта."
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("Ход работы описывает алгоритм")
+    expect(normalized).not.toMatch(/рисунке\s*1/i)
+    expect(normalized).not.toMatch(/таблицу\s*2/i)
   })
 
   it("builds overlapping character shingles", () => {
