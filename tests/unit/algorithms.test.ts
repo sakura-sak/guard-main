@@ -87,6 +87,46 @@ describe("plagiarism algorithms", () => {
     expect(normalized).not.toContain("Листинг программы")
   })
 
+  it("keeps the coursework body when the contents misspells the heading and lists appendices", () => {
+    const raw = [
+      "Министерство образования Республики Беларусь",
+      "Учреждение образования БГУИР",
+      "Минск 2024",
+      "РЕФЕРАТ",
+      "Пояснительная записка 63 с., 30 рис., 4 чертежа, 10 источников, 4 приложения",
+      "Цель проектирования: сокращение времени на обновление информации о ремонте цифровой техники.",
+      "СОДЕРАЖАНИЕ",
+      "Введение6",
+      "1Анализ исходных данных на курсовое проектирование7",
+      "1.3Обоснование и описание выбора языка программирования, средств разработки, используемых технологий и сторонних библиотек11",
+      "Заключение42",
+      "Список используемых источников43",
+      "Этот абзац вставлен внутрь содержания и должен остаться в тексте проверки целиком.",
+      "Приложение А (обязательное) Отчет о проверке на заимствования в системе «Антиплагиат»44",
+      "Приложение Б (обязательное) Листинги программного кода45",
+      "ВВЕДЕНИЕ",
+      "В этом курсовом проекте будет спроектировано программное средство для сервис-центра по ремонту цифровой техники.",
+      "АНАЛИЗ ИСХОДНЫХ ДАННЫХ",
+      "В рамках данной курсовой работы рассматривается учет клиентов, заказов и запчастей сервис-центра.",
+      "СПИСОК ИСПОЛЬЗОВАННЫХ ИСТОЧНИКОВ",
+      "[1] METANIT.COM Введение в Java FX https://metanit.com/java/javafx/1.1.php.",
+      "ПРИЛОЖЕНИЕ А",
+      "(обязательное)",
+      "public class Main extends Application { private Connection connection; }",
+    ].join("\n")
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("РЕФЕРАТ")
+    expect(normalized).toContain("Цель проектирования")
+    expect(normalized).toContain("Этот абзац вставлен")
+    expect(normalized).toContain("В этом курсовом проекте")
+    expect(normalized).toContain("учет клиентов")
+    expect(normalized).toContain("METANIT")
+    expect(normalized).not.toMatch(/содеражание/i)
+    expect(normalized).not.toMatch(/введение6/i)
+    expect(normalized).not.toMatch(/антиплагиат»44/i)
+    expect(normalized).not.toContain("class Main")
+  })
+
   it("keeps prose about the application and cuts only a real appendix heading", () => {
     const raw = [
       "Готовность приложения к эксплуатации подтверждена испытаниями и покрытием тестов.",

@@ -116,7 +116,7 @@ const TITLE_BLOCK_WINDOW = 4000
  * Если такой пары нет, начало текста не трогаем.
  */
 const CONTENTS_WORD =
-  "с\\s{0,2}о\\s{0,2}д\\s{0,2}е\\s{0,2}р\\s{0,2}ж\\s{0,2}а\\s{0,2}н\\s{0,2}и\\s{0,2}е|о\\s{0,2}г\\s{0,2}л\\s{0,2}а\\s{0,2}в\\s{0,2}л\\s{0,2}е\\s{0,2}н\\s{0,2}и\\s{0,2}е"
+  "с\\s{0,2}о\\s{0,2}д\\s{0,2}е\\s{0,2}р\\s{0,2}ж\\s{0,2}а\\s{0,2}н\\s{0,2}и\\s{0,2}е|с\\s{0,2}о\\s{0,2}д\\s{0,2}е\\s{0,2}р\\s{0,2}а\\s{0,2}ж\\s{0,2}а\\s{0,2}н\\s{0,2}и\\s{0,2}е|о\\s{0,2}г\\s{0,2}л\\s{0,2}а\\s{0,2}в\\s{0,2}л\\s{0,2}е\\s{0,2}н\\s{0,2}и\\s{0,2}е"
 
 function stripTitleBlock(text: string): string {
   const start = /министерств[оа]\s+образования/iu.exec(text)
@@ -132,13 +132,16 @@ function isContentsHeading(line: string): boolean {
   return new RegExp(String.raw`^\s*(?:\d{1,4}\s+)?(?:${CONTENTS_WORD})\s*$`, "iu").test(line)
 }
 
-/** Пункт оглавления: длинные точки, «Вывод ...... 19», «Введение3», «1. Теория 5». */
+/** Пункт оглавления: точки, «Введение6», «1.3 Обоснование ...11», «Приложение А ...44». */
 function hasTrailingPageNumber(line: string): boolean {
-  if (/(?:\.\s*){2,}\d{1,4}\s*$/u.test(line) || /…+\s*\d{1,4}\s*$/u.test(line)) return true
-  if (/[\p{L}]\d{1,4}\s*$/u.test(line) && line.length <= 80) return true
-  const spaced = line.match(/^(.*\S)\s+(\d{1,4})\s*$/u)
-  if (!spaced || line.length > 120) return false
-  const title = spaced[1]
+  const trimmed = line.trim()
+  if (!trimmed) return false
+  if (/(?:\.\s*){2,}\d{1,4}\s*$/u.test(trimmed) || /…+\s*\d{1,4}\s*$/u.test(trimmed)) return true
+  const end = trimmed.match(/(\d{1,4})\s*$/u)
+  if (!end || !isPageNumber(end[1] || "")) return false
+  if (trimmed.length > 350) return false
+  if (/[\p{L}][.!?]\s+\p{L}/u.test(trimmed) && !/^приложени[ея]\s/iu.test(trimmed)) return false
+  const title = trimmed.replace(/(?:[^\d\s])?\s*\d{1,4}\s*$/u, "").trim()
   if (/^глава$/iu.test(title)) return false
   if (/^(?:глава\s+)?\d+(?:\.\d+)*$/iu.test(title)) return false
   return true
@@ -160,6 +163,12 @@ function isAppendixMarker(marker: string): boolean {
   return /^\p{L}$/u.test(marker) && marker === marker.toUpperCase()
 }
 
+function isAppendixTocLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (!hasTrailingPageNumber(trimmed)) return false
+  return /^приложени[ея]\s+(?:№\s*)?[\p{L}\d]/iu.test(trimmed)
+}
+
 function isAppendixHeading(line: string): boolean {
   const trimmed = line.trim()
   if (hasTrailingPageNumber(trimmed)) return false
@@ -175,6 +184,8 @@ function stripContentsAndAppendix(text: string): string {
 
   for (const line of lines) {
     if (inAppendix) continue
+
+    if (!inContents && isAppendixTocLine(line)) continue
 
     if (!inContents && isAppendixHeading(line)) {
       inAppendix = true
@@ -316,6 +327,9 @@ function stripInlineAppendix(text: string): string {
     if (prev && /[\p{L}\p{N}_]/u.test(prev)) continue
     const after = text.slice(match.index + match[0].length)
     if (/^\s*[\.…]{2,}/u.test(after)) continue
+    const lineEnd = text.indexOf("\n", match.index)
+    const line = text.slice(match.index, lineEnd === -1 ? text.length : lineEnd)
+    if (hasTrailingPageNumber(line)) continue
     return text.slice(0, pageNumberBefore(text, match.index)).trim()
   }
   return text
