@@ -18,6 +18,19 @@ function roundPercent(n: number): number {
   return Math.round(Math.max(0, Math.min(100, n)) * 100) / 100
 }
 
+/**
+ * MinHash всего текста завышает похожесть примерно на 23 пункта даже у оригинала:
+ * наблюдаемое s ≈ база + (1 − база) × настоящая доля. Возвращаем оценку настоящей доли.
+ * LOCAL_PLAGIARISM_BASE=0 отключает поправку.
+ */
+export function adjustLocalPlagiarismPercent(rawPercent: number): number {
+  const rawBase = Number(String(process.env.LOCAL_PLAGIARISM_BASE ?? "23").replace(",", "."))
+  const base = Number.isFinite(rawBase) ? Math.min(99, Math.max(0, rawBase)) : 23
+  if (base <= 0) return roundPercent(rawPercent)
+  const adjusted = ((rawPercent / 100 - base / 100) / (1 - base / 100)) * 100
+  return roundPercent(Math.max(0, adjusted))
+}
+
 export async function computeLocalPlagiarismPercent(
   normalizedContent: string,
   signature: number[],
@@ -35,7 +48,7 @@ export async function computeLocalPlagiarismPercent(
     const similarity = roundPercent(compareMinHashSignatures(signature, doc.minhashSignature) * 100)
     if (similarity >= LOCAL_SIMILARITY_THRESHOLD && similarity > best) best = similarity
   }
-  return best
+  return adjustLocalPlagiarismPercent(best)
 }
 
 export function computeMinHashSignature(normalizedContent: string): {

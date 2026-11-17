@@ -66,9 +66,18 @@ const CONTENT_START_MARKERS = [
   "заключение",
 ]
 
+/** Пробел внутри строки. Перевод строки — это граница страницы PDF, через неё слова склеивать нельзя. */
+const SAME_LINE_SPACE = "[^\\S\\n]"
+
 const FIGURE_REFERENCE_PATTERNS = [
-  /(^|\s)(?:представлен[аыо]?|показан[аыо]?|приведен[аыо]?|изображен[аыо]?|отображен[аыо]?|расположен[аыо]?)\s+(?:на|в)\s+(?:рисунк[еа]|рис\.?|таблиц[еа]|табл\.?)\s*№?\s*\d+(?:\.\d+)?/gi,
-  /(^|\s)(?:рисунок|рис\.|таблица|табл\.)\s*№?\s*\d+(?:\.\d+)?/gi,
+  new RegExp(
+    `(^|\\s)(?:представлен[аыо]?|показан[аыо]?|приведен[аыо]?|изображен[аыо]?|отображен[аыо]?|расположен[аыо]?)${SAME_LINE_SPACE}+(?:на|в)${SAME_LINE_SPACE}+(?:рисунк[еа]|рис\\.?|таблиц[еа]|табл\\.?)${SAME_LINE_SPACE}*№?${SAME_LINE_SPACE}*\\d+(?:\\.\\d+)?`,
+    "giu",
+  ),
+  new RegExp(
+    `(^|\\s)(?:рисунок|рис\\.|таблица|табл\\.)${SAME_LINE_SPACE}*№?${SAME_LINE_SPACE}*\\d+(?:\\.\\d+)?`,
+    "giu",
+  ),
 ]
 
 function countCoverMarkers(text: string): number {
@@ -115,8 +124,11 @@ const TITLE_BLOCK_WINDOW = 4000
  * Титул одним куском: от «Министерство образования» до «Минск» и года.
  * Если такой пары нет, начало текста не трогаем.
  */
-const CONTENTS_WORD =
-  "с\\s{0,2}о\\s{0,2}д\\s{0,2}е\\s{0,2}р\\s{0,2}ж\\s{0,2}а\\s{0,2}н\\s{0,2}и\\s{0,2}е|с\\s{0,2}о\\s{0,2}д\\s{0,2}е\\s{0,2}р\\s{0,2}а\\s{0,2}ж\\s{0,2}а\\s{0,2}н\\s{0,2}и\\s{0,2}е|о\\s{0,2}г\\s{0,2}л\\s{0,2}а\\s{0,2}в\\s{0,2}л\\s{0,2}е\\s{0,2}н\\s{0,2}и\\s{0,2}е"
+const CONTENTS_WORD = [
+  `с${SAME_LINE_SPACE}{0,2}о${SAME_LINE_SPACE}{0,2}д${SAME_LINE_SPACE}{0,2}е${SAME_LINE_SPACE}{0,2}р${SAME_LINE_SPACE}{0,2}ж${SAME_LINE_SPACE}{0,2}а${SAME_LINE_SPACE}{0,2}н${SAME_LINE_SPACE}{0,2}и${SAME_LINE_SPACE}{0,2}е`,
+  `с${SAME_LINE_SPACE}{0,2}о${SAME_LINE_SPACE}{0,2}д${SAME_LINE_SPACE}{0,2}е${SAME_LINE_SPACE}{0,2}р${SAME_LINE_SPACE}{0,2}а${SAME_LINE_SPACE}{0,2}ж${SAME_LINE_SPACE}{0,2}а${SAME_LINE_SPACE}{0,2}н${SAME_LINE_SPACE}{0,2}и${SAME_LINE_SPACE}{0,2}е`,
+  `о${SAME_LINE_SPACE}{0,2}г${SAME_LINE_SPACE}{0,2}л${SAME_LINE_SPACE}{0,2}а${SAME_LINE_SPACE}{0,2}в${SAME_LINE_SPACE}{0,2}л${SAME_LINE_SPACE}{0,2}е${SAME_LINE_SPACE}{0,2}н${SAME_LINE_SPACE}{0,2}и${SAME_LINE_SPACE}{0,2}е`,
+].join("|")
 
 function stripTitleBlock(text: string): string {
   const start = /министерств[оа]\s+образования/iu.exec(text)
@@ -163,17 +175,32 @@ function isAppendixMarker(marker: string): boolean {
   return /^\p{L}$/u.test(marker) && marker === marker.toUpperCase()
 }
 
+/** «Приложение» и «ПРИЛОЖЕНИЕ» — заголовок. Строчное «приложения» в предложении — нет. */
+function isAppendixHeadingWord(word: string): boolean {
+  const first = word[0] ?? ""
+  return first !== first.toLowerCase() && first === first.toUpperCase()
+}
+
+const APPENDIX_HEADING_RE = new RegExp(
+  `(приложени[ея])${SAME_LINE_SPACE}+(?:№${SAME_LINE_SPACE}*)?([\\p{L}](?![\\p{L}])|\\d{1,3}(?!\\d))`,
+  "giu",
+)
+
 function isAppendixTocLine(line: string): boolean {
   const trimmed = line.trim()
   if (!hasTrailingPageNumber(trimmed)) return false
-  return /^приложени[ея]\s+(?:№\s*)?[\p{L}\d]/iu.test(trimmed)
+  const match = new RegExp(`^(приложени[ея])${SAME_LINE_SPACE}+`, "iu").exec(trimmed)
+  return match != null && isAppendixHeadingWord(match[1] || "")
 }
 
 function isAppendixHeading(line: string): boolean {
   const trimmed = line.trim()
   if (hasTrailingPageNumber(trimmed)) return false
-  const match = /^(?:\d{1,4}\s+)?приложени[ея]\s+(?:№\s*)?([\p{L}](?![\p{L}])|\d{1,3}(?!\d))/iu.exec(trimmed)
-  return match != null && isAppendixMarker(match[1] || "")
+  const match = new RegExp(
+    `^(?:\\d{1,4}${SAME_LINE_SPACE}+)?(приложени[ея])${SAME_LINE_SPACE}+(?:№${SAME_LINE_SPACE}*)?([\\p{L}](?![\\p{L}])|\\d{1,3}(?!\\d))`,
+    "iu",
+  ).exec(trimmed)
+  return match != null && isAppendixHeadingWord(match[1] || "") && isAppendixMarker(match[2] || "")
 }
 
 function stripContentsAndAppendix(text: string): string {
@@ -229,10 +256,10 @@ function stripFlatContentsBlock(text: string): string {
 
 function expandHeadingCut(text: string, wordAt: number): number {
   let i = wordAt
-  while (i > 0 && /\s/u.test(text[i - 1])) i--
+  while (i > 0 && new RegExp(SAME_LINE_SPACE, "u").test(text[i - 1])) i--
   let j = i
   while (j > 0 && /\d/u.test(text[j - 1])) j--
-  if (j < i && i - j <= 4 && (j === 0 || /\s/u.test(text[j - 1]))) return j
+  if (j < i && i - j <= 4 && (j === 0 || new RegExp(SAME_LINE_SPACE, "u").test(text[j - 1]))) return j
   return wordAt
 }
 
@@ -265,9 +292,9 @@ function readDotLeader(text: string, from: number): { end: number; dots: number 
       p++
       continue
     }
-    if (dots > 0 && /\s/u.test(ch)) {
+    if (dots > 0 && new RegExp(SAME_LINE_SPACE, "u").test(ch)) {
       let q = p
-      while (q < text.length && /\s/u.test(text[q])) q++
+      while (q < text.length && new RegExp(SAME_LINE_SPACE, "u").test(text[q])) q++
       if (q < text.length && (text[q] === "." || text[q] === "…")) {
         p = q
         continue
@@ -289,7 +316,7 @@ function matchOneFlatEntry(text: string, start: number): number | null {
     const leader = readDotLeader(text, k)
     if (!leader) continue
     let r = leader.end
-    while (r < text.length && /\s/u.test(text[r])) r++
+    while (r < text.length && new RegExp(SAME_LINE_SPACE, "u").test(text[r])) r++
     const page = /^(\d{1,4})(?![\p{L}\p{N}])/u.exec(text.slice(r))
     if (!page || !isPageNumber(page[1])) continue
     const title = text.slice(start, k)
@@ -316,17 +343,18 @@ function matchOneFlatEntry(text: string, start: number): number | null {
 
 /**
  * Первое настоящее приложение и всё после него: несколько приложений, листинги и код.
- * Номер страницы перед заголовком («151 ПРИЛОЖЕНИЕ Б») тоже относится к приложению.
+ * Номер страницы перед заголовком («151 ПРИЛОЖЕНИЕ Б») тоже относится к приложению,
+ * но только на той же строке. «приложения» в конце страницы и номер 63 на следующей — это не заголовок.
  * Пункт оглавления «Приложение А .... 25» и «приложение Microsoft Excel» не подходят.
  */
 function stripInlineAppendix(text: string): string {
-  const heading = /приложени[ея]\s+(?:№\s*)?([\p{L}](?![\p{L}])|\d{1,3}(?!\d))/giu
-  for (const match of text.matchAll(heading)) {
-    if (match.index == null || !isAppendixMarker(match[1] || "")) continue
+  APPENDIX_HEADING_RE.lastIndex = 0
+  for (const match of text.matchAll(APPENDIX_HEADING_RE)) {
+    if (match.index == null || !isAppendixHeadingWord(match[1] || "") || !isAppendixMarker(match[2] || "")) continue
     const prev = match.index > 0 ? text[match.index - 1] : ""
     if (prev && /[\p{L}\p{N}_]/u.test(prev)) continue
     const after = text.slice(match.index + match[0].length)
-    if (/^\s*[\.…]{2,}/u.test(after)) continue
+    if (/^[^\S\n]*[\.…]{2,}/u.test(after)) continue
     const lineEnd = text.indexOf("\n", match.index)
     const line = text.slice(match.index, lineEnd === -1 ? text.length : lineEnd)
     if (hasTrailingPageNumber(line)) continue
@@ -336,12 +364,13 @@ function stripInlineAppendix(text: string): string {
 }
 
 function pageNumberBefore(text: string, index: number): number {
+  const sameLineSpace = new RegExp(SAME_LINE_SPACE, "u")
   let i = index
-  while (i > 0 && /\s/u.test(text[i - 1])) i--
+  while (i > 0 && sameLineSpace.test(text[i - 1])) i--
   let j = i
   while (j > 0 && /\d/u.test(text[j - 1])) j--
   const digits = text.slice(j, i)
-  if (j < i && digits.length <= 4 && isPageNumber(digits) && (j === 0 || /\s/u.test(text[j - 1]))) return j
+  if (j < i && digits.length <= 4 && isPageNumber(digits) && (j === 0 || sameLineSpace.test(text[j - 1]))) return j
   return index
 }
 

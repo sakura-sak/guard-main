@@ -163,6 +163,38 @@ describe("plagiarism algorithms", () => {
     expect(normalized).not.toContain("Ведомость документов")
   })
 
+  it("keeps the chapter after a caption word приложения when the next page starts with its number", () => {
+    const raw = [
+      "Диаграмма системного контекста является отправной точкой для документирования программной системы.",
+      "Контекстный уровень представления программного приложения",
+      "",
+      "63 На контейнерном уровне помимо пользователей представлены база данных PostgreSQL и контейнер программного приложения Антиплагиат.",
+      "Затем можно увеличить масштаб и детализировать компоненты архитектуры.",
+      "ПРИЛОЖЕНИЕ А",
+      'import fs from "fs"',
+    ].join("\n")
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("На контейнерном уровне")
+    expect(normalized).toContain("программного приложения Антиплагиат")
+    expect(normalized).toContain("детализировать компоненты")
+    expect(normalized).not.toContain("import fs")
+  })
+
+  it("does not cut the work when lowercase приложения is followed by a number on the same line", () => {
+    const raw =
+      "В пояснительной записке описана архитектура программного средства и его основные контейнеры. " +
+      "Дальше идёт описание программного приложения 2 и контейнер веб-сайта остаётся в проверке до заключения."
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("контейнер веб-сайта остаётся")
+  })
+
+  it("does not treat the next page number as part of a figure reference", () => {
+    const raw =
+      "Результат эксперимента показан на рисунке\n\n3 Основные показатели эксперимента остаются в тексте проверки целиком."
+    const normalized = normalizeContentForCheck(raw)
+    expect(normalized).toContain("3 Основные показатели")
+  })
+
   it("cuts an appendix heading even when it is in the first half", () => {
     const head = "Ход работы. Краткое описание алгоритма и полученных результатов эксперимента."
     const raw = `${head}\nПриложение А\nЛистинг который не должен остаться в проверке оригинальности текста.`

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { formatApiUploadError, prismaClientMessage } from "@/lib/prisma-error-message"
 import { cn } from "@/lib/utils"
 import { validateFile } from "@/lib/file-parser"
-import { computeMinHashSignature, computeLocalPlagiarismPercent } from "@/lib/local-plagiarism"
+import { computeMinHashSignature, computeLocalPlagiarismPercent, adjustLocalPlagiarismPercent } from "@/lib/local-plagiarism"
 
 describe("prismaClientMessage / formatApiUploadError", () => {
   it("maps known Prisma codes", () => {
@@ -38,5 +38,17 @@ describe("cn / validateFile / MinHash helper", () => {
     expect(shingles.size).toBeGreaterThan(0)
     expect(await computeLocalPlagiarismPercent("x", signature, "lab", null)).toBe(0)
     expect(await computeLocalPlagiarismPercent("x", [1, 2], "lab", "bsuir")).toBe(0)
+  })
+
+  it("removes the constant extra MinHash similarity before showing originality", () => {
+    const previous = process.env.LOCAL_PLAGIARISM_BASE
+    process.env.LOCAL_PLAGIARISM_BASE = "23"
+    expect(adjustLocalPlagiarismPercent(22.66)).toBe(0)
+    expect(adjustLocalPlagiarismPercent(36.72)).toBeCloseTo(17.82, 1)
+    expect(adjustLocalPlagiarismPercent(61.72)).toBeCloseTo(50.29, 1)
+    expect(adjustLocalPlagiarismPercent(82.81)).toBeCloseTo(77.68, 1)
+    expect(adjustLocalPlagiarismPercent(0)).toBe(0)
+    if (previous == null) delete process.env.LOCAL_PLAGIARISM_BASE
+    else process.env.LOCAL_PLAGIARISM_BASE = previous
   })
 })
